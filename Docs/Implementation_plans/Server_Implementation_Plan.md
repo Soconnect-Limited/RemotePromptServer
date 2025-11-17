@@ -1,0 +1,849 @@
+# サーバー側実装計画（MacStudio FastAPI Server）
+
+作成日: 2025-11-17
+バージョン: 1.0
+対象: Phase 1 〜 Phase 3（非対話モード実装 → FastAPI + DB統合）
+
+---
+
+## 実装フロー概要
+
+```
+Phase 1: データベース基盤 + セッション管理（2-3日）
+  ↓
+Phase 2: ジョブ管理モデル拡張（1日）
+  ↓
+Phase 3: FastAPI REST API層（2-3日）
+  ↓
+Phase 4: 統合テスト・動作確認（1日）
+```
+
+---
+
+## Phase 1: データベース基盤 + セッション管理（2-3日）
+
+### 目標
+SQLite + SQLAlchemyでDB基盤を構築し、subprocess経由でCLIと通信するセッション管理を実装する
+（注：MASTER_SPECIFICATIONではdevice_sessionsテーブルでの永続管理が必須要件のため、最初からDB実装とする）
+
+### 1.1 プロジェクトセットアップ
+
+- [ ] プロジェクトディレクトリ作成
+  ```bash
+  mkdir -p ~/remote-job-server/{data,logs,tests}
+  cd ~/remote-job-server
+  ```
+
+- [ ] Python仮想環境作成
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+
+- [ ] requirements.txt作成
+  ```txt
+  fastapi==0.104.1
+  uvicorn[standard]==0.24.0
+  sqlalchemy==2.0.23
+  pydantic==2.5.0
+  pydantic-settings==2.1.0
+  python-dotenv==1.0.0
+  PyAPNs2==0.7.2
+  ```
+
+- [ ] 依存関係インストール
+  ```bash
+  pip install -r requirements.txt
+  ```
+
+- [ ] .gitignore作成
+  ```
+  .venv/
+  __pycache__/
+  *.pyc
+  .env
+  data/*.db
+  logs/*.log
+  .DS_Store
+  ```
+
+---
+
+### 1.2 データベース設定
+
+**ファイル**: `database.py`
+
+- [ ] SessionLocal設定
+  ```python
+  from sqlalchemy import create_engine
+  from sqlalchemy.orm import sessionmaker
+
+  DATABASE_URL = "sqlite:///./data/jobs.db"
+  engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+  SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+  ```
+
+- [ ] データベース初期化関数
+  ```python
+  def init_db():
+      Base.metadata.create_all(bind=engine)
+  ```
+
+---
+
+### 1.3 SQLAlchemyモデル定義
+
+**ファイル**: `models.py`
+
+- [ ] Base定義
+  ```python
+  from sqlalchemy.ext.declarative import declarative_base
+  Base = declarative_base()
+  ```
+
+- [ ] DeviceSessionモデル実装（Phase 1で最優先）
+  - [ ] id: Integer, primary_key, autoincrement
+  - [ ] device_id: String, nullable=False
+  - [ ] runner: String, nullable=False
+  - [ ] session_id: String, nullable=False
+  - [ ] created_at: DateTime, nullable=False
+  - [ ] updated_at: DateTime, nullable=False
+  - [ ] UNIQUE制約: (device_id, runner)
+  - [ ] インデックス: (device_id, runner)
+
+- [ ] Deviceモデル実装（Phase 1で簡易実装）
+  - [ ] id: Integer, primary_key, autoincrement
+  - [ ] device_id: String, unique, nullable=False
+  - [ ] device_token: String, nullable=False
+  - [ ] created_at: DateTime, nullable=False
+  - [ ] updated_at: DateTime, nullable=False
+
+- [ ] Jobモデル実装（Phase 2で拡張予定の基本構造のみ）
+  - [ ] id: String(36), primary_key
+  - [ ] runner: String(20), nullable=False
+  - [ ] input_text: Text, nullable=False
+  - [ ] device_id: String(100), nullable=False
+  - [ ] status: String(20), nullable=False
+  - [ ] stdout: Text
+  - [ ] created_at: DateTime, nullable=False
+
+---
+
+### 1.4 DB初期化スクリプト
+
+**ファイル**: `init_db.py`
+
+- [ ] スクリプト作成
+  ```python
+  from database import init_db, SessionLocal
+  from models import Device
+  from datetime import datetime
+
+  def create_initial_data():
+      db = SessionLocal()
+      try:
+          device = Device(
+              device_id="test-device-1",
+              device_token="dummy-token",
+              created_at=datetime.utcnow(),
+              updated_at=datetime.utcnow()
+          )
+          db.add(device)
+          db.commit()
+          print("Initial data created")
+      finally:
+          db.close()
+
+  if __name__ == "__main__":
+      init_db()
+      create_initial_data()
+  ```
+
+- [ ] 実行確認
+  ```bash
+  python init_db.py
+  sqlite3 data/jobs.db ".schema"
+  ```
+
+---
+
+### 1.5 ClaudeSessionManager実装（DB統合版）
+
+**ファイル**: `session_manager.py`
+
+- [ ] 基本クラス定義
+  ```python
+  import subprocess
+  import uuid
+  from typing import Optional
+  from database import SessionLocal
+  from models import DeviceSession
+  from datetime import datetime
+  import logging
+
+  logger = logging.getLogger(__name__)
+
+  class ClaudeSessionManager:
+      def __init__(self):
+          self.trusted_directory = "/Users/nao/workspace"
+  ```
+
+- [ ] `_get_session_id_from_db()` メソッド実装（DB版）
+  - [ ] SessionLocal() でDB接続
+  - [ ] DeviceSession.query().filter_by(device_id, runner='claude')
+  - [ ] session_id返却 or None
+  - [ ] 引数: `device_id: str`
+  - [ ] 戻り値: `Optional[str]`
+
+- [ ] `_save_session_id_to_db()` メソッド実装（DB版）
+  - [ ] SessionLocal() でDB接続
+  - [ ] 既存レコード検索
+  - [ ] UPDATE（session_id, updated_at） or INSERT
+  - [ ] commit()
+  - [ ] 引数: `device_id: str, session_id: str`
+
+- [ ] `execute_job()` メソッド実装
+  - [ ] UUID生成ロジック（新規セッション時）
+  - [ ] `--session-id` オプション付きコマンド実行
+  - [ ] `--resume` オプション付きコマンド実行
+  - [ ] subprocess.run() タイムアウト設定（300秒）
+  - [ ] 例外処理（TimeoutExpired, 一般例外）
+  - [ ] 戻り値辞書：success, output, session_id, error
+
+- [ ] ロギング設定
+  - [ ] logging.getLogger() 設定
+  - [ ] INFO/ERROR レベルログ出力
+
+---
+
+### 1.6 CodexSessionManager実装（DB統合版）
+
+**ファイル**: `session_manager.py`（同一ファイル内）
+
+- [ ] 基本クラス定義
+  ```python
+  class CodexSessionManager:
+      def __init__(self):
+          pass
+  ```
+
+- [ ] `_get_session_id_from_db()` メソッド実装（DB版）
+  - [ ] SessionLocal() でDB接続
+  - [ ] DeviceSession.query().filter_by(device_id, runner='codex')
+  - [ ] session_id返却 or None
+  - [ ] 引数: `device_id: str`
+  - [ ] 戻り値: `Optional[str]`
+
+- [ ] `_save_session_id_to_db()` メソッド実装（DB版）
+  - [ ] SessionLocal() でDB接続
+  - [ ] 既存レコード検索
+  - [ ] UPDATE（session_id, updated_at） or INSERT
+  - [ ] commit()
+  - [ ] 引数: `device_id: str, session_id: str`
+
+- [ ] `execute_job()` メソッド実装
+  - [ ] `codex exec` コマンド実行
+  - [ ] `codex exec resume <session_id>` コマンド実行
+  - [ ] セッションID抽出（正規表現: `r'session id: ([a-f0-9\-]+)'`）
+  - [ ] 出力フィルタリング（メタデータ行除去）
+  - [ ] subprocess.run() タイムアウト設定（300秒）
+  - [ ] 例外処理（TimeoutExpired, 一般例外）
+  - [ ] 戻り値辞書：success, output, session_id, error
+
+- [ ] ロギング設定
+  - [ ] logging.getLogger() 設定
+  - [ ] INFO/ERROR レベルログ出力
+
+---
+
+### 1.7 統合SessionManager実装
+
+**ファイル**: `session_manager.py`（同一ファイル内）
+
+- [ ] SessionManagerクラス定義
+  ```python
+  class SessionManager:
+      def __init__(self):
+          self.claude_manager = ClaudeSessionManager()
+          self.codex_manager = CodexSessionManager()
+  ```
+
+- [ ] `execute_job()` メソッド実装
+  - [ ] runner引数による分岐（claude/codex）
+  - [ ] 各マネージャーへの委譲
+  - [ ] 未知runnerのエラーハンドリング
+
+- [ ] `get_session_status()` メソッド実装
+  - [ ] DBからセッションID取得
+  - [ ] exists/session_id形式の辞書返却
+
+---
+
+### 1.8 ローカルテスト実装
+
+**ファイル**: `tests/test_session_manager.py`
+
+- [ ] テストスクリプト作成
+  ```python
+  from session_manager import ClaudeSessionManager, CodexSessionManager
+
+  def test_claude_session():
+      mgr = ClaudeSessionManager()
+      result = mgr.execute_job("こんにちは", "test-device-1", continue_session=True)
+      print(f"Success: {result['success']}")
+      print(f"Output: {result['output'][:100]}")
+      print(f"Session ID: {result['session_id']}")
+
+  def test_codex_session():
+      mgr = CodexSessionManager()
+      result = mgr.execute_job("What is 5 * 7?", "test-device-2", continue_session=True)
+      print(f"Success: {result['success']}")
+      print(f"Output: {result['output'][:100]}")
+      print(f"Session ID: {result['session_id']}")
+  ```
+
+- [ ] Claude Code動作確認
+  - [ ] 初回実行（--session-id）
+  - [ ] 継続実行（--resume）
+  - [ ] セッションID保存確認（DB）
+  - [ ] device_sessions テーブル確認
+
+- [ ] Codex動作確認
+  - [ ] 初回実行（exec）
+  - [ ] 継続実行（exec resume）
+  - [ ] セッションID抽出確認
+  - [ ] device_sessions テーブル確認
+
+- [ ] DB永続化テスト
+  - [ ] sqlite3 data/jobs.db "SELECT * FROM device_sessions;"
+  - [ ] セッションID保存確認
+  - [ ] UNIQUE制約確認（device_id, runner）
+
+- [ ] MCP動作確認（オプション）
+  - [ ] Claude + Serena MCPテスト
+  - [ ] Codex + Serena MCPテスト
+
+---
+
+### Phase 1 完了条件
+
+- [ ] データベース基盤: SQLite + SQLAlchemy設定完了
+- [ ] DeviceSessionモデル: device_sessions テーブル作成成功
+- [ ] ClaudeSessionManager: 応答取得成功 + DB永続化確認
+- [ ] CodexSessionManager: 応答取得成功 + DB永続化確認
+- [ ] セッション継続: 会話履歴が保持される（DB経由）
+- [ ] セッションID保存: device_sessions テーブルに保存確認
+- [ ] エラーハンドリング: タイムアウト・例外を適切に処理
+
+---
+
+## Phase 2: ジョブ管理モデル拡張（1日）
+
+### 目標
+Phase 1のDB基盤にJobモデルの詳細実装を追加し、ジョブ管理機能を完成させる
+
+### 2.1 Jobモデル拡張
+
+**ファイル**: `models.py`（Phase 1のJobモデルを拡張）
+
+- [ ] Jobモデル拡張実装
+  - [ ] exit_code: Integer（追加）
+  - [ ] stderr: Text（追加）
+  - [ ] started_at: DateTime（追加）
+  - [ ] finished_at: DateTime（追加）
+  - [ ] notify_token: String(255)（追加）
+  - [ ] `to_dict()` メソッド実装
+    ```python
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "runner": self.runner,
+            "input_text": self.input_text,
+            "device_id": self.device_id,
+            "status": self.status,
+            "exit_code": self.exit_code,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+        }
+    ```
+
+---
+
+### 2.2 マイグレーション実行
+
+- [ ] データベーステーブル再作成
+  ```bash
+  rm -f data/jobs.db  # 既存DBを削除
+  python init_db.py    # 新スキーマで再作成
+  ```
+
+- [ ] スキーマ確認
+  ```bash
+  sqlite3 data/jobs.db ".schema jobs"
+  ```
+
+---
+
+### 2.3 DBテスト
+
+**ファイル**: `tests/test_database.py`
+
+- [ ] Job拡張フィールドテスト
+  - [ ] exit_code, stderr, started_at, finished_at保存確認
+  - [ ] to_dict() メソッド動作確認
+  - [ ] JSON変換確認
+
+- [ ] Job CRUD テスト
+  - [ ] INSERT テスト（全フィールド）
+  - [ ] SELECT テスト（status filter）
+  - [ ] UPDATE テスト（status変更 + タイムスタンプ）
+
+---
+
+### Phase 2 完了条件
+
+- [ ] Jobモデル拡張完了（全フィールド実装）
+- [ ] to_dict() メソッド動作確認
+- [ ] Job CRUD動作確認
+- [ ] マイグレーション成功
+
+---
+
+## Phase 3: FastAPI REST API層（2-3日）
+
+### 目標
+REST APIエンドポイントを実装し、ジョブ管理・セッション管理をHTTP経由で操作可能にする
+
+### 3.1 設定ファイル
+
+**ファイル**: `config.py`
+
+- [ ] 設定クラス定義
+  ```python
+  from pydantic_settings import BaseSettings
+
+  class Settings(BaseSettings):
+      API_KEY: str = "your-secret-key"
+      DATABASE_URL: str = "sqlite:///./data/jobs.db"
+      LOG_LEVEL: str = "INFO"
+
+      class Config:
+          env_file = ".env"
+
+  settings = Settings()
+  ```
+
+- [ ] .env ファイル作成
+  ```
+  API_KEY=test-api-key-123
+  DATABASE_URL=sqlite:///./data/jobs.db
+  LOG_LEVEL=DEBUG
+  ```
+
+---
+
+### 3.2 ロギング設定
+
+**ファイル**: `config.py`（追記）
+
+- [ ] ログ設定関数実装
+  ```python
+  import logging
+  from logging.handlers import RotatingFileHandler
+
+  def setup_logging():
+      logger = logging.getLogger()
+      logger.setLevel(logging.DEBUG)
+
+      # ファイルハンドラ
+      fh = RotatingFileHandler('logs/server.log', maxBytes=10*1024*1024, backupCount=5)
+      fh.setLevel(logging.DEBUG)
+
+      # コンソールハンドラ
+      ch = logging.StreamHandler()
+      ch.setLevel(logging.INFO)
+
+      # フォーマッタ
+      formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+      fh.setFormatter(formatter)
+      ch.setFormatter(formatter)
+
+      logger.addHandler(fh)
+      logger.addHandler(ch)
+  ```
+
+---
+
+### 3.3 JobManager実装
+
+**ファイル**: `job_manager.py`
+
+- [ ] JobManagerクラス定義
+  ```python
+  class JobManager:
+      def __init__(self):
+          self.session_manager = SessionManager()
+  ```
+
+- [ ] `create_job()` メソッド実装
+  - [ ] Job レコード作成（UUID生成）
+  - [ ] device_token取得（Device テーブル）
+  - [ ] DB保存（status: queued）
+  - [ ] BackgroundTasksで`_execute_job()`登録
+  - [ ] 戻り値: {id, status}
+
+- [ ] `_execute_job()` メソッド実装
+  - [ ] Job取得（job_id）
+  - [ ] status更新: running
+  - [ ] SessionManager.execute_job() 呼び出し
+  - [ ] 結果保存（success/failed, stdout/stderr）
+  - [ ] finished_at更新
+  - [ ] APNs通知送信（後回し可）
+
+- [ ] `get_jobs()` メソッド実装
+  - [ ] ページネーション（limit, offset）
+  - [ ] status フィルタ
+  - [ ] device_id フィルタ
+  - [ ] 戻り値: List[Job]
+
+- [ ] `get_job()` メソッド実装
+  - [ ] job_id検索
+  - [ ] 戻り値: Job or 404
+
+---
+
+### 3.4 FastAPI メインアプリ
+
+**ファイル**: `main.py`
+
+- [ ] FastAPIアプリ初期化
+  ```python
+  from fastapi import FastAPI, BackgroundTasks, HTTPException
+  from fastapi.middleware.cors import CORSMiddleware
+
+  app = FastAPI(title="Remote Job Server")
+
+  # CORS設定
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=["*"],  # 本番環境では制限推奨
+      allow_credentials=True,
+      allow_methods=["*"],
+      allow_headers=["*"],
+  )
+  ```
+
+- [ ] DB初期化（起動時）
+  ```python
+  from database import Base, engine
+
+  @app.on_event("startup")
+  def startup_event():
+      Base.metadata.create_all(bind=engine)
+      setup_logging()
+  ```
+
+- [ ] JobManagerインスタンス作成
+  ```python
+  job_manager = JobManager()
+  ```
+
+---
+
+### 3.5 Pydanticモデル定義
+
+**ファイル**: `main.py`（または `schemas.py`）
+
+- [ ] CreateJobRequest
+  ```python
+  class CreateJobRequest(BaseModel):
+      runner: str
+      input_text: str
+      device_id: str
+  ```
+
+- [ ] RegisterDeviceRequest
+  ```python
+  class RegisterDeviceRequest(BaseModel):
+      device_id: str
+      device_token: str
+  ```
+
+---
+
+### 3.6 エンドポイント実装
+
+**ファイル**: `main.py`
+
+#### POST /register_device
+
+- [ ] エンドポイント実装
+  - [ ] Device INSERT or UPDATE
+  - [ ] updated_at更新
+  - [ ] 戻り値: {status: "registered"}
+
+#### POST /jobs
+
+- [ ] エンドポイント実装
+  - [ ] JobManager.create_job() 呼び出し
+  - [ ] BackgroundTasks 登録
+  - [ ] 戻り値: {id, status}
+
+#### GET /jobs
+
+- [ ] エンドポイント実装
+  - [ ] Query Parameters: limit, status, device_id
+  - [ ] JobManager.get_jobs() 呼び出し
+  - [ ] 戻り値: List[Job]
+
+#### GET /jobs/{job_id}
+
+- [ ] エンドポイント実装
+  - [ ] JobManager.get_job() 呼び出し
+  - [ ] 戻り値: Job or 404
+
+#### GET /sessions
+
+- [ ] エンドポイント実装
+  - [ ] Query Parameters: device_id（必須）
+  - [ ] SessionManager.get_session_status() 呼び出し
+  - [ ] 戻り値: {claude: {...}, codex: {...}}
+
+#### DELETE /sessions/{runner}
+
+- [ ] エンドポイント実装
+  - [ ] Query Parameters: device_id（必須）
+  - [ ] DeviceSession DELETE
+  - [ ] 戻り値: {status: "deleted", runner, device_id}
+
+#### GET /health
+
+- [ ] エンドポイント実装
+  - [ ] 戻り値: {status: "ok"}
+
+---
+
+### 3.7 エラーハンドリング
+
+**ファイル**: `main.py`
+
+- [ ] カスタム例外定義
+  ```python
+  class SessionExecutionError(Exception):
+      pass
+
+  class SessionTimeoutError(SessionExecutionError):
+      pass
+  ```
+
+- [ ] 例外ハンドラ登録
+  ```python
+  @app.exception_handler(SessionExecutionError)
+  async def session_error_handler(request, exc):
+      return JSONResponse(status_code=500, content={"detail": str(exc)})
+  ```
+
+---
+
+### 3.8 ローカルサーバー起動テスト
+
+- [ ] サーバー起動
+  ```bash
+  uvicorn main:app --reload --host 0.0.0.0 --port 8000
+  ```
+
+- [ ] ヘルスチェック
+  ```bash
+  curl http://localhost:8000/health
+  ```
+
+- [ ] デバイス登録テスト
+  ```bash
+  curl -X POST http://localhost:8000/register_device \
+    -H "Content-Type: application/json" \
+    -d '{"device_id": "test-device-1", "device_token": "dummy-token"}'
+  ```
+
+- [ ] ジョブ作成テスト（Claude）
+  ```bash
+  curl -X POST http://localhost:8000/jobs \
+    -H "Content-Type: application/json" \
+    -d '{"runner": "claude", "input_text": "こんにちは", "device_id": "test-device-1"}'
+  ```
+
+- [ ] ジョブ取得テスト
+  ```bash
+  JOB_ID="..." # 上記で取得したID
+  curl http://localhost:8000/jobs/$JOB_ID
+  ```
+
+- [ ] セッション状態確認
+  ```bash
+  curl "http://localhost:8000/sessions?device_id=test-device-1"
+  ```
+
+- [ ] セッション削除テスト
+  ```bash
+  curl -X DELETE "http://localhost:8000/sessions/claude?device_id=test-device-1"
+  ```
+
+---
+
+### Phase 3 完了条件
+
+- [x] 全エンドポイント実装完了
+- [x] curlでジョブ作成・取得可能
+- [x] ジョブがSessionManagerで実行される
+- [x] 結果がDBに保存される
+- [x] セッションIDがdevice_sessionsテーブルに保存される
+- [x] エラーハンドリング動作確認
+
+---
+
+## Phase 4: 統合テスト・動作確認（1日）
+
+### 目標
+実際のCLI実行を含む統合テストで全体動作を確認する
+
+### 4.1 統合テストシナリオ
+
+**ファイル**: `tests/test_integration.py`
+
+- [ ] シナリオ1: Claude初回→継続実行
+  - [ ] POST /jobs (初回)
+  - [ ] セッションID保存確認
+  - [ ] POST /jobs (継続)
+  - [ ] 会話履歴継続確認
+
+- [ ] シナリオ2: Codex初回→継続実行
+  - [ ] POST /jobs (初回)
+  - [ ] セッションID抽出確認
+  - [ ] POST /jobs (継続)
+  - [ ] 会話履歴継続確認
+
+- [ ] シナリオ3: セッション削除→再作成
+  - [ ] DELETE /sessions/claude
+  - [ ] POST /jobs (新規セッション)
+  - [ ] 新しいセッションID確認
+
+- [ ] シナリオ4: 複数デバイス同時実行
+  - [ ] device_id: test-device-1
+  - [ ] device_id: test-device-2
+  - [ ] セッション混線なし確認
+
+---
+
+### 4.2 パフォーマンステスト
+
+- [ ] 同時ジョブ実行テスト
+  - [ ] 3ジョブ並列投稿
+  - [ ] 全ジョブ完了確認
+  - [ ] タイムアウトなし確認
+
+- [ ] 長時間実行テスト
+  - [ ] 5分間のプロンプト実行
+  - [ ] タイムアウト動作確認
+
+---
+
+### 4.3 エラーケーステスト
+
+- [ ] 不正なrunner指定
+  - [ ] runner: "invalid"
+  - [ ] エラーレスポンス確認
+
+- [ ] 存在しないジョブID
+  - [ ] GET /jobs/invalid-id
+  - [ ] 404確認
+
+- [ ] セッションタイムアウト
+  - [ ] 300秒超過プロンプト
+  - [ ] Timeout エラー確認
+
+---
+
+### 4.4 ログ・モニタリング確認
+
+- [ ] ログファイル確認
+  ```bash
+  tail -f logs/server.log
+  ```
+
+- [ ] エラーログフィルタ
+  ```bash
+  grep ERROR logs/server.log
+  ```
+
+- [ ] DB整合性確認
+  ```bash
+  sqlite3 data/jobs.db "SELECT * FROM device_sessions;"
+  sqlite3 data/jobs.db "SELECT id, status, runner FROM jobs ORDER BY created_at DESC LIMIT 10;"
+  ```
+
+---
+
+### Phase 4 完了条件
+
+- [x] 全統合テストシナリオ成功
+- [x] パフォーマンステスト合格
+- [x] エラーケース正常処理
+- [x] ログ出力正常
+- [x] DB整合性確認
+
+---
+
+## サーバー実装完了チェックリスト
+
+### 最終確認項目
+
+- [ ] Phase 1完了（データベース基盤 + セッション管理）
+- [ ] Phase 2完了（ジョブ管理モデル拡張）
+- [ ] Phase 3完了（FastAPI REST API層）
+- [ ] Phase 4完了（統合テスト・動作確認）
+
+### 本番環境準備（後日）
+
+- [ ] Tailscale接続確認
+- [ ] MacStudio IPアドレス固定（100.100.30.35）
+- [ ] ファイアウォール設定（ポート8000）
+- [ ] systemdサービス登録
+- [ ] 自動起動設定
+- [ ] バックアップスクリプト設定
+
+---
+
+## トラブルシューティング
+
+### よくある問題
+
+1. **Claude Code信頼ダイアログ**
+   - 対処: `cwd=self.trusted_directory` 設定
+   - 事前に手動でディレクトリを信頼済みにする
+
+2. **Codex セッションID抽出失敗**
+   - 対処: 正規表現パターン確認
+   - ログ出力で実際の出力形式確認
+
+3. **DBロック**
+   - 対処: `check_same_thread=False` 設定確認
+   - セッション適切にclose()
+
+4. **タイムアウト頻発**
+   - 対処: timeout値調整（300秒 → 600秒）
+   - プロンプト内容簡素化
+
+---
+
+## 次のステップ
+
+サーバー実装完了後：
+1. iOS クライアントアプリ実装計画策定
+2. APNs プッシュ通知実装
+3. Apple Watch アプリ実装
+
+---
+
+**End of Implementation Plan**
