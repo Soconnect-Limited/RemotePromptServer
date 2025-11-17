@@ -1,0 +1,54 @@
+#!/usr/bin/expect -f
+# Claude Codeを起動して信頼承認後のプロンプト記号を確認
+
+set timeout 60
+log_user 1
+
+puts "\n=== Starting Claude Code ==="
+
+spawn claude
+
+# 信頼確認ダイアログ
+expect {
+    "Do you trust" {
+        puts "\n=== Trust dialog detected, sending Enter ==="
+        send "\r"
+        exp_continue
+    }
+    -re {[^\r\n]*$} {
+        set line $expect_out(0,string)
+        puts "\n=== Last line received: '$line' ==="
+
+        # プロンプト記号を探す(行末にある記号)
+        if {[regexp {(›|>|\$|➜|❯|%)\s*$} $line match prompt]} {
+            puts "\n=== PROMPT CHARACTER DETECTED: '$prompt' ==="
+
+            # テストメッセージ送信
+            send "say hello\r"
+
+            # 応答待機
+            expect {
+                -re {[^\r\n]*$} {
+                    puts "\n=== Response received ==="
+                }
+                timeout {
+                    puts "\n=== Timeout waiting for response ==="
+                }
+            }
+
+            # 終了
+            send \003
+            exit 0
+        }
+
+        exp_continue
+    }
+    timeout {
+        puts "\n=== TIMEOUT ==="
+        exit 1
+    }
+    eof {
+        puts "\n=== EOF ==="
+        exit 1
+    }
+}

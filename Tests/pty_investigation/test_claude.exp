@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+# Claude Codeのプロンプト記号を確認するexpectスクリプト
+
+set timeout 30
+
+# Claude Codeを起動
+spawn claude
+
+# 信頼確認ダイアログを待つ
+expect {
+    "Do you trust the files" {
+        send "\r"
+        exp_continue
+    }
+    -re {[›>\$➜❯]} {
+        puts "\n\n=== PROMPT DETECTED ==="
+        puts "Match: $expect_out(0,string)"
+        puts "========================\n"
+
+        # テストメッセージを送信
+        send "hello\r"
+        expect -re {[›>\$➜❯]}
+        puts "\n\n=== RESPONSE RECEIVED ==="
+
+        # 終了
+        send "exit\r"
+    }
+    timeout {
+        puts "\n\n=== TIMEOUT ==="
+        puts "No prompt detected"
+    }
+}
+
+exit
