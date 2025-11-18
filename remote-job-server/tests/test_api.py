@@ -21,6 +21,7 @@ class APITests(TestCase):
         Base.metadata.drop_all(bind=engine)
         init_db()
         self.client = TestClient(main.app)
+        self.headers = {"x-api-key": main.settings.api_key}
         fake_session = MagicMock()
         fake_session.execute_job.return_value = {
             "success": True,
@@ -41,21 +42,23 @@ class APITests(TestCase):
         res = self.client.post(
             "/register_device",
             json={"device_id": "dev-1", "device_token": "token"},
+            headers=self.headers,
         )
         self.assertEqual(res.status_code, 200)
 
         res = self.client.post(
             "/jobs",
             json={"runner": "claude", "input_text": "hello", "device_id": "dev-1"},
+            headers=self.headers,
         )
         self.assertEqual(res.status_code, 200)
         job_id = res.json()["id"]
 
-        res = self.client.get("/jobs")
+        res = self.client.get("/jobs", headers=self.headers)
         self.assertEqual(res.status_code, 200)
         self.assertGreaterEqual(len(res.json()), 1)
 
-        res = self.client.get(f"/jobs/{job_id}")
+        res = self.client.get(f"/jobs/{job_id}", headers=self.headers)
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["id"], job_id)
 
@@ -63,10 +66,11 @@ class APITests(TestCase):
         res = self.client.post(
             "/register_device",
             json={"device_id": "dev-2", "device_token": "token"},
+            headers=self.headers,
         )
         self.assertEqual(res.status_code, 200)
 
-        res = self.client.get("/sessions", params={"device_id": "dev-2"})
+        res = self.client.get("/sessions", params={"device_id": "dev-2"}, headers=self.headers)
         self.assertEqual(res.status_code, 200)
 
         db = SessionLocal()
@@ -84,7 +88,11 @@ class APITests(TestCase):
         finally:
             db.close()
 
-        res = self.client.delete("/sessions/claude", params={"device_id": "dev-2"})
+        res = self.client.delete(
+            "/sessions/claude",
+            params={"device_id": "dev-2"},
+            headers=self.headers,
+        )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "deleted")
 

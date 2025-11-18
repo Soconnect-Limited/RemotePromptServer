@@ -661,9 +661,13 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
       return JSONResponse(status_code=500, content={"detail": str(exc)})
   ```
 
----
+### 3.8 認証 / CORS 設定
 
-### 3.8 ローカルサーバー起動テスト
+- [x] `config.py` の API_KEY と allowed_origins をFastAPIに適用
+- [x] `verify_api_key` 依存を全エンドポイント（/health以外）に追加
+- [x] 環境変数 `ALLOWED_ORIGINS` でCORSを制御可能にする
+
+### 3.9 ローカルサーバー起動テスト
 
 - [ ] サーバー起動
   ```bash

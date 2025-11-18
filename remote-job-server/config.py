@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 from logging.handlers import RotatingFileHandler
+from typing import List
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -11,10 +13,21 @@ class Settings(BaseSettings):
     api_key: str = "dev-api-key"
     database_url: str = "sqlite:///./data/jobs.db"
     log_level: str = "INFO"
+    allowed_origins: List[str] = [
+        "http://100.100.30.35:8000",
+        "http://127.0.0.1:8000",
+    ]
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def split_origins(cls, value):
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
 
 settings = Settings()

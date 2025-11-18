@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from config import setup_logging
+from config import setup_logging, settings
 from database import SessionLocal, init_db
 from job_manager import JobManager
 from models import Device, DeviceSession, utcnow
@@ -17,7 +17,7 @@ from session_manager import SessionManager
 app = FastAPI(title="Remote Job Server")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,7 +60,16 @@ def startup_event() -> None:
 
 
 @app.post("/register_device")
-def register_device(req: RegisterDeviceRequest, db: Session = Depends(get_db)) -> dict:
+def verify_api_key(x_api_key: str = Header(...)) -> None:
+    if x_api_key != settings.api_key:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+
+
+def register_device(
+    req: RegisterDeviceRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
     device = db.query(Device).filter_by(device_id=req.device_id).first()
     if device:
         device.device_token = req.device_token
@@ -81,6 +90,7 @@ def register_device(req: RegisterDeviceRequest, db: Session = Depends(get_db)) -
 def create_job(
     req: CreateJobRequest,
     background_tasks: BackgroundTasks,
+    _: None = Depends(verify_api_key),
 ) -> JobSummary:
     job = job_manager.create_job(
         runner=req.runner,
@@ -97,12 +107,13 @@ def list_jobs(
     limit: int = 20,
     status: Optional[str] = None,
     device_id: Optional[str] = None,
+    _: None = Depends(verify_api_key),
 ) -> List[dict]:
     return job_manager.get_jobs(limit=limit, status=status, device_id=device_id)
 
 
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str) -> dict:
+def get_job(job_id: str, _: None = Depends(verify_api_key)) -> dict:
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -110,7 +121,10 @@ def get_job(job_id: str) -> dict:
 
 
 @app.get("/sessions")
-def get_sessions(device_id: str = Query(...)) -> dict:
+def get_sessions(
+    device_id: str = Query(...),
+    _: None = Depends(verify_api_key),
+) -> dict:
     return {
         "claude": session_manager.get_session_status("claude", device_id),
         "codex": session_manager.get_session_status("codex", device_id),
@@ -122,6 +136,7 @@ def delete_session(
     runner: str,
     device_id: str = Query(...),
     db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
 ) -> dict:
     record = db.query(DeviceSession).filter_by(device_id=device_id, runner=runner).first()
     if not record:
