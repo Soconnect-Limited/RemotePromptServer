@@ -2,34 +2,81 @@
 
 作成日: 2025-11-18
 最終更新: 2025-11-18
-バージョン: 1.2
-対象: Phase 1 〜 Phase 5（iOS基本実装 → watchOS連携 → プッシュ通知 + SSE）
+バージョン: 2.1
+対象: Phase 1 〜 Phase 5（チャット式UI実装 → Markdown表示 → watchOS連携 → プッシュ通知 + SSE）
 
 **変更履歴**:
 - v1.0 (2025-11-18): 初版作成
 - v1.1 (2025-11-18): Master Specification v2.0との整合性修正
-  - 修正1: `deleteSession(runner:deviceId:)` に `deviceId` 引数追加（サーバー必須パラメータ対応）
-  - 修正2: `navigationDestination(item:)` を `navigationDestination(isPresented:)` に変更（String非Identifiable対応）
-  - 修正3: Watch プリセット action 名を `log_check` → `check_logs` に統一（Master Specification準拠）
 - v1.2 (2025-11-18): SSEストリーミング実装追加
-  - Phase 3にSSE関連セクション追加（3.8, 3.9, 3.10）
-  - リアルタイムジョブ状態更新機能追加
+- v2.0 (2025-11-18): UI仕様を Messenger ライクなチャット形式に全面変更
+  - JobDetailView → ChatView（対話式メッセージ一覧）に変更
+  - Markdown レンダリング機能追加（MarkdownUI ライブラリ使用）
+  - メッセージバブル形式での入出力表示
+  - サーバー保存形式は Markdown（`stdout` フィールド）
+- **v2.1 (2025-11-18): 並列ジョブ対応・再起動時回復・ID管理の設計修正**
+  - **重大修正1**: Message に `jobId` フィールド追加（localId と分離）
+  - **重大修正2**: SSEManager をジョブ単位で個別管理（辞書方式）
+  - **重大修正3**: アプリ起動時に未完了ジョブの SSE 再接続処理追加
 
 ---
 
 ## 実装フロー概要
 
 ```
-Phase 1: データモデル + API Client基盤（2-3日）
+Phase 1: チャットUIデータモデル + API Client拡張（2-3日）
   ↓
-Phase 2: iOS 基本UI実装（3-4日）
+Phase 2: Messenger風チャットUI実装 + Markdown表示（3-4日）
   ↓
-Phase 3: プッシュ通知実装（2-3日）
+Phase 3: SSEリアルタイム更新 + プッシュ通知（2-3日）
   ↓
-Phase 4: Apple Watch 連携（2-3日）
+Phase 4: Apple Watch チャット連携（2-3日）
   ↓
 Phase 5: 統合テスト・UI/UX改善（2-3日）
 ```
+
+---
+
+## UI設計コンセプト
+
+### チャット形式の基本構造
+
+```
+┌─────────────────────────────┐
+│ ← Claude Chat              │  ← ナビゲーションバー
+├─────────────────────────────┤
+│                             │
+│  ┌─────────────────┐        │  ← ユーザー入力（右寄せ・青）
+│  │ List files in   │        │
+│  │ /tmp            │        │
+│  └─────────────────┘        │
+│           2025/11/18 10:00  │
+│                             │
+│        ┌─────────────────┐  │  ← AI応答（左寄せ・グレー）
+│        │ # Files         │  │  ← Markdown表示
+│        │ - file1.txt     │  │
+│        │ - file2.log     │  │
+│        │                 │  │
+│        │ **Total**: 2    │  │
+│        └─────────────────┘  │
+│     2025/11/18 10:00 ✓     │
+│                             │
+│  ┌─────────────────┐        │
+│  │ Thanks!         │        │
+│  └─────────────────┘        │
+│           2025/11/18 10:01  │
+│                             │
+├─────────────────────────────┤
+│ ┌─────────────────────┐ [>]│  ← 入力フィールド + 送信ボタン
+└─────────────────────────────┘
+```
+
+### データフロー
+
+1. **ユーザー入力** → `POST /jobs` → ジョブID取得
+2. **SSE接続** → `GET /jobs/{id}/stream` → リアルタイム状態更新
+3. **完了通知** → `GET /jobs/{id}` → `stdout` を Markdown としてレンダリング
+4. **メッセージ保存** → ローカルDB（Core Data / UserDefaults）でチャット履歴管理
 
 ---
 
@@ -41,15 +88,16 @@ Phase 5: 統合テスト・UI/UX改善（2-3日）
 **対応プラットフォーム**: iOS 16.0+, watchOS 9.0+
 **言語**: Swift 5.9+
 **フレームワーク**: SwiftUI
+**新規依存**: MarkdownUI (Swift Package Manager)
 
 ---
 
-## Phase 1: データモデル + API Client基盤（2-3日）
+## Phase 1: チャットUIデータモデル + API Client拡張（2-3日）
 
 ### 目標
-サーバーAPIと通信するための基盤を構築し、データモデルとネットワークレイヤーを実装する
+チャット形式に対応したデータモデルを構築し、ジョブ作成APIをクライアントに統合
 
-### 1.1 プロジェクト構造作成
+### 1.1 プロジェクト構造更新
 
 **ディレクトリ構成**:
 ```
@@ -59,1537 +107,880 @@ RemotePrompt/
 │   │   ├── RemotePromptApp.swift（既存）
 │   │   └── AppDelegate.swift
 │   ├── Models/
-│   │   ├── Job.swift
-│   │   ├── Device.swift
-│   │   └── Session.swift
+│   │   ├── Message.swift          ← 新規：チャットメッセージモデル
+│   │   ├── Job.swift              ← 既存
+│   │   └── MessageType.swift      ← 新規：送信/受信区別
 │   ├── Services/
-│   │   ├── APIClient.swift
-│   │   ├── APIEndpoints.swift
-│   │   └── PushNotificationManager.swift
+│   │   ├── APIClient.swift        ← 拡張：ジョブ作成メソッド追加
+│   │   ├── SSEManager.swift       ← 既存
+│   │   └── MessageStore.swift     ← 新規：チャット履歴永続化
 │   ├── Views/
-│   │   ├── JobsListView.swift
-│   │   ├── JobDetailView.swift
-│   │   ├── NewJobView.swift
-│   │   └── Components/
-│   │       ├── JobRowView.swift
-│   │       └── RunnerPicker.swift
+│   │   ├── ChatView.swift         ← 新規：メインチャット画面
+│   │   ├── MessageBubble.swift    ← 新規：メッセージ吹き出し
+│   │   ├── MarkdownView.swift     ← 新規：Markdownレンダリング
+│   │   └── InputBar.swift         ← 新規：入力フィールド
 │   ├── ViewModels/
-│   │   ├── JobsViewModel.swift
-│   │   └── JobDetailViewModel.swift
-│   └── Utils/
-│       ├── Constants.swift
-│       └── Extensions.swift
-├── RemotePromptTests/
-└── RemotePromptUITests/
+│   │   └── ChatViewModel.swift    ← 新規：チャット状態管理
+│   └── Support/
+│       └── Constants.swift        ← 既存
+└── Package Dependencies:
+    └── MarkdownUI (https://github.com/gonzalezreal/swift-markdown-ui)
 ```
 
-- [ ] Xcodeでグループ作成
-  - [ ] App グループ
-  - [ ] Models グループ
-  - [ ] Services グループ
-  - [ ] Views グループ
-  - [ ] ViewModels グループ
-  - [ ] Utils グループ
+- [ ] Xcodeでグループ作成・整理
+  - [ ] Models に `Message.swift`, `MessageType.swift` 追加
+  - [ ] Views に `ChatView.swift`, `MessageBubble.swift`, `MarkdownView.swift`, `InputBar.swift` 追加
+  - [ ] Services に `MessageStore.swift` 追加
+  - [ ] ViewModels に `ChatViewModel.swift` 追加
 
 ---
 
-### 1.2 データモデル実装
+### 1.2 MarkdownUI 依存追加
 
-**ファイル**: `Models/Job.swift`
+**ファイル**: `RemotePrompt.xcodeproj/project.pbxproj`（Xcode GUI操作）
 
-- [ ] Job構造体定義
-  - [ ] Identifiable適合
-  - [ ] Codable適合
-  - [ ] プロパティ定義
-    - [ ] id: String
-    - [ ] runner: String
-    - [ ] inputText: String
-    - [ ] deviceId: String
-    - [ ] status: String
-    - [ ] exitCode: Int?
-    - [ ] stdout: String?
-    - [ ] stderr: String?
-    - [ ] createdAt: Date?
-    - [ ] startedAt: Date?
-    - [ ] finishedAt: Date?
-  - [ ] CodingKeys定義（snake_case → camelCase変換）
-    ```swift
-    enum CodingKeys: String, CodingKey {
-        case id, runner, status, stdout, stderr
-        case inputText = "input_text"
-        case deviceId = "device_id"
-        case exitCode = "exit_code"
-        case createdAt = "created_at"
-        case startedAt = "started_at"
-        case finishedAt = "finished_at"
-    }
-    ```
-  - [ ] 計算プロパティ追加
-    - [ ] statusColor: Color
-    - [ ] runnerColor: Color
-    - [ ] isCompleted: Bool
-    - [ ] isRunning: Bool
+- [ ] Swift Package Manager で MarkdownUI 追加
+  ```
+  File → Add Package Dependencies...
+  URL: https://github.com/gonzalezreal/swift-markdown-ui
+  Version: 2.0.0以上
+  Target: RemotePrompt (iOS)
+  ```
 
-- [ ] CreateJobRequest構造体定義
+- [ ] インポート確認
+  ```swift
+  import MarkdownUI
+  ```
+
+---
+
+### 1.3 Message データモデル実装
+
+**ファイル**: `Models/Message.swift`
+
+- [ ] Message 構造体定義
+  ```swift
+  import Foundation
+
+  enum MessageType: String, Codable {
+      case user       // ユーザー入力
+      case assistant  // AI応答
+      case system     // システムメッセージ（エラー等）
+  }
+
+  enum MessageStatus: String, Codable {
+      case sending    // 送信中
+      case queued     // サーバーでキュー中
+      case running    // 実行中
+      case completed  // 完了
+      case failed     // 失敗
+  }
+
+  struct Message: Identifiable, Codable {
+      let id: String                // ✅ ローカルID（UUID、永続化用）
+      let jobId: String?            // ✅ サーバージョブID（assistant のみ、SSE購読用）
+      let type: MessageType
+      let content: String           // ユーザー入力 or AI応答（Markdown）
+      var status: MessageStatus
+      let createdAt: Date
+      var finishedAt: Date?
+      var errorMessage: String?
+
+      var isRunning: Bool {
+          status == .sending || status == .queued || status == .running
+      }
+
+      // ✅ 初期化ヘルパー
+      init(
+          id: String = UUID().uuidString,
+          jobId: String? = nil,
+          type: MessageType,
+          content: String,
+          status: MessageStatus,
+          createdAt: Date = Date(),
+          finishedAt: Date? = nil,
+          errorMessage: String? = nil
+      ) {
+          self.id = id
+          self.jobId = jobId
+          self.type = type
+          self.content = content
+          self.status = status
+          self.createdAt = createdAt
+          self.finishedAt = finishedAt
+          self.errorMessage = errorMessage
+      }
+  }
+  ```
+
+- [ ] CodingKeys 定義（JSON互換）
+- [ ] 初期化メソッド実装
+
+---
+
+### 1.4 APIClient 拡張（ジョブ作成）
+
+**ファイル**: `Services/APIClient.swift`（既存ファイル更新）
+
+- [ ] ジョブ作成メソッド追加
   ```swift
   struct CreateJobRequest: Codable {
       let runner: String
       let inputText: String
       let deviceId: String
+      let notifyToken: String?
 
       enum CodingKeys: String, CodingKey {
           case runner
           case inputText = "input_text"
           case deviceId = "device_id"
+          case notifyToken = "notify_token"
       }
   }
-  ```
 
-- [ ] CreateJobResponse構造体定義
-  ```swift
   struct CreateJobResponse: Codable {
       let id: String
+      let runner: String
       let status: String
   }
+
+  func createJob(runner: String, prompt: String, deviceId: String) async throws -> CreateJobResponse {
+      guard let url = URL(string: "\(Constants.baseURL)/jobs") else {
+          throw APIError.invalidURL
+      }
+
+      var request = URLRequest(url: url)
+      request.httpMethod = "POST"
+      request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
+      request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+      let body = CreateJobRequest(
+          runner: runner,
+          inputText: prompt,
+          deviceId: deviceId,
+          notifyToken: nil
+      )
+      request.httpBody = try JSONEncoder().encode(body)
+
+      let (data, response) = try await URLSession.shared.data(for: request)
+      guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+          let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+          throw APIError.httpError(code)
+      }
+
+      return try JSONDecoder().decode(CreateJobResponse.self, from: data)
+  }
   ```
 
-**ファイル**: `Models/Device.swift`
-
-- [ ] Device構造体定義
-  - [ ] Codable適合
-  - [ ] プロパティ定義
-    - [ ] deviceId: String
-    - [ ] deviceToken: String
-  - [ ] CodingKeys定義
-    ```swift
-    enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
-        case deviceToken = "device_token"
-    }
-    ```
-
-**ファイル**: `Models/Session.swift`
-
-- [ ] SessionStatus構造体定義
+- [ ] デバイスID生成ヘルパー追加
   ```swift
-  struct SessionStatus: Codable {
-      let exists: Bool
-      let sessionId: String?
-
-      enum CodingKeys: String, CodingKey {
-          case exists
-          case sessionId = "session_id"
+  static func getDeviceId() -> String {
+      if let saved = UserDefaults.standard.string(forKey: "device_id") {
+          return saved
       }
-  }
-
-  struct SessionsResponse: Codable {
-      let claude: SessionStatus
-      let codex: SessionStatus
+      let newId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+      UserDefaults.standard.set(newId, forKey: "device_id")
+      return newId
   }
   ```
 
 ---
 
-### 1.3 定数管理
+### 1.5 MessageStore 実装（ローカル永続化）
 
-**ファイル**: `Utils/Constants.swift`
+**ファイル**: `Services/MessageStore.swift`
 
-- [ ] Constants定義
+- [ ] MessageStore クラス定義
   ```swift
-  enum Constants {
-      static let baseURL = "http://100.100.30.35:35000"
-      static let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? "iphone-unknown"
+  import Foundation
+  import Combine
 
-      enum Runners {
-          static let claude = "claude"
-          static let codex = "codex"
-          static let all = [claude, codex]
+  final class MessageStore: ObservableObject {
+      @Published var messages: [Message] = []
+      private let storageKey = "chat_messages"
+
+      init() {
+          loadMessages()
       }
 
-      enum JobStatus {
-          static let queued = "queued"
-          static let running = "running"
-          static let success = "success"
-          static let failed = "failed"
+      func addMessage(_ message: Message) {
+          messages.append(message)
+          saveMessages()
+      }
+
+      func updateMessage(_ message: Message) {
+          if let index = messages.firstIndex(where: { $0.id == message.id }) {
+              messages[index] = message
+              saveMessages()
+          }
+      }
+
+      func clearAll() {
+          messages.removeAll()
+          saveMessages()
+      }
+
+      private func saveMessages() {
+          if let encoded = try? JSONEncoder().encode(messages) {
+              UserDefaults.standard.set(encoded, forKey: storageKey)
+          }
+      }
+
+      private func loadMessages() {
+          guard let data = UserDefaults.standard.data(forKey: storageKey),
+                let decoded = try? JSONDecoder().decode([Message].self, from: data) else {
+              return
+          }
+          messages = decoded
       }
   }
   ```
 
----
-
-### 1.4 API Endpoints定義
-
-**ファイル**: `Services/APIEndpoints.swift`
-
-- [ ] APIEndpoint列挙型定義
-  ```swift
-  enum APIEndpoint {
-      case health
-      case registerDevice
-      case createJob
-      case listJobs(limit: Int?, status: String?)
-      case getJob(id: String)
-      case getSessions(deviceId: String)
-      case deleteSession(runner: String, deviceId: String)
-
-      var path: String {
-          // パス文字列を返却
-      }
-
-      var method: String {
-          // HTTPメソッドを返却
-      }
-  }
-  ```
-
----
-
-### 1.5 API Client実装
-
-**ファイル**: `Services/APIClient.swift`
-
-- [ ] APIClientクラス定義
-  ```swift
-  @MainActor
-  class APIClient: ObservableObject {
-      static let shared = APIClient()
-      private let baseURL: String
-      private let deviceId: String
-      private let apiKey: String
-
-      private init() {
-          self.baseURL = Constants.baseURL
-          self.deviceId = Constants.deviceId
-          self.apiKey = "YOUR_API_KEY"  // TODO: 環境変数 or Keychain
-      }
-  }
-  ```
-
-- [ ] 基本ネットワークメソッド実装
-  - [ ] `request<T: Decodable>(_ endpoint: APIEndpoint, body: Encodable?) async throws -> T`
-    - [ ] URL生成
-    - [ ] URLRequest生成
-    - [ ] HTTPヘッダー設定
-      - [ ] `Content-Type: application/json`
-      - [ ] `x-api-key: <apiKey>` （サーバー認証用）
-    - [ ] HTTPメソッド設定
-    - [ ] ボディ設定（POST/PUT/DELETE）
-    - [ ] URLSession.data(for:)実行
-    - [ ] HTTPステータスコードチェック
-    - [ ] JSONDecoder.decode()
-    - [ ] エラーハンドリング
-
-- [ ] エンドポイント別メソッド実装
-  - [ ] `healthCheck() async throws -> HealthResponse`
-  - [ ] `registerDevice(deviceToken: String) async throws`
-  - [ ] `createJob(runner: String, inputText: String) async throws -> CreateJobResponse`
-  - [ ] `fetchJobs(limit: Int?, status: String?) async throws -> [Job]`
-  - [ ] `fetchJob(id: String) async throws -> Job`
-  - [ ] `fetchSessions() async throws -> SessionsResponse`
-  - [ ] `deleteSession(runner: String, deviceId: String) async throws`
-    - [ ] ⚠️ **重要**: `device_id` はサーバー側必須クエリパラメータ（Master Specification line 1120-1125）
-
-- [ ] エラー型定義
-  ```swift
-  enum APIError: Error, LocalizedError {
-      case invalidURL
-      case requestFailed(statusCode: Int)
-      case decodingFailed(Error)
-      case serverError(String)
-
-      var errorDescription: String? {
-          // エラーメッセージ返却
-      }
-  }
-  ```
-
----
-
-### 1.6 Info.plist設定
-
-**ファイル**: `RemotePrompt/Info.plist`
-
-- [ ] ATS（App Transport Security）設定追加
-  ```xml
-  <key>NSAppTransportSecurity</key>
-  <dict>
-      <key>NSAllowsArbitraryLoads</key>
-      <false/>
-      <key>NSExceptionDomains</key>
-      <dict>
-          <key>100.100.30.35</key>
-          <dict>
-              <key>NSExceptionAllowsInsecureHTTPLoads</key>
-              <true/>
-              <key>NSIncludesSubdomains</key>
-              <true/>
-          </dict>
-      </dict>
-  </dict>
-  ```
-
----
-
-### 1.7 APIテスト実装
-
-**ファイル**: `RemotePromptTests/APIClientTests.swift`
-
-- [ ] テストクラス作成
-  ```swift
-  import XCTest
-  @testable import RemotePrompt
-
-  final class APIClientTests: XCTestCase {
-      var apiClient: APIClient!
-
-      override func setUp() {
-          super.setUp()
-          apiClient = APIClient.shared
-      }
-  }
-  ```
-
-- [ ] テストケース実装
-  - [ ] `testHealthCheck()`
-    - [ ] ヘルスチェックAPI呼び出し
-    - [ ] レスポンス検証
-  - [ ] `testFetchJobs()`
-    - [ ] ジョブ一覧取得
-    - [ ] デコード成功確認
-  - [ ] `testCreateJob()`
-    - [ ] ジョブ作成
-    - [ ] レスポンス検証
-  - [ ] `testFetchSessions()`
-    - [ ] セッション取得
-    - [ ] デコード成功確認
+- [ ] UserDefaults ベースの永続化実装
+- [ ] メッセージ追加・更新・削除メソッド実装
 
 ---
 
 ### Phase 1 完了条件
 
-- [ ] 全データモデル実装完了
-- [ ] APIClient実装完了
-- [ ] Info.plist ATS設定完了
-- [ ] ユニットテストすべて成功
-- [ ] サーバーとの疎通確認（ヘルスチェック成功）
+- [ ] Message / MessageType データモデル実装完了
+- [ ] APIClient に createJob メソッド追加完了
+- [ ] MessageStore 永続化実装完了
+- [ ] MarkdownUI 依存追加完了
+- [ ] ビルド成功（シミュレータで起動確認）
 
 ---
 
-## Phase 2: iOS 基本UI実装（3-4日）
+## Phase 2: Messenger風チャットUI実装 + Markdown表示（3-4日）
 
 ### 目標
-SwiftUIでジョブ一覧・詳細・新規作成画面を実装し、基本的なジョブ管理機能を提供する
+チャット画面とメッセージバブル、Markdown表示機能を実装
 
-### 2.1 ViewModel実装
+### 2.1 MessageBubble（メッセージ吹き出し）実装
 
-**ファイル**: `ViewModels/JobsViewModel.swift`
+**ファイル**: `Views/MessageBubble.swift`
 
-- [ ] JobsViewModelクラス定義
+- [ ] MessageBubble View 実装
   ```swift
-  @MainActor
-  class JobsViewModel: ObservableObject {
-      @Published var jobs: [Job] = []
-      @Published var isLoading = false
-      @Published var errorMessage: String?
+  import SwiftUI
+  import MarkdownUI
 
-      private let apiClient = APIClient.shared
-  }
-  ```
-
-- [ ] メソッド実装
-  - [ ] `loadJobs() async`
-    - [ ] isLoading = true設定
-    - [ ] APIClient.fetchJobs()呼び出し
-    - [ ] jobs更新
-    - [ ] エラーハンドリング
-    - [ ] isLoading = false設定
-  - [ ] `refresh() async`
-    - [ ] loadJobs()呼び出し
-  - [ ] `createJob(runner: String, inputText: String) async throws`
-    - [ ] APIClient.createJob()呼び出し
-    - [ ] loadJobs()で再取得
-
-**ファイル**: `ViewModels/JobDetailViewModel.swift`
-
-- [ ] JobDetailViewModelクラス定義
-  ```swift
-  @MainActor
-  class JobDetailViewModel: ObservableObject {
-      @Published var job: Job?
-      @Published var isLoading = false
-      @Published var errorMessage: String?
-
-      private let apiClient = APIClient.shared
-      private let jobId: String
-
-      init(jobId: String) {
-          self.jobId = jobId
-      }
-  }
-  ```
-
-- [ ] メソッド実装
-  - [ ] `loadJob() async`
-    - [ ] APIClient.fetchJob(id:)呼び出し
-    - [ ] job更新
-  - [ ] `refresh() async`
-    - [ ] loadJob()呼び出し
-  - [ ] `startPolling()`（実行中ジョブの定期更新）
-    - [ ] Timer設定（5秒間隔）
-    - [ ] loadJob()定期呼び出し
-    - [ ] 完了時にポーリング停止
-
----
-
-### 2.2 ジョブ一覧画面実装
-
-**ファイル**: `Views/JobsListView.swift`
-
-- [ ] JobsListView定義
-  ```swift
-  struct JobsListView: View {
-      @StateObject private var viewModel = JobsViewModel()
-      @State private var showingNewJobSheet = false
+  struct MessageBubble: View {
+      let message: Message
 
       var body: some View {
-          // UI実装
-      }
-  }
-  ```
-
-- [ ] UI要素実装
-  - [ ] NavigationStack
-  - [ ] List(viewModel.jobs)
-    - [ ] ForEachでJobRowView表示
-    - [ ] NavigationLinkでJobDetailViewへ遷移
-  - [ ] toolbar
-    - [ ] 右上に"+"ボタン（新規ジョブ）
-    - [ ] タップでshowingNewJobSheet = true
-  - [ ] .refreshable修飾子
-    - [ ] await viewModel.refresh()
-  - [ ] .task修飾子
-    - [ ] await viewModel.loadJobs()
-  - [ ] .sheet修飾子
-    - [ ] NewJobView表示
-  - [ ] エラー表示
-    - [ ] viewModel.errorMessageがnilでない場合にアラート表示
-
-**ファイル**: `Views/Components/JobRowView.swift`
-
-- [ ] JobRowView定義
-  ```swift
-  struct JobRowView: View {
-      let job: Job
-
-      var body: some View {
-          // UI実装
-      }
-  }
-  ```
-
-- [ ] UI要素実装
-  - [ ] VStack(alignment: .leading)
-    - [ ] HStack
-      - [ ] runnerバッジ（Text + background + cornerRadius）
-      - [ ] statusバッジ（Text + foregroundColor）
-      - [ ] Spacer()
-      - [ ] 相対時刻表示（job.createdAt）
-    - [ ] inputTextプレビュー（2行制限）
-  - [ ] 計算プロパティ
-    - [ ] runnerColor: Color
-      - [ ] claude: .blue
-      - [ ] codex: .green
-    - [ ] statusColor: Color
-      - [ ] success: .green
-      - [ ] failed: .red
-      - [ ] running: .orange
-      - [ ] queued: .gray
-
----
-
-### 2.3 ジョブ詳細画面実装
-
-**ファイル**: `Views/JobDetailView.swift`
-
-- [ ] JobDetailView定義
-  ```swift
-  struct JobDetailView: View {
-      let jobId: String
-      @StateObject private var viewModel: JobDetailViewModel
-
-      init(jobId: String) {
-          self.jobId = jobId
-          _viewModel = StateObject(wrappedValue: JobDetailViewModel(jobId: jobId))
-      }
-
-      var body: some View {
-          // UI実装
-      }
-  }
-  ```
-
-- [ ] UI要素実装
-  - [ ] ScrollView
-    - [ ] VStack(alignment: .leading, spacing: 16)
-      - [ ] セクション: 基本情報
-        - [ ] runner表示
-        - [ ] status表示
-        - [ ] created_at表示
-        - [ ] started_at表示（オプショナル）
-        - [ ] finished_at表示（オプショナル）
-      - [ ] セクション: 入力
-        - [ ] inputText表示（Text + background）
-      - [ ] セクション: 出力（statusがsuccessの場合）
-        - [ ] stdout表示（Text + background + ScrollView）
-        - [ ] コピーボタン
-      - [ ] セクション: エラー（statusがfailedの場合）
-        - [ ] stderr表示（Text + background + foregroundColor: .red）
-  - [ ] .navigationTitle("ジョブ詳細")
-  - [ ] .toolbar
-    - [ ] 右上に更新ボタン
-    - [ ] タップでviewModel.refresh()
-  - [ ] .task修飾子
-    - [ ] await viewModel.loadJob()
-    - [ ] statusがrunningの場合はポーリング開始
-  - [ ] .onDisappear修飾子
-    - [ ] ポーリング停止
-
----
-
-### 2.4 新規ジョブ作成画面実装
-
-**ファイル**: `Views/NewJobView.swift`
-
-- [ ] NewJobView定義
-  ```swift
-  struct NewJobView: View {
-      @Environment(\.dismiss) var dismiss
-      @EnvironmentObject var jobsViewModel: JobsViewModel
-
-      @State private var inputText = ""
-      @State private var selectedRunner = Constants.Runners.claude
-      @State private var isSubmitting = false
-      @State private var errorMessage: String?
-
-      var body: some View {
-          // UI実装
-      }
-  }
-  ```
-
-- [ ] UI要素実装
-  - [ ] NavigationStack
-    - [ ] Form
-      - [ ] Section(header: "Runner")
-        - [ ] Picker("CLI Tool", selection: $selectedRunner)
-          - [ ] ForEach(Constants.Runners.all)
-          - [ ] .pickerStyle(.segmented)
-      - [ ] Section(header: "Input")
-        - [ ] TextEditor(text: $inputText)
-          - [ ] .frame(minHeight: 200)
-      - [ ] Section
-        - [ ] Button("実行")
-          - [ ] action: submitJob()
-          - [ ] disabled: inputText.isEmpty || isSubmitting
-          - [ ] ProgressView表示（isSubmitting時）
-    - [ ] .navigationTitle("新規ジョブ")
-    - [ ] .navigationBarTitleDisplayMode(.inline)
-    - [ ] .toolbar
-      - [ ] 右上に"閉じる"ボタン
-      - [ ] タップでdismiss()
-    - [ ] .alert(エラー表示用)
-
-- [ ] メソッド実装
-  - [ ] `submitJob()`
-    ```swift
-    func submitJob() {
-        Task {
-            isSubmitting = true
-            defer { isSubmitting = false }
-
-            do {
-                try await jobsViewModel.createJob(
-                    runner: selectedRunner,
-                    inputText: inputText
-                )
-                dismiss()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-    ```
-
----
-
-### 2.5 アプリエントリポイント更新
-
-**ファイル**: `App/RemotePromptApp.swift`
-
-- [ ] RemotePromptApp更新
-  ```swift
-  @main
-  struct RemotePromptApp: App {
-      var body: some Scene {
-          WindowGroup {
-              JobsListView()
-          }
-      }
-  }
-  ```
-
----
-
-### 2.6 UI動作確認
-
-- [ ] シミュレータ起動テスト
-  - [ ] iPhone 15 Pro シミュレータ
-  - [ ] iOS 17.0+
-- [ ] ジョブ一覧画面表示確認
-  - [ ] ナビゲーションタイトル表示
-  - [ ] ツールバーボタン表示
-  - [ ] 空リストメッセージ表示（初回）
-- [ ] 新規ジョブ作成テスト
-  - [ ] モーダル表示確認
-  - [ ] Runner選択確認
-  - [ ] TextEditor入力確認
-  - [ ] 実行ボタン動作確認
-  - [ ] サーバーへのPOST成功確認
-- [ ] ジョブ一覧更新確認
-  - [ ] 作成したジョブが一覧に表示
-  - [ ] Pull-to-Refresh動作確認
-- [ ] ジョブ詳細画面遷移確認
-  - [ ] タップで詳細画面表示
-  - [ ] 基本情報表示確認
-  - [ ] 出力表示確認（完了ジョブ）
-
----
-
-### Phase 2 完了条件
-
-- [ ] 全ViewModel実装完了
-- [ ] 全View実装完了
-- [ ] シミュレータでUI動作確認
-- [ ] サーバーとの連携確認（ジョブCRUD成功）
-- [ ] エラーハンドリング動作確認
-
----
-
-## Phase 3: プッシュ通知実装（2-3日）
-
-### 目標
-APNsプッシュ通知を実装し、ジョブ完了時にiPhoneへ通知を送信する
-
-### 3.1 APNs設定（Apple Developer Portal）
-
-- [ ] App ID設定
-  - [ ] Capabilities: Push Notificationsを有効化
-  - [ ] Bundle ID確認: `com.example.remoteprompt`（適宜変更）
-- [ ] APNs認証キー作成
-  - [ ] .p8ファイルダウンロード
-  - [ ] Key IDメモ
-  - [ ] Team IDメモ
-- [ ] Provisioning Profile作成
-  - [ ] Development / Distribution
-  - [ ] Push Notifications含む
-
----
-
-### 3.2 Xcodeプロジェクト設定
-
-- [ ] Signing & Capabilities設定
-  - [ ] Team選択
-  - [ ] Bundle Identifier設定
-  - [ ] Capabilityタブで"Push Notifications"追加
-  - [ ] Background Modes追加
-    - [ ] "Remote notifications"チェック
-
----
-
-### 3.3 AppDelegate実装
-
-**ファイル**: `App/AppDelegate.swift`
-
-- [ ] AppDelegateクラス定義
-  ```swift
-  import UIKit
-  import UserNotifications
-
-  class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-      func application(_ application: UIApplication,
-                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-          UNUserNotificationCenter.current().delegate = self
-          registerForPushNotifications()
-          return true
-      }
-  }
-  ```
-
-- [ ] プッシュ通知登録メソッド実装
-  ```swift
-  func registerForPushNotifications() {
-      UNUserNotificationCenter.current()
-          .requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-              guard granted else { return }
-              DispatchQueue.main.async {
-                  UIApplication.shared.registerForRemoteNotifications()
+          HStack(alignment: .top, spacing: 8) {
+              if message.type == .user {
+                  Spacer()
               }
-          }
-  }
-  ```
 
-- [ ] デバイストークン取得メソッド実装
-  ```swift
-  func application(_ application: UIApplication,
-                  didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-      let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
-      print("Device Token: \(tokenString)")
+              VStack(alignment: message.type == .user ? .trailing : .leading, spacing: 4) {
+                  // メッセージ本体
+                  if message.type == .assistant {
+                      // AI応答はMarkdown表示
+                      Markdown(message.content)
+                          .markdownTheme(.gitHub)
+                          .padding(12)
+                          .background(Color(.systemGray6))
+                          .cornerRadius(16)
+                  } else {
+                      // ユーザー入力はテキスト表示
+                      Text(message.content)
+                          .padding(12)
+                          .background(message.type == .user ? Color.blue : Color(.systemGray5))
+                          .foregroundColor(message.type == .user ? .white : .primary)
+                          .cornerRadius(16)
+                  }
 
-      Task {
-          do {
-              try await APIClient.shared.registerDevice(deviceToken: tokenString)
-              print("Device registered successfully")
-          } catch {
-              print("Failed to register device: \(error)")
-          }
-      }
-  }
-
-  func application(_ application: UIApplication,
-                  didFailToRegisterForRemoteNotificationsWithError error: Error) {
-      print("Failed to register for remote notifications: \(error)")
-  }
-  ```
-
-- [ ] 通知受信ハンドラ実装
-  ```swift
-  func userNotificationCenter(_ center: UNUserNotificationCenter,
-                            didReceive response: UNNotificationResponse,
-                            withCompletionHandler completionHandler: @escaping () -> Void) {
-      let userInfo = response.notification.request.content.userInfo
-
-      if let jobId = userInfo["job_id"] as? String {
-          print("Notification tapped for job: \(jobId)")
-          // JobDetailViewへ遷移するための通知を送信
-          NotificationCenter.default.post(
-              name: .openJobDetail,
-              object: nil,
-              userInfo: ["jobId": jobId]
-          )
-      }
-
-      completionHandler()
-  }
-
-  func userNotificationCenter(_ center: UNUserNotificationCenter,
-                            willPresent notification: UNNotification,
-                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-      // アプリがフォアグラウンドでも通知を表示
-      completionHandler([.banner, .sound, .badge])
-  }
-  ```
-
-- [ ] Notification.Name拡張定義
-  ```swift
-  extension Notification.Name {
-      static let openJobDetail = Notification.Name("openJobDetail")
-  }
-  ```
-
----
-
-### 3.4 RemotePromptApp更新
-
-**ファイル**: `App/RemotePromptApp.swift`
-
-- [ ] AppDelegate統合
-  ```swift
-  @main
-  struct RemotePromptApp: App {
-      @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-      var body: some Scene {
-          WindowGroup {
-              JobsListView()
-          }
-      }
-  }
-  ```
-
----
-
-### 3.5 通知タップ時の画面遷移実装
-
-**ファイル**: `Views/JobsListView.swift`（更新）
-
-- [ ] JobsListView更新
-  ```swift
-  struct JobsListView: View {
-      @StateObject private var viewModel = JobsViewModel()
-      @State private var showingNewJobSheet = false
-      @State private var selectedJobId: String?
-      @State private var showJobDetail = false
-
-      var body: some View {
-          NavigationStack {
-              // 既存のUI...
-
-              .navigationDestination(isPresented: $showJobDetail) {
-                  if let jobId = selectedJobId {
-                      JobDetailView(jobId: jobId)
+                  // ステータス・タイムスタンプ
+                  HStack(spacing: 4) {
+                      if message.isRunning {
+                          ProgressView()
+                              .scaleEffect(0.7)
+                      }
+                      Text(statusText)
+                          .font(.caption2)
+                          .foregroundStyle(.secondary)
+                      if message.status == .completed {
+                          Image(systemName: "checkmark")
+                              .font(.caption2)
+                              .foregroundStyle(.green)
+                      } else if message.status == .failed {
+                          Image(systemName: "exclamationmark.triangle")
+                              .font(.caption2)
+                              .foregroundStyle(.red)
+                      }
                   }
               }
-              .onReceive(NotificationCenter.default.publisher(for: .openJobDetail)) { notification in
-                  if let jobId = notification.userInfo?["jobId"] as? String {
-                      selectedJobId = jobId
-                      showJobDetail = true
-                  }
+
+              if message.type == .assistant {
+                  Spacer()
               }
+          }
+          .padding(.horizontal)
+      }
+
+      private var statusText: String {
+          switch message.status {
+          case .sending: return "送信中..."
+          case .queued: return "待機中"
+          case .running: return "実行中"
+          case .completed:
+              if let finished = message.finishedAt {
+                  return finished.formatted(date: .omitted, time: .shortened)
+              }
+              return "完了"
+          case .failed: return "失敗"
           }
       }
   }
   ```
-  - [ ] ⚠️ **修正理由**: `navigationDestination(item:)` は `Identifiable` な型が必要。`String?` は非準拠のため `isPresented:` オーバーロードに変更
+
+- [ ] ユーザー/AI の吹き出し配置切り替え
+- [ ] Markdown レンダリング統合
+- [ ] ステータスアイコン表示
 
 ---
 
-### 3.6 サーバー側APNs設定（確認のみ）
+### 2.2 InputBar（入力フィールド）実装
 
-- [ ] サーバー側.env確認
-  ```bash
-  APNS_KEY_PATH=/path/to/AuthKey_XXXXXXXX.p8
-  APNS_KEY_ID=XXXXXXXXXX
-  APNS_TEAM_ID=YYYYYYYYYY
-  APNS_BUNDLE_ID=com.example.remoteprompt
-  APNS_USE_SANDBOX=true  # 開発環境
+**ファイル**: `Views/InputBar.swift`
+
+- [ ] InputBar View 実装
+  ```swift
+  import SwiftUI
+
+  struct InputBar: View {
+      @Binding var text: String
+      let onSend: () -> Void
+      let isLoading: Bool
+
+      var body: some View {
+          HStack(spacing: 12) {
+              TextField("メッセージを入力...", text: $text, axis: .vertical)
+                  .textFieldStyle(.roundedBorder)
+                  .lineLimit(1...5)
+                  .disabled(isLoading)
+
+              Button(action: onSend) {
+                  Image(systemName: "arrow.up.circle.fill")
+                      .font(.title2)
+                      .foregroundStyle(canSend ? .blue : .gray)
+              }
+              .disabled(!canSend)
+          }
+          .padding()
+          .background(Color(.systemBackground))
+      }
+
+      private var canSend: Bool {
+          !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
+      }
+  }
   ```
 
-- [ ] notify.py実装確認（サーバー側で実装済みを想定）
+- [ ] 複数行入力対応（最大5行）
+- [ ] 送信ボタン有効/無効切り替え
+- [ ] ローディング中の入力無効化
 
 ---
 
-### 3.7 プッシュ通知テスト
+### 2.3 ChatViewModel 実装
 
-- [ ] 実機テスト準備
-  - [ ] 実機デバイス接続
-  - [ ] Development Provisioning Profileインストール
-  - [ ] アプリビルド・インストール
-- [ ] デバイストークン登録確認
-  - [ ] アプリ起動
-  - [ ] 通知許可ダイアログで"許可"タップ
-  - [ ] Xcodeコンソールでデバイストークン出力確認
-  - [ ] サーバーログで/register_device呼び出し確認
-- [ ] プッシュ通知受信テスト
-  - [ ] 新規ジョブ作成
-  - [ ] ジョブ完了待機（サーバー側でAPNs送信）
-  - [ ] 通知バナー表示確認
-  - [ ] 通知タップ→ジョブ詳細画面遷移確認
-- [ ] フォアグラウンド通知テスト
-  - [ ] アプリ起動中にジョブ完了
-  - [ ] バナー表示確認
+**ファイル**: `ViewModels/ChatViewModel.swift`
 
----
-
-### 3.8 SSE（Server-Sent Events）Manager実装
-
-**ファイル**: `Services/SSEManager.swift`
-
-- [ ] SSEManagerクラス定義
+- [ ] ChatViewModel クラス定義
   ```swift
   import Foundation
   import Combine
 
-  class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
-      @Published var jobStatus: String = "queued"
-      @Published var isConnected = false
+  @MainActor
+  final class ChatViewModel: ObservableObject {
+      @Published var messages: [Message] = []
+      @Published var inputText: String = ""
+      @Published var isLoading: Bool = false
       @Published var errorMessage: String?
 
-      private var urlSession: URLSession?
-      private var dataTask: URLSessionDataTask?
-      private var buffer = Data()
-      private var jobId: String?
+      private let apiClient = APIClient.shared
+      private let messageStore = MessageStore()
+      // ✅ 修正: ジョブIDをキーにしたSSE接続辞書
+      private var sseConnections: [String: SSEManager] = [:]
+      private var cancellables = Set<AnyCancellable>()
+      private let runner: String  // "claude" or "codex"
 
-      override init() {
-          super.init()
-          let config = URLSessionConfiguration.default
-          config.timeoutIntervalForRequest = 300  // 5分タイムアウト
-          config.httpAdditionalHeaders = ["Accept": "text/event-stream"]
-          urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-      }
-  }
-  ```
-
-- [ ] SSE接続メソッド実装
-  ```swift
-  extension SSEManager {
-      func connect(jobId: String) {
-          self.jobId = jobId
-          disconnect()  // 既存接続をクローズ
-
-          guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
-              errorMessage = "Invalid URL"
-              return
+      init(runner: String = "claude") {
+          self.runner = runner
+          loadMessages()
+          // ✅ 修正: 起動時に未完了ジョブを回復
+          Task {
+              await recoverIncompleteJobs()
           }
-
-          var request = URLRequest(url: url)
-          request.httpMethod = "GET"
-          request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-          request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
-
-          dataTask = urlSession?.dataTask(with: request)
-          dataTask?.resume()
-          isConnected = true
       }
 
-      func disconnect() {
-          dataTask?.cancel()
-          dataTask = nil
-          buffer.removeAll()
-          isConnected = false
+      func loadMessages() {
+          messages = messageStore.messages
       }
-  }
-  ```
 
-- [ ] URLSessionDataDelegate実装
-  ```swift
-  extension SSEManager {
-      func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-          buffer.append(data)
+      // ✅ 追加: 未完了ジョブの回復処理
+      private func recoverIncompleteJobs() async {
+          let incompleteJobs = messages.filter { $0.isRunning && $0.jobId != nil }
 
-          // SSEメッセージをパース（"data: {...}\n\n" 形式）
-          guard let message = String(data: buffer, encoding: .utf8) else { return }
+          for message in incompleteJobs {
+              guard let jobId = message.jobId else { continue }
 
-          let lines = message.components(separatedBy: "\n\n")
-          for i in 0..<(lines.count - 1) {  // 最後の不完全な行は次回処理
-              let line = lines[i]
-              if line.hasPrefix("data: ") {
-                  let jsonString = String(line.dropFirst(6))  // "data: " を削除
-                  if let jsonData = jsonString.data(using: .utf8),
-                     let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
-                      DispatchQueue.main.async {
-                          self.jobStatus = event.status
+              // サーバーから最新状態を取得
+              do {
+                  let job = try await apiClient.fetchJob(id: jobId)
+
+                  // ローカルメッセージを更新
+                  if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                      var updated = messages[index]
+                      updated.status = job.status == "success" ? .completed :
+                                      job.status == "failed" ? .failed :
+                                      job.status == "running" ? .running : .queued
+                      updated.content = job.stdout ?? updated.content
+                      updated.finishedAt = job.finishedAt
+                      updated.errorMessage = job.stderr
+
+                      messages[index] = updated
+                      messageStore.updateMessage(updated)
+
+                      // まだ実行中なら SSE 再接続
+                      if updated.isRunning {
+                          startSSEStreaming(jobId: jobId, messageId: message.id)
                       }
+                  }
+              } catch {
+                  // エラー時はジョブを失敗扱い
+                  if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                      var failed = messages[index]
+                      failed.status = .failed
+                      failed.errorMessage = "回復失敗: \(error.localizedDescription)"
+                      messages[index] = failed
+                      messageStore.updateMessage(failed)
                   }
               }
           }
-
-          // 最後の不完全な行をバッファに保持
-          if let lastLine = lines.last, !lastLine.isEmpty {
-              buffer = lastLine.data(using: .utf8) ?? Data()
-          } else {
-              buffer.removeAll()
-          }
       }
 
-      func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-          DispatchQueue.main.async {
-              self.isConnected = false
-              if let error = error {
-                  self.errorMessage = error.localizedDescription
-              }
-          }
-      }
-  }
-  ```
+      func sendMessage() {
+          let prompt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+          guard !prompt.isEmpty else { return }
 
-- [ ] JobStatusEvent構造体定義
-  ```swift
-  struct JobStatusEvent: Codable {
-      let status: String
-      let timestamp: String?
-  }
-  ```
-
----
-
-### 3.9 JobDetailViewModel SSE対応
-
-**ファイル**: `ViewModels/JobDetailViewModel.swift`（更新）
-
-- [ ] SSEManager統合
-  ```swift
-  @MainActor
-  class JobDetailViewModel: ObservableObject {
-      @Published var job: Job?
-      @Published var isLoading = false
-      @Published var errorMessage: String?
-      @Published var isSSEConnected = false  // ✅ ビュー公開用プロパティ
-
-      private let apiClient = APIClient.shared
-      private let sseManager = SSEManager()
-      private let jobId: String
-      private var pollingTimer: Timer?
-      private var cancellables = Set<AnyCancellable>()  // ✅ Combine購読保持用
-
-      init(jobId: String) {
-          self.jobId = jobId
-      }
-  }
-  ```
-
-- [ ] SSE接続ロジック実装
-  ```swift
-  extension JobDetailViewModel {
-      func loadJob() async {
+          inputText = ""
           isLoading = true
-          defer { isLoading = false }
 
-          do {
-              let fetchedJob = try await apiClient.fetchJob(id: jobId)
-              job = fetchedJob
+          // ✅ 修正: ユーザーメッセージ（jobId は nil）
+          let userMessage = Message(
+              type: .user,
+              content: prompt,
+              status: .sending
+          )
+          messages.append(userMessage)
+          messageStore.addMessage(userMessage)
 
-              // ✅ SSE接続開始（実行中ジョブのみ）
-              if fetchedJob.isRunning {
-                  startSSEStreaming()
+          Task {
+              do {
+                  // ジョブ作成
+                  let response = try await apiClient.createJob(
+                      runner: runner,
+                      prompt: prompt,
+                      deviceId: APIClient.getDeviceId()
+                  )
+
+                  // ユーザーメッセージのステータス更新
+                  var updatedUserMsg = userMessage
+                  updatedUserMsg.status = .queued
+                  updateMessage(updatedUserMsg)
+
+                  // ✅ 修正: AI応答メッセージ（jobId にサーバーIDを設定）
+                  let assistantMessage = Message(
+                      jobId: response.id,
+                      type: .assistant,
+                      content: "",
+                      status: .queued
+                  )
+                  messages.append(assistantMessage)
+                  messageStore.addMessage(assistantMessage)
+
+                  // ✅ 修正: SSE接続（messageIdも渡す）
+                  startSSEStreaming(jobId: response.id, messageId: assistantMessage.id)
+
+              } catch {
+                  errorMessage = error.localizedDescription
+                  // エラーメッセージを表示
+                  var failedMsg = userMessage
+                  failedMsg.status = .failed
+                  failedMsg.errorMessage = error.localizedDescription
+                  updateMessage(failedMsg)
               }
+              isLoading = false
+          }
+      }
+
+      // ✅ 修正: ジョブごとに個別SSEManager生成・購読
+      private func startSSEStreaming(jobId: String, messageId: String) {
+          // 既存接続があれば切断
+          if let existing = sseConnections[jobId] {
+              existing.disconnect()
+          }
+
+          // 新規SSEManager生成
+          let manager = SSEManager()
+          sseConnections[jobId] = manager
+          manager.connect(jobId: jobId)
+
+          // ✅ messageId をクロージャでキャプチャして正しいメッセージを更新
+          manager.$jobStatus
+              .receive(on: RunLoop.main)
+              .sink { [weak self] status in
+                  guard let self else { return }
+                  self.updateMessageStatus(messageId: messageId, status: status)
+              }
+              .store(in: &cancellables)
+
+          manager.$isConnected
+              .receive(on: RunLoop.main)
+              .sink { [weak self] connected in
+                  guard let self else { return }
+                  if !connected {
+                      // SSE切断時は最終結果を取得
+                      Task {
+                          await self.fetchFinalResult(jobId: jobId, messageId: messageId)
+                          // 切断後はマネージャを削除
+                          self.sseConnections.removeValue(forKey: jobId)
+                      }
+                  }
+              }
+              .store(in: &cancellables)
+      }
+
+      // ✅ 修正: messageId で検索
+      private func updateMessageStatus(messageId: String, status: String) {
+          guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+          var message = messages[index]
+
+          switch status {
+          case "running":
+              message.status = .running
+          case "success":
+              message.status = .completed
+              message.finishedAt = Date()
+          case "failed":
+              message.status = .failed
+              message.finishedAt = Date()
+          default:
+              break
+          }
+
+          messages[index] = message
+          messageStore.updateMessage(message)
+      }
+
+      // ✅ 修正: messageId で検索
+      private func fetchFinalResult(jobId: String, messageId: String) async {
+          do {
+              let job = try await apiClient.fetchJob(id: jobId)
+              guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+
+              var message = messages[index]
+              message.content = job.stdout ?? ""
+              message.status = job.status == "success" ? .completed : .failed
+              message.finishedAt = job.finishedAt
+              message.errorMessage = job.stderr
+
+              messages[index] = message
+              messageStore.updateMessage(message)
           } catch {
               errorMessage = error.localizedDescription
           }
       }
 
-      private func startSSEStreaming() {
-          sseManager.connect(jobId: jobId)
+      private func updateMessage(_ message: Message) {
+          if let index = messages.firstIndex(where: { $0.id == message.id }) {
+              messages[index] = message
+              messageStore.updateMessage(message)
+          }
+      }
 
-          // ✅ SSE接続状態を監視
-          sseManager.$isConnected
-              .assign(to: \.isSSEConnected, on: self)
-              .store(in: &cancellables)
+      func clearChat() {
+          // ✅ 全SSE接続を切断
+          for (_, manager) in sseConnections {
+              manager.disconnect()
+          }
+          sseConnections.removeAll()
+          cancellables.removeAll()
 
-          // ✅ SSE status変更を監視（AnyCancellableを保持）
-          sseManager.$jobStatus
-              .sink { [weak self] newStatus in
-                  guard let self = self else { return }
-                  self.job?.status = newStatus
+          messages.removeAll()
+          messageStore.clearAll()
+      }
 
-                  // 完了したらSSE切断
-                  if newStatus == "success" || newStatus == "failed" {
-                      self.stopSSEStreaming()
-                      Task {
-                          await self.loadJob()  // 最終結果を取得
+      // ✅ deinit時のクリーンアップ
+      deinit {
+          for (_, manager) in sseConnections {
+              manager.disconnect()
+          }
+      }
+  }
+  ```
+
+- [ ] メッセージ送信ロジック実装
+- [ ] SSE接続によるリアルタイム更新
+- [ ] 最終結果取得（Markdown形式）
+
+---
+
+### 2.4 ChatView（メインチャット画面）実装
+
+**ファイル**: `Views/ChatView.swift`
+
+- [ ] ChatView 実装
+  ```swift
+  import SwiftUI
+
+  struct ChatView: View {
+      @StateObject private var viewModel = ChatViewModel(runner: "claude")
+      @State private var scrollProxy: ScrollViewProxy?
+
+      var body: some View {
+          NavigationStack {
+              VStack(spacing: 0) {
+                  // メッセージ一覧
+                  ScrollViewReader { proxy in
+                      ScrollView {
+                          LazyVStack(spacing: 12) {
+                              ForEach(viewModel.messages) { message in
+                                  MessageBubble(message: message)
+                                      .id(message.id)
+                              }
+                          }
+                          .padding(.vertical)
+                      }
+                      .onAppear {
+                          scrollProxy = proxy
+                      }
+                      .onChange(of: viewModel.messages.count) { _ in
+                          scrollToBottom()
                       }
                   }
+
+                  Divider()
+
+                  // 入力バー
+                  InputBar(
+                      text: $viewModel.inputText,
+                      onSend: {
+                          viewModel.sendMessage()
+                      },
+                      isLoading: viewModel.isLoading
+                  )
               }
-              .store(in: &cancellables)  // ✅ メモリリーク防止
-      }
-
-      func stopSSEStreaming() {  // ✅ public: ビューから呼び出すため
-          sseManager.disconnect()
-          cancellables.removeAll()  // ✅ 購読解除
-      }
-
-      // ✅ フォールバック: SSE失敗時はポーリング
-      func startPollingFallback() {
-          pollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-              guard let self = self else { return }
-              Task {
-                  await self.loadJob()
+              .navigationTitle("Claude Chat")
+              .navigationBarTitleDisplayMode(.inline)
+              .toolbar {
+                  ToolbarItem(placement: .navigationBarTrailing) {
+                      Menu {
+                          Button("履歴をクリア") {
+                              viewModel.clearChat()
+                          }
+                          Button("Codexに切り替え") {
+                              // TODO: runner切り替え
+                          }
+                      } label: {
+                          Image(systemName: "ellipsis.circle")
+                      }
+                  }
               }
           }
       }
 
-      func stopPolling() {
-          pollingTimer?.invalidate()
-          pollingTimer = nil
+      private func scrollToBottom() {
+          guard let lastMessage = viewModel.messages.last else { return }
+          withAnimation {
+              scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+          }
+      }
+  }
+  ```
+
+- [ ] ScrollView + LazyVStack でメッセージ一覧表示
+- [ ] 新着メッセージ時の自動スクロール
+- [ ] ツールバーメニュー（履歴クリア、runner切り替え）
+
+---
+
+### 2.5 ContentView 更新
+
+**ファイル**: `ContentView.swift`
+
+- [ ] ChatView を呼び出すように変更
+  ```swift
+  import SwiftUI
+
+  struct ContentView: View {
+      var body: some View {
+          ChatView()
       }
   }
   ```
 
 ---
 
-### 3.10 JobDetailView SSE対応
+### Phase 2 完了条件
 
-**ファイル**: `Views/JobDetailView.swift`（更新）
+- [ ] MessageBubble 実装完了（ユーザー/AI吹き出し表示）
+- [ ] InputBar 実装完了（複数行入力対応）
+- [ ] ChatViewModel 実装完了（メッセージ送信・SSE更新）
+- [ ] ChatView 実装完了（チャット画面表示）
+- [ ] Markdown表示動作確認（MarkdownUIでレンダリング成功）
+- [ ] シミュレータでチャット送受信成功
 
-- [ ] UI要素更新
-  ```swift
-  struct JobDetailView: View {
-      let jobId: String
-      @StateObject private var viewModel: JobDetailViewModel
+---
 
-      init(jobId: String) {
-          self.jobId = jobId
-          _viewModel = StateObject(wrappedValue: JobDetailViewModel(jobId: jobId))
-      }
+## Phase 3: SSEリアルタイム更新 + プッシュ通知（2-3日）
 
-      var body: some View {
-          ScrollView {
-              VStack(alignment: .leading, spacing: 16) {
-                  // ✅ SSE接続状態表示（isSSEConnected公開プロパティ使用）
-                  if viewModel.isSSEConnected {
-                      HStack {
-                          Circle()
-                              .fill(Color.green)
-                              .frame(width: 8, height: 8)
-                          Text("リアルタイム更新中")
-                              .font(.caption)
-                              .foregroundColor(.secondary)
-                      }
-                  }
+### 目標
+既存のSSE実装を活用し、バックグラウンド時のプッシュ通知を統合
 
-                  // 既存のUI...
-              }
-          }
-          .task {
-              await viewModel.loadJob()
+### 3.1 SSE統合確認
 
-              // ✅ SSE失敗時のフォールバック（isSSEConnected使用）
-              DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                  if !viewModel.isSSEConnected && viewModel.job?.isRunning == true {
-                      viewModel.startPollingFallback()
-                  }
-              }
-          }
-          .onDisappear {
-              viewModel.stopSSEStreaming()
-              viewModel.stopPolling()
-          }
-      }
-  }
-  ```
+**前提**: Phase 1.2（v1.2）で実装済み
+
+- [ ] SSEManager が ChatViewModel で正しく動作することを確認
+- [ ] ジョブ状態変更イベントが Message.status に反映されることを確認
+- [ ] SSE切断時のポーリングフォールバック動作確認
+
+---
+
+### 3.2 プッシュ通知設定
+
+**ファイル**: `App/AppDelegate.swift`
+
+- [ ] AppDelegate 実装（既存実装計画を流用）
+  - [ ] UNUserNotificationCenter でプッシュ通知許可要求
+  - [ ] デバイストークン取得
+  - [ ] サーバーへデバイス登録（POST /register_device）
+  - [ ] 通知タップ時のディープリンク処理
+
+- [ ] Apple Developer Portal で APNs 設定
+  - [ ] Push Notifications Capability 有効化
+  - [ ] .p8 認証キー取得
+
+---
+
+### 3.3 通知受信時の処理
+
+- [ ] 通知ペイロードからジョブID抽出
+- [ ] ChatView でジョブIDに該当するメッセージをハイライト
+- [ ] 最新結果を取得して Markdown 表示更新
 
 ---
 
 ### Phase 3 完了条件
 
-- [ ] APNs設定完了（Apple Developer Portal）
-- [ ] AppDelegate実装完了
-- [ ] 実機でデバイストークン取得成功
-- [ ] サーバーへのデバイス登録成功
-- [ ] プッシュ通知受信成功
-- [ ] 通知タップ時の画面遷移成功
-- [ ] SSEManager実装完了（3.8）
-- [ ] JobDetailViewModel SSE対応完了（3.9）
-- [ ] JobDetailView リアルタイム更新確認（3.10）
-- [ ] SSE接続失敗時のポーリングフォールバック動作確認
+- [ ] SSE接続でチャットメッセージがリアルタイム更新
+- [ ] バックグラウンド時にプッシュ通知受信成功
+- [ ] 通知タップで該当メッセージに遷移成功
 
 ---
 
-## Phase 4: Apple Watch 連携（2-3日）
+## Phase 4: Apple Watch チャット連携（2-3日）
 
 ### 目標
-Apple Watchからプリセットボタンでジョブを実行できるようにする
+Apple Watchでプリセットプロンプトを送信し、iPhoneのチャット履歴と同期
 
-### 4.1 watchOSターゲット追加
+### 4.1 Watch Extension 作成
 
-- [ ] Xcodeでwatchアプリターゲット作成
-  - [ ] File > New > Target
-  - [ ] "Watch App" 選択
-  - [ ] Product Name: "RemotePrompt Watch"
-  - [ ] Organization Identifier設定
-  - [ ] Language: Swift
-  - [ ] User Interface: SwiftUI
-- [ ] Bundle Identifier確認
-  - [ ] `com.example.remoteprompt.watchkitapp`
+- [ ] Xcode で Watch App Target 追加
+- [ ] Watch Connectivity フレームワーク追加
 
 ---
 
-### 4.2 Watch Connectivity設定（iPhone側）
+### 4.2 Watch プリセット画面実装
 
-**ファイル**: `Services/WatchConnectivityManager.swift`
+**ファイル**: `WatchApp/PresetListView.swift`
 
-- [ ] WatchConnectivityManagerクラス定義
+- [ ] プリセットボタン一覧表示
   ```swift
-  import WatchConnectivity
-
-  class WatchConnectivityManager: NSObject, ObservableObject {
-      static let shared = WatchConnectivityManager()
-      var session: WCSession?
-
-      override private init() {
-          super.init()
-          if WCSession.isSupported() {
-              session = WCSession.default
-              session?.delegate = self
-              session?.activate()
-          }
-      }
-  }
-  ```
-
-- [ ] WCSessionDelegate実装
-  ```swift
-  extension WatchConnectivityManager: WCSessionDelegate {
-      func session(_ session: WCSession,
-                  activationDidCompleteWith activationState: WCSessionActivationState,
-                  error: Error?) {
-          print("WCSession activated: \(activationState.rawValue)")
-      }
-
-      func sessionDidBecomeInactive(_ session: WCSession) {
-          print("WCSession inactive")
-      }
-
-      func sessionDidDeactivate(_ session: WCSession) {
-          print("WCSession deactivated")
-          session.activate()
-      }
-  }
-  ```
-
-- [ ] メッセージ受信ハンドラ実装
-  ```swift
-  extension WatchConnectivityManager {
-      func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
-          guard message["type"] as? String == "preset" else { return }
-
-          let action = message["action"] as? String ?? ""
-          let runner = message["runner"] as? String ?? Constants.Runners.claude
-
-          let inputText = presetTextForAction(action)
-
-          Task {
-              do {
-                  _ = try await APIClient.shared.createJob(
-                      runner: runner,
-                      inputText: inputText
-                  )
-                  print("Job created from Watch: \(action)")
-              } catch {
-                  print("Failed to create job from Watch: \(error)")
-              }
-          }
-      }
-
-      private func presetTextForAction(_ action: String) -> String {
-          switch action {
-          case "daily_batch":
-              return "今日のバッチ処理を開始してください"
-          case "status_check":
-              return "現在のシステムステータスを確認してください"
-          case "check_logs":
-              return "最新のログを確認してください"
-          default:
-              return action
-          }
-      }
-  }
-  ```
-
----
-
-### 4.3 RemotePromptApp更新（iPhone側）
-
-**ファイル**: `App/RemotePromptApp.swift`
-
-- [ ] WatchConnectivityManager初期化
-  ```swift
-  @main
-  struct RemotePromptApp: App {
-      @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-      init() {
-          // Watch Connectivity初期化
-          _ = WatchConnectivityManager.shared
-      }
-
-      var body: some Scene {
-          WindowGroup {
-              JobsListView()
-          }
-      }
-  }
-  ```
-
----
-
-### 4.4 Watch Connectivity設定（Watch側）
-
-**ファイル**: `RemotePrompt Watch/Services/WatchViewModel.swift`
-
-- [ ] WatchViewModelクラス定義
-  ```swift
-  import WatchKit
-  import WatchConnectivity
-
-  class WatchViewModel: NSObject, ObservableObject {
-      var session: WCSession?
-      @Published var lastError: String?
-
-      override init() {
-          super.init()
-          if WCSession.isSupported() {
-              session = WCSession.default
-              session?.delegate = self
-              session?.activate()
-          }
-      }
-  }
-  ```
-
-- [ ] WCSessionDelegate実装
-  ```swift
-  extension WatchViewModel: WCSessionDelegate {
-      func session(_ session: WCSession,
-                  activationDidCompleteWith activationState: WCSessionActivationState,
-                  error: Error?) {
-          print("Watch WCSession activated: \(activationState.rawValue)")
-      }
-  }
-  ```
-
-- [ ] プリセット送信メソッド実装
-  ```swift
-  extension WatchViewModel {
-      func sendPreset(action: String, runner: String) {
-          guard let session = session, session.isReachable else {
-              lastError = "iPhone not reachable"
-              return
-          }
-
-          let message: [String: Any] = [
-              "type": "preset",
-              "action": action,
-              "runner": runner
-          ]
-
-          session.sendMessage(message, replyHandler: nil) { error in
-              DispatchQueue.main.async {
-                  self.lastError = error.localizedDescription
-              }
-          }
-      }
-  }
-  ```
-
----
-
-### 4.5 Watch画面実装
-
-**ファイル**: `RemotePrompt Watch/Views/PresetButtonsView.swift`
-
-- [ ] PresetButtonsView定義
-  ```swift
-  import SwiftUI
-
-  struct PresetButtonsView: View {
-      @StateObject private var viewModel = WatchViewModel()
-
-      let presets: [(title: String, action: String, runner: String)] = [
-          ("今日のバッチ", "daily_batch", "claude"),
-          ("ステータス確認", "status_check", "codex"),
-          ("ログ確認", "check_logs", "claude")
+  struct PresetListView: View {
+      let presets = [
+          ("ログ確認", "check_logs"),
+          ("システム状態", "system_status"),
+          ("エラー解析", "analyze_error")
       ]
 
       var body: some View {
-          // UI実装
-      }
-  }
-  ```
-
-- [ ] UI要素実装
-  - [ ] NavigationStack
-    - [ ] List(presets, id: \.action)
-      - [ ] Button(action: sendPreset)
-        - [ ] VStack(alignment: .leading)
-          - [ ] Text(preset.title)
-            - [ ] .font(.headline)
-          - [ ] Text(preset.runner)
-            - [ ] .font(.caption)
-            - [ ] .foregroundColor(.secondary)
-    - [ ] .navigationTitle("プリセット")
-    - [ ] .alert(エラー表示用)
-
-- [ ] メソッド実装
-  ```swift
-  private func sendPreset(_ preset: (title: String, action: String, runner: String)) {
-      viewModel.sendPreset(action: preset.action, runner: preset.runner)
-      WKInterfaceDevice.current().play(.success)  // ハプティックフィードバック
-  }
-  ```
-
----
-
-### 4.6 Watch App エントリポイント
-
-**ファイル**: `RemotePrompt Watch/RemotePromptWatchApp.swift`
-
-- [ ] RemotePromptWatchApp定義
-  ```swift
-  import SwiftUI
-
-  @main
-  struct RemotePromptWatchApp: App {
-      var body: some Scene {
-          WindowGroup {
-              PresetButtonsView()
+          List(presets, id: \.1) { preset in
+              Button(preset.0) {
+                  sendPreset(preset.1)
+              }
           }
       }
+
+      func sendPreset(_ action: String) {
+          // iPhone に WatchConnectivity 経由で送信
+      }
   }
   ```
 
 ---
 
-### 4.7 Watch連携テスト
+### 4.3 iPhone ↔ Watch 通信
 
-- [ ] シミュレータテスト
-  - [ ] iPhone + Apple Watchペアシミュレータ起動
-  - [ ] 両方のアプリ起動
-  - [ ] WCSession接続確認
-- [ ] メッセージ送信テスト
-  - [ ] Watchでプリセットボタンタップ
-  - [ ] iPhone側でメッセージ受信確認
-  - [ ] サーバーへのジョブ投稿確認
-- [ ] 実機テスト
-  - [ ] 実機iPhone + 実機Apple Watchでテスト
-  - [ ] プリセット実行成功確認
-  - [ ] プッシュ通知受信確認（Watchでも）
+- [ ] WCSession でプリセット送信
+- [ ] iPhone 側で受信→ジョブ作成→チャット履歴に追加
+- [ ] Watch 側で実行結果を簡易表示（テキストのみ）
 
 ---
 
 ### Phase 4 完了条件
 
-- [ ] watchOSターゲット作成完了
-- [ ] WatchConnectivity実装完了（iPhone/Watch両方）
-- [ ] Watch画面実装完了
-- [ ] シミュレータで連携確認
-- [ ] 実機でプリセット実行成功
-- [ ] Watch→iPhone→サーバーの全経路動作確認
+- [ ] Watch からプリセット送信成功
+- [ ] iPhone のチャット履歴に反映成功
+- [ ] Watch で実行結果受信成功
 
 ---
 
 ## Phase 5: 統合テスト・UI/UX改善（2-3日）
 
 ### 目標
-全機能の統合テストを実施し、UI/UXを最適化する
+E2Eテストと使いやすさの改善
 
 ### 5.1 統合テストシナリオ
 
-- [ ] エンドツーエンドテスト
-  - [ ] シナリオ1: iPhone新規ジョブ作成→完了通知受信
-    - [ ] 新規ジョブ作成
-    - [ ] ジョブ詳細画面でポーリング確認
-    - [ ] 完了時にプッシュ通知受信
-    - [ ] 通知タップで詳細画面表示
-  - [ ] シナリオ2: Watch プリセット実行→iPhone通知受信
-    - [ ] Watchプリセットボタンタップ
-    - [ ] iPhoneでジョブ作成確認
-    - [ ] 完了時にiPhone/Watch両方で通知受信
-  - [ ] シナリオ3: セッション継続確認
-    - [ ] 同じrunnerで連続ジョブ実行
-    - [ ] サーバー側でセッションID同一確認
-    - [ ] 会話履歴継続確認（実際の応答内容で検証）
+- [ ] シナリオ1: チャットメッセージ送信→SSE更新→Markdown表示
+- [ ] シナリオ2: バックグラウンド→プッシュ通知→フォアグラウンド復帰
+- [ ] シナリオ3: Watch からプリセット送信→iPhone で結果確認
+- [ ] シナリオ4: オフライン→オンライン復帰時の再送処理
+- [ ] シナリオ5: 長文Markdown（コードブロック、表、リスト）の表示確認
 
 ---
 
-### 5.2 エラーケーステスト
+### 5.2 UI/UX改善
 
-- [ ] ネットワークエラー
-  - [ ] サーバー停止状態でジョブ作成
-  - [ ] エラーメッセージ表示確認
-- [ ] タイムアウトエラー
-  - [ ] 長時間実行ジョブ（5分超）
-  - [ ] タイムアウト処理確認
-- [ ] Watch非接続時
-  - [ ] iPhone単独でWatch機能無効確認
-  - [ ] クラッシュしないことを確認
+- [ ] メッセージバブルの最大幅調整
+- [ ] Markdown テーマカスタマイズ（コードブロックのシンタックスハイライト）
+- [ ] 入力中インジケーター（「AI が入力中...」表示）
+- [ ] エラーメッセージの再送ボタン
+- [ ] チャット履歴の検索機能
+- [ ] ダークモード対応確認
 
 ---
 
-### 5.3 UI/UX改善
+### 5.3 パフォーマンステスト
 
-**ジョブ一覧画面**:
-- [ ] 空リスト時のメッセージ追加
-  ```swift
-  if viewModel.jobs.isEmpty && !viewModel.isLoading {
-      ContentUnavailableView(
-          "ジョブがありません",
-          systemImage: "tray",
-          description: Text("右上の+ボタンから新規ジョブを作成できます")
-      )
-  }
-  ```
-- [ ] Pull-to-Refresh実装（既存）
-- [ ] ローディングインジケーター追加
-  ```swift
-  if viewModel.isLoading {
-      ProgressView()
-  }
-  ```
-
-**ジョブ詳細画面**:
-- [ ] 出力コピー機能追加
-  ```swift
-  Button(action: {
-      UIPasteboard.general.string = job.stdout
-  }) {
-      Label("コピー", systemImage: "doc.on.doc")
-  }
-  ```
-- [ ] 実行中ジョブのリアルタイム更新UI
-  - [ ] ProgressView表示
-  - [ ] "実行中..."メッセージ
-
-**新規ジョブ作成画面**:
-- [ ] プリセット入力候補追加
-  - [ ] よく使うプロンプトのテンプレート
-  - [ ] タップで入力フィールドに挿入
-- [ ] Runner選択のヘルプテキスト
-  - [ ] "Claude: 汎用タスク向け"
-  - [ ] "Codex: コード生成向け"
-
----
-
-### 5.4 パフォーマンス最適化
-
-- [ ] ジョブ一覧のページネーション実装
-  - [ ] 初回20件取得
-  - [ ] スクロール最下部でさらに20件取得
-- [ ] 画像キャッシュ（該当する場合）
-- [ ] メモリリークチェック
-  - [ ] Instruments実行
-  - [ ] メモリグラフ確認
-
----
-
-### 5.5 アクセシビリティ対応
-
-- [ ] VoiceOver対応
-  - [ ] すべてのUI要素にaccessibilityLabel設定
-  - [ ] 画像にaccessibilityHint設定
-- [ ] Dynamic Type対応
-  - [ ] .font(.body) 等のシステムフォント使用
-  - [ ] カスタムフォントサイズ対応
-- [ ] Color Contrast確認
-  - [ ] WCAG AAレベル準拠確認
-
----
-
-### 5.6 ローカライゼーション準備
-
-- [ ] Localizable.stringsファイル作成
-  - [ ] 日本語（ja）
-  - [ ] 英語（en）
-- [ ] すべてのUI文字列を`NSLocalizedString`化
-  ```swift
-  Text(NSLocalizedString("job_list_title", comment: "Jobs list title"))
-  ```
-
----
-
-### 5.7 最終動作確認
-
-- [ ] 実機テスト（iPhone）
-  - [ ] iOS 16.0
-  - [ ] iOS 17.0+
-- [ ] 実機テスト（Apple Watch）
-  - [ ] watchOS 9.0
-  - [ ] watchOS 10.0+
-- [ ] 全機能動作確認
-  - [ ] ジョブCRUD
-  - [ ] プッシュ通知
-  - [ ] Watch連携
-  - [ ] セッション管理
+- [ ] 100件メッセージでのスクロール性能確認
+- [ ] Markdown レンダリング速度測定
+- [ ] SSE接続のメモリリーク確認
 
 ---
 
 ### Phase 5 完了条件
 
-- [ ] 全統合テスト成功
-- [ ] エラーケース正常処理
-- [ ] UI/UX改善完了
-- [ ] パフォーマンス最適化完了
-- [ ] アクセシビリティ対応完了
-- [ ] 実機で全機能動作確認
+- [ ] 全統合テストシナリオ成功
+- [ ] UI/UX改善項目実装完了
+- [ ] パフォーマンステスト合格
+- [ ] App Store 提出可能な品質到達
 
 ---
 
@@ -1597,59 +988,41 @@ Apple Watchからプリセットボタンでジョブを実行できるように
 
 ### 最終確認項目
 
-- [ ] Phase 1完了（データモデル + API Client基盤）
-- [ ] Phase 2完了（iOS 基本UI実装）
-- [ ] Phase 3完了（プッシュ通知実装）
-- [ ] Phase 4完了（Apple Watch 連携）
+- [ ] Phase 1完了（チャットUIデータモデル + API Client拡張）
+- [ ] Phase 2完了（Messenger風チャットUI + Markdown表示）
+- [ ] Phase 3完了（SSEリアルタイム更新 + プッシュ通知）
+- [ ] Phase 4完了（Apple Watch チャット連携）
 - [ ] Phase 5完了（統合テスト・UI/UX改善）
 
-### App Store申請準備（オプション）
+### リリース準備
 
-- [ ] アプリアイコン作成（1024x1024px）
-- [ ] スクリーンショット作成（iPhone/Watch）
-- [ ] App Store説明文作成
-- [ ] プライバシーポリシー作成
-- [ ] 利用規約作成
-- [ ] TestFlight配布テスト
-- [ ] App Store Connect設定
-- [ ] 審査申請
+- [ ] TestFlight ビルドアップロード
+- [ ] 実機テスト（iPhone + Apple Watch）
+- [ ] スクリーンショット作成
+- [ ] App Store 説明文作成
 
 ---
 
-## トラブルシューティング
+## 技術スタック まとめ
 
-### よくある問題
-
-1. **プッシュ通知が届かない**
-   - 対処: Provisioning Profileの再作成
-   - デバイストークン再取得
-   - サーバー側.p8ファイル確認
-
-2. **Watch Connectivity接続失敗**
-   - 対処: 両方のアプリを再起動
-   - WCSession.activate()呼び出し確認
-   - ペアリング確認
-
-3. **API通信エラー**
-   - 対処: Info.plist ATS設定確認
-   - サーバーURL確認（Tailscale IP）
-   - ネットワーク接続確認
-
-4. **ジョブ詳細画面でクラッシュ**
-   - 対処: オプショナルプロパティのnil処理確認
-   - デコードエラーログ確認
+| レイヤー | 技術 | 用途 |
+|---------|------|------|
+| UI | SwiftUI | チャット画面、メッセージバブル |
+| Markdown | MarkdownUI | AI応答のMarkdown表示 |
+| ネットワーク | URLSession | REST API通信 |
+| リアルタイム | SSE（URLSessionDataDelegate） | ジョブ状態更新 |
+| 永続化 | UserDefaults | チャット履歴保存 |
+| 通知 | UNUserNotificationCenter + APNs | バックグラウンド通知 |
+| Watch連携 | WatchConnectivity | プリセット送信 |
 
 ---
 
-## 次のステップ
+## 参考資料
 
-iOS/watchOS実装完了後：
-1. ユーザーフィードバック収集
-2. 機能追加計画
-   - ジョブ履歴検索
-   - ジョブお気に入り機能
-   - Watchコンプリケーション
-3. 運用監視体制構築
+- [MarkdownUI GitHub](https://github.com/gonzalezreal/swift-markdown-ui)
+- [Apple Push Notifications Guide](https://developer.apple.com/documentation/usernotifications)
+- [WatchConnectivity Framework](https://developer.apple.com/documentation/watchconnectivity)
+- [Server-Sent Events (SSE) Specification](https://html.spec.whatwg.org/multipage/server-sent-events.html)
 
 ---
 
