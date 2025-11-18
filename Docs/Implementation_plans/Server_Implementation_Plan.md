@@ -643,23 +643,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ### 3.7 エラーハンドリング
 
-**ファイル**: `main.py`
-
-- [ ] カスタム例外定義
-  ```python
-  class SessionExecutionError(Exception):
-      pass
-
-  class SessionTimeoutError(SessionExecutionError):
-      pass
-  ```
-
-- [ ] 例外ハンドラ登録
-  ```python
-  @app.exception_handler(SessionExecutionError)
-  async def session_error_handler(request, exc):
-      return JSONResponse(status_code=500, content={"detail": str(exc)})
-  ```
+- [x] 方針: FastAPI標準の `HTTPException`/`BackgroundTasks` で例外を処理し、カスタム例外は現状不要（SessionManager側で例外捕捉済み）
 
 ### 3.8 認証 / CORS 設定
 
@@ -669,42 +653,42 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ### 3.9 ローカルサーバー起動テスト
 
-- [ ] サーバー起動
+- [x] サーバー起動（uvicorn main:app --reload）
   ```bash
   uvicorn main:app --reload --host 0.0.0.0 --port 8000
   ```
 
-- [ ] ヘルスチェック
+- [x] ヘルスチェック
   ```bash
   curl http://localhost:8000/health
   ```
 
-- [ ] デバイス登録テスト
+- [x] デバイス登録テスト
   ```bash
   curl -X POST http://localhost:8000/register_device \
     -H "Content-Type: application/json" \
     -d '{"device_id": "test-device-1", "device_token": "dummy-token"}'
   ```
 
-- [ ] ジョブ作成テスト（Claude）
+- [x] ジョブ作成テスト（Claude）
   ```bash
   curl -X POST http://localhost:8000/jobs \
     -H "Content-Type: application/json" \
     -d '{"runner": "claude", "input_text": "こんにちは", "device_id": "test-device-1"}'
   ```
 
-- [ ] ジョブ取得テスト
+- [x] ジョブ取得テスト
   ```bash
   JOB_ID="..." # 上記で取得したID
   curl http://localhost:8000/jobs/$JOB_ID
   ```
 
-- [ ] セッション状態確認
+- [x] セッション状態確認
   ```bash
   curl "http://localhost:8000/sessions?device_id=test-device-1"
   ```
 
-- [ ] セッション削除テスト
+- [x] セッション削除テスト
   ```bash
   curl -X DELETE "http://localhost:8000/sessions/claude?device_id=test-device-1"
   ```
