@@ -23,7 +23,7 @@ class JobManager:
     def __init__(self, session_manager: Optional[SessionManager] = None):
         self.session_manager = session_manager or SessionManager()
 
-    def create_job(
+    def create_job(  # pylint: disable=too-many-arguments
         self,
         runner: str,
         input_text: str,
