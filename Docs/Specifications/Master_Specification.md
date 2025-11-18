@@ -1140,9 +1140,19 @@ DELETE /sessions/claude?device_id=iphone-nao-1
 
 ---
 
-## 7. プッシュ通知設計
+## 7. リアルタイム通知設計
 
-### 7.1 APNs設定
+> **2つの通知方式**: バックグラウンド通知（APNs）+ フォアグラウンド更新（SSE）
+
+### 7.1 通知方式の使い分け
+
+| 状況 | 通知方式 | 用途 |
+|------|----------|------|
+| **アプリがバックグラウンド** | APNs（Push Notification） | ジョブ完了を通知バナーで知らせる |
+| **アプリがフォアグラウンド** | SSE（Server-Sent Events） | ジョブ詳細画面でリアルタイム状態更新 |
+| **SSE接続失敗時** | ポーリング（GET /jobs/{id}） | フォールバック（5秒間隔） |
+
+### 7.2 APNs設定
 
 #### 必要なファイル
 - `.p8` ファイル（APNs認証キー）
@@ -1226,6 +1236,145 @@ def send_push_notification(device_token: str, job_id: str, runner: str, status: 
     "sound": "default"
   },
   "job_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+### 7.4 SSEストリーミング実装
+
+> **フォアグラウンド専用**: アプリがジョブ詳細画面を表示している場合のリアルタイム更新
+
+#### サーバー側エンドポイント
+
+**GET /jobs/{job_id}/stream**
+
+```python
+# sse_manager.py
+from fastapi import Request
+from fastapi.responses import StreamingResponse
+from typing import AsyncGenerator
+import asyncio
+import json
+
+class SSEManager:
+    def __init__(self):
+        self.connections: dict[str, set[asyncio.Queue]] = {}
+
+    async def subscribe(self, job_id: str) -> AsyncGenerator[str, None]:
+        """SSE接続をサブスクライブ"""
+        queue = asyncio.Queue()
+        if job_id not in self.connections:
+            self.connections[job_id] = set()
+        self.connections[job_id].add(queue)
+
+        try:
+            while True:
+                data = await queue.get()
+                if data is None:  # 終了シグナル
+                    break
+                yield f"data: {json.dumps(data)}\n\n"
+        finally:
+            self.connections[job_id].discard(queue)
+
+    async def broadcast(self, job_id: str, event_data: dict):
+        """ジョブ状態変更をブロードキャスト"""
+        if job_id in self.connections:
+            for queue in self.connections[job_id]:
+                await queue.put(event_data)
+
+# main.py
+@app.get("/jobs/{job_id}/stream")
+async def stream_job_status(job_id: str, request: Request):
+    async def event_generator():
+        async for message in sse_manager.subscribe(job_id):
+            if await request.is_disconnected():
+                break
+            yield message
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
+```
+
+#### ジョブ状態イベント
+
+| イベント | タイミング | データ例 |
+|----------|------------|----------|
+| **job_started** | ジョブ開始時 | `{"status": "running", "started_at": "2025-11-18T10:00:00Z"}` |
+| **job_completed** | ジョブ完了時 | `{"status": "success", "finished_at": "2025-11-18T10:05:00Z", "exit_code": 0}` |
+| **job_failed** | ジョブ失敗時 | `{"status": "failed", "finished_at": "2025-11-18T10:02:00Z", "exit_code": 1}` |
+
+#### クライアント側実装（Swift）
+
+```swift
+// SSEManager.swift
+import Foundation
+
+class SSEManager: ObservableObject {
+    @Published var jobStatus: String = "queued"
+    private var eventSource: EventSource?
+
+    func connect(jobId: String) {
+        let url = URL(string: "http://100.100.30.35:35000/jobs/\(jobId)/stream")!
+        eventSource = EventSource(url: url)
+
+        eventSource?.onMessage { message in
+            if let data = message.data(using: .utf8),
+               let json = try? JSONDecoder().decode(JobStatusEvent.self, from: data) {
+                DispatchQueue.main.async {
+                    self.jobStatus = json.status
+                }
+            }
+        }
+
+        eventSource?.connect()
+    }
+
+    func disconnect() {
+        eventSource?.disconnect()
+    }
+}
+
+struct JobStatusEvent: Codable {
+    let status: String
+    let started_at: String?
+    let finished_at: String?
+    let exit_code: Int?
+}
+```
+
+#### フォールバック処理
+
+SSE接続失敗時は従来のポーリングAPIに自動切替：
+
+```swift
+func startMonitoring(jobId: String) {
+    // まずSSE接続を試行
+    sseManager.connect(jobId: jobId)
+
+    // 10秒後にSSE接続状態を確認
+    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+        if !sseManager.isConnected {
+            // SSE失敗時はポーリングに切替
+            startPolling(jobId: jobId)
+        }
+    }
+}
+
+func startPolling(jobId: String) {
+    pollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+        Task {
+            let job = try await apiClient.fetchJob(id: jobId)
+            self.jobStatus = job.status
+            if job.status == "success" || job.status == "failed" {
+                self.pollingTimer?.invalidate()
+            }
+        }
+    }
 }
 ```
 

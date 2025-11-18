@@ -2,13 +2,14 @@
 
 作成日: 2025-11-17
 最終更新: 2025-11-18
-バージョン: 1.2
-対象: Phase 1 〜 Phase 5（非対話モード実装 → FastAPI + DB統合 → APNsプッシュ通知 → 統合テスト）
+バージョン: 1.3
+対象: Phase 1 〜 Phase 5（非対話モード実装 → FastAPI + DB統合 → APNsプッシュ通知 + SSE → 統合テスト）
 
 **変更履歴**:
 - v1.0 (2025-11-17): Phase 1-4 初版作成
 - v1.1 (2025-11-18): **Phase 5 APNsプッシュ通知実装を追加**（システム中核機能）
 - v1.2 (2025-11-18): **Phase順序変更: Phase 4とPhase 5を入れ替え**（統合テストで通知機能を検証するため）
+- v1.3 (2025-11-18): **Phase 4にSSEストリーミング実装を追加**（4.11〜4.13: リアルタイム状態更新）
 
 ---
 
@@ -1211,6 +1212,206 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ---
 
+### 4.11 SSEストリーミング実装
+
+**ファイル**: `sse_manager.py`, `main.py`
+
+> **目的**: アプリがフォアグラウンドの場合、ジョブ状態をリアルタイムでストリーミング配信する
+
+- [ ] sse_manager.py実装
+  ```python
+  from fastapi import Request
+  from fastapi.responses import StreamingResponse
+  from typing import AsyncGenerator
+  import asyncio
+  import json
+  import logging
+
+  LOGGER = logging.getLogger(__name__)
+
+  class SSEManager:
+      def __init__(self):
+          # job_id -> set of active connections
+          self.connections: dict[str, set[asyncio.Queue]] = {}
+
+      async def subscribe(self, job_id: str) -> AsyncGenerator[str, None]:
+          """SSE接続をサブスクライブ"""
+          queue = asyncio.Queue()
+
+          if job_id not in self.connections:
+              self.connections[job_id] = set()
+
+          self.connections[job_id].add(queue)
+          LOGGER.info("SSE connection opened for job %s", job_id)
+
+          try:
+              while True:
+                  data = await queue.get()
+                  if data is None:  # 終了シグナル
+                      break
+                  yield f"data: {json.dumps(data)}\n\n"
+          finally:
+              self.connections[job_id].discard(queue)
+              if not self.connections[job_id]:
+                  del self.connections[job_id]
+              LOGGER.info("SSE connection closed for job %s", job_id)
+
+      async def broadcast(self, job_id: str, event_data: dict):
+          """ジョブ状態変更をブロードキャスト"""
+          if job_id in self.connections:
+              for queue in self.connections[job_id]:
+                  await queue.put(event_data)
+              LOGGER.debug("Broadcasted event to %d connections for job %s",
+                          len(self.connections[job_id]), job_id)
+
+  sse_manager = SSEManager()
+  ```
+
+- [ ] main.py にSSEエンドポイント追加
+  ```python
+  from sse_manager import sse_manager
+  from fastapi.responses import StreamingResponse
+
+  @app.get("/jobs/{job_id}/stream")
+  async def stream_job_status(job_id: str, request: Request):
+      """ジョブ状態をSSEでストリーミング"""
+      async def event_generator():
+          async for message in sse_manager.subscribe(job_id):
+              if await request.is_disconnected():
+                  break
+              yield message
+
+      return StreamingResponse(
+          event_generator(),
+          media_type="text/event-stream",
+          headers={
+              "Cache-Control": "no-cache",
+              "X-Accel-Buffering": "no"
+          }
+      )
+  ```
+
+- [ ] job_manager.py にブロードキャスト処理追加
+  ```python
+  from sse_manager import sse_manager
+
+  async def _execute_job(job_id: str):
+      # ... 既存のコード ...
+
+      # ジョブ開始時
+      job.status = "running"
+      job.started_at = utcnow()
+      db.commit()
+      await sse_manager.broadcast(job_id, {
+          "status": "running",
+          "started_at": job.started_at.isoformat()
+      })
+
+      # ジョブ完了時
+      job.status = "success" if result.get("success") else "failed"
+      job.finished_at = utcnow()
+      db.commit()
+      await sse_manager.broadcast(job_id, {
+          "status": job.status,
+          "finished_at": job.finished_at.isoformat(),
+          "exit_code": job.exit_code
+      })
+  ```
+
+---
+
+### 4.12 フォールバック実装
+
+**ファイル**: `main.py`
+
+> **目的**: SSE接続失敗時は従来のポーリングAPIで対応
+
+- [ ] ポーリング用エンドポイント確認
+  ```python
+  # 既存のGET /jobs/{job_id}がフォールバック用APIとして機能
+  # クライアント側でSSE失敗時は5秒間隔でポーリング
+  ```
+
+- [ ] CORS設定でSSE対応
+  ```python
+  # main.py のCORS設定を確認
+  app.add_middleware(
+      CORSMiddleware,
+      allow_origins=settings.allowed_origins,
+      allow_credentials=True,
+      allow_methods=["*"],
+      allow_headers=["*"],
+      expose_headers=["*"]  # SSE用
+  )
+  ```
+
+---
+
+### 4.13 SSEテスト実装
+
+**ファイル**: `tests/test_sse.py`
+
+- [ ] SSE接続テスト
+  ```python
+  import pytest
+  from fastapi.testclient import TestClient
+  from main import app
+
+  def test_sse_stream():
+      client = TestClient(app)
+
+      # ジョブ作成
+      response = client.post("/jobs", json={
+          "runner": "claude",
+          "input_text": "Test",
+          "device_id": "test-device"
+      })
+      job_id = response.json()["id"]
+
+      # SSEストリーム接続
+      with client.stream("GET", f"/jobs/{job_id}/stream") as response:
+          assert response.status_code == 200
+          assert response.headers["content-type"] == "text/event-stream"
+
+          # 最初のイベントを受信
+          for line in response.iter_lines():
+              if line.startswith("data:"):
+                  data = json.loads(line[6:])
+                  assert "status" in data
+                  break
+  ```
+
+- [ ] ブロードキャストテスト
+  ```python
+  @pytest.mark.asyncio
+  async def test_sse_broadcast():
+      from sse_manager import sse_manager
+
+      job_id = "test-job-123"
+      received = []
+
+      async def receiver():
+          async for message in sse_manager.subscribe(job_id):
+              data = json.loads(message.split("data: ")[1])
+              received.append(data)
+              if data["status"] == "success":
+                  break
+
+      # レシーバー起動
+      task = asyncio.create_task(receiver())
+
+      # イベント送信
+      await sse_manager.broadcast(job_id, {"status": "running"})
+      await sse_manager.broadcast(job_id, {"status": "success"})
+
+      await task
+      assert len(received) == 2
+      assert received[0]["status"] == "running"
+      assert received[1]["status"] == "success"
+  ```
+
+---
+
 ### Phase 4 完了条件
 
 - [ ] PyAPNs2インストール完了
@@ -1222,6 +1423,9 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [ ] ユニットテスト成功（test_notify.py）
 - [ ] 統合テスト成功（test_job_manager_with_notify.py）
 - [ ] 実機E2Eテスト成功（iPhone実機で通知受信確認）
+- [ ] **sse_manager.py 実装完了（リアルタイムストリーミング）**
+- [ ] **SSEエンドポイント実装完了（GET /jobs/{job_id}/stream）**
+- [ ] **SSEテスト成功（test_sse.py）**
 
 ---
 
