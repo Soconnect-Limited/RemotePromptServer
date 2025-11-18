@@ -1,8 +1,14 @@
 # サーバー側実装計画（MacStudio FastAPI Server）
 
 作成日: 2025-11-17
-バージョン: 1.0
-対象: Phase 1 〜 Phase 3（非対話モード実装 → FastAPI + DB統合）
+最終更新: 2025-11-18
+バージョン: 1.2
+対象: Phase 1 〜 Phase 5（非対話モード実装 → FastAPI + DB統合 → APNsプッシュ通知 → 統合テスト）
+
+**変更履歴**:
+- v1.0 (2025-11-17): Phase 1-4 初版作成
+- v1.1 (2025-11-18): **Phase 5 APNsプッシュ通知実装を追加**（システム中核機能）
+- v1.2 (2025-11-18): **Phase順序変更: Phase 4とPhase 5を入れ替え**（統合テストで通知機能を検証するため）
 
 ---
 
@@ -15,7 +21,9 @@ Phase 2: ジョブ管理モデル拡張（1日）
   ↓
 Phase 3: FastAPI REST API層（2-3日）
   ↓
-Phase 4: 統合テスト・動作確認（1日）
+Phase 4: APNsプッシュ通知実装（1-2日）← **必須機能（v1.2で統合テスト前に移動）**
+  ↓
+Phase 5: 統合テスト・動作確認（1日）
 ```
 
 ---
@@ -706,127 +714,621 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ---
 
-## Phase 4: 統合テスト・動作確認（1日）
+## Phase 4: APNsプッシュ通知実装（1-2日）
 
 ### 目標
-実際のCLI実行を含む統合テストで全体動作を確認する
+ジョブ完了時にiPhone/Apple WatchへAPNsプッシュ通知を送信する機能を実装する
 
-### 4.1 統合テストシナリオ
+### 4.1 PyAPNs2インストール確認
 
-**ファイル**: `tests/test_integration.py`
+**ファイル**: `requirements.txt`
 
-- [x] シナリオ1: Claude初回→継続実行
-  - [x] POST /jobs (初回)
-  - [x] セッションID保存確認
-  - [x] POST /jobs (継続)
-  - [x] 会話履歴継続確認
+- [ ] PyAPNs2依存関係確認
+  ```bash
+  cat requirements.txt | grep PyAPNs2
+  # PyAPNs2==2.0.0 が含まれていることを確認
+  ```
 
-- [x] シナリオ2: Codex初回→継続実行
-  - [x] POST /jobs (初回)
-  - [x] セッションID抽出確認
-  - [x] POST /jobs (継続)
-  - [x] 会話履歴継続確認
-
-- [x] シナリオ3: セッション削除→再作成
-  - [x] DELETE /sessions/claude
-  - [x] POST /jobs (新規セッション)
-  - [x] 新しいセッションID確認
-
-- [x] シナリオ4: 複数デバイス同時実行
-  - [x] device_id: test-device-1
-  - [x] device_id: test-device-2
-  - [x] セッション混線なし確認
+- [ ] 未インストールの場合は追加
+  ```bash
+  echo "PyAPNs2==2.0.0" >> requirements.txt
+  pip install PyAPNs2==2.0.0
+  ```
 
 ---
 
-### 4.2 パフォーマンステスト
+### 4.2 APNs認証キー取得（Apple Developer Portal）
 
-- [x] 同時ジョブ実行テスト
-  - [x] 3ジョブ並列投稿
-  - [x] 全ジョブ完了確認
-  - [x] タイムアウトなし確認
+**前提**: iOSアプリ開発チームがAPNs認証キーを取得済み
 
-- [x] 長時間実行テスト
-  - [x] 5分間のプロンプト実行
-  - [x] タイムアウト動作確認
+- [ ] APNs認証キー情報の確認
+  - [ ] `.p8` ファイルのパス確認
+  - [ ] Key ID確認（10文字の英数字）
+  - [ ] Team ID確認（10文字の英数字）
+  - [ ] Bundle ID確認（例: `com.example.remoteprompt`）
+  - [ ] 環境確認（Development: Sandbox / Production）
+
+- [ ] ⚠️ **重要**: `.p8` ファイルをサーバーに配置
+  ```bash
+  mkdir -p /Users/macstudio/Projects/RemotePrompt/remote-job-server/certs
+  # .p8 ファイルを certs/ にコピー
+  # 例: certs/AuthKey_XXXXXXXXXX.p8
+  ```
+
+- [ ] `.gitignore` に証明書ディレクトリ追加
+  ```bash
+  echo "certs/" >> .gitignore
+  ```
 
 ---
 
-### 4.3 エラーケーステスト
+### 4.3 環境変数設定
 
-- [x] 不正なrunner指定
-  - [x] runner: "invalid"
-  - [x] エラーレスポンス確認
+**ファイル**: `.env`
 
-- [x] 存在しないジョブID
-  - [x] GET /jobs/invalid-id
-  - [x] 404確認
+- [ ] APNs設定を `.env` に追加
+  ```bash
+  # APNs設定（既存の設定の下に追記）
+  APNS_KEY_PATH=/Users/macstudio/Projects/RemotePrompt/remote-job-server/certs/AuthKey_XXXXXXXXXX.p8
+  APNS_KEY_ID=XXXXXXXXXX
+  APNS_TEAM_ID=YYYYYYYYYY
+  APNS_BUNDLE_ID=com.example.remoteprompt
+  APNS_USE_SANDBOX=true  # 開発環境はtrue、本番はfalse
+  ```
 
-- [x] セッションタイムアウト
-  - [x] 300秒超過プロンプト
-  - [x] Timeout エラー確認
+- [ ] 環境変数の検証
+  ```bash
+  cat .env | grep APNS
+  ```
 
 ---
 
-### 4.4 ログ・モニタリング確認
+### 4.4 config.py更新
 
-- [x] ログファイル確認
-  ```bash
-  tail -f logs/server.log
-  ```
-  **検証結果**: RotatingFileHandler が正常に動作。INFO/ERROR レベルのログが logs/server.log に出力されることを確認。
+**ファイル**: `config.py`
 
-- [x] エラーログフィルタ
-  ```bash
-  grep ERROR logs/server.log
-  ```
-  **検証結果**: grep によるエラーログフィルタリングが正常に機能することを確認。
+- [ ] Settings クラスにAPNs設定追加
+  ```python
+  from pydantic_settings import BaseSettings
+  from typing import List
 
-- [x] DB整合性確認
-  ```bash
-  sqlite3 data/jobs.db "SELECT * FROM device_sessions;"
-  sqlite3 data/jobs.db "SELECT id, status, runner FROM jobs ORDER BY created_at DESC LIMIT 10;"
+  class Settings(BaseSettings):
+      # 既存の設定...
+      api_key: str = "dev-api-key"
+      database_url: str = "sqlite:///./data/jobs.db"
+      log_level: str = "INFO"
+      allowed_origins: List[str] = ["http://100.100.30.35:35000"]
+
+      # APNs設定（追加）
+      apns_key_path: str = ""
+      apns_key_id: str = ""
+      apns_team_id: str = ""
+      apns_bundle_id: str = "com.example.remoteprompt"
+      apns_use_sandbox: bool = True
+
+      class Config:
+          env_file = ".env"
+
+  settings = Settings()
   ```
-  **検証結果**: jobs, devices, device_sessions の3テーブルが正常に作成され、データの整合性を確認。
+
+- [ ] APNs設定のバリデーション追加
+  ```python
+  def validate_apns_config() -> bool:
+      """APNs設定が有効かチェック"""
+      import os
+      if not settings.apns_key_path:
+          return False
+      if not os.path.exists(settings.apns_key_path):
+          LOGGER.warning("APNs key file not found: %s", settings.apns_key_path)
+          return False
+      if not settings.apns_key_id or not settings.apns_team_id:
+          return False
+      return True
+  ```
+
+---
+
+### 4.5 notify.py実装
+
+**ファイル**: `notify.py`
+
+- [ ] notify.pyファイル作成
+  ```bash
+  touch notify.py
+  ```
+
+- [ ] インポート定義
+  ```python
+  import logging
+  from typing import Optional
+  from apns2.client import APNsClient
+  from apns2.payload import Payload
+  from apns2.errors import APNsException
+  from config import settings, validate_apns_config
+
+  LOGGER = logging.getLogger(__name__)
+  ```
+
+- [ ] APNsClientシングルトン実装
+  ```python
+  _apns_client: Optional[APNsClient] = None
+
+  def get_apns_client() -> Optional[APNsClient]:
+      """APNsクライアントを取得（シングルトン）"""
+      global _apns_client
+
+      if not validate_apns_config():
+          LOGGER.warning("APNs configuration is invalid, notifications disabled")
+          return None
+
+      if _apns_client is None:
+          try:
+              _apns_client = APNsClient(
+                  credentials=settings.apns_key_path,
+                  use_sandbox=settings.apns_use_sandbox
+              )
+              LOGGER.info("APNs client initialized (sandbox: %s)", settings.apns_use_sandbox)
+          except Exception as e:
+              LOGGER.error("Failed to initialize APNs client: %s", e)
+              return None
+
+      return _apns_client
+  ```
+
+- [ ] send_push_notification関数実装
+  ```python
+  def send_push_notification(
+      device_token: str,
+      job_id: str,
+      runner: str,
+      status: str
+  ) -> bool:
+      """
+      APNs経由でプッシュ通知を送信
+
+      Args:
+          device_token: デバイストークン（64文字の16進数文字列）
+          job_id: ジョブID（UUID）
+          runner: "claude" or "codex"
+          status: "success" or "failed"
+
+      Returns:
+          送信成功時True、失敗時False
+      """
+      client = get_apns_client()
+      if client is None:
+          LOGGER.warning("APNs client not available, skipping notification")
+          return False
+
+      try:
+          # 通知タイトル・本文作成
+          title = "ジョブ完了" if status == "success" else "ジョブ失敗"
+          body = f"[{runner}] {job_id[:8]}: {status}"
+
+          # Payloadオブジェクト作成
+          payload = Payload(
+              alert={
+                  "title": title,
+                  "body": body
+              },
+              sound="default",
+              badge=1,
+              custom={
+                  "job_id": job_id,
+                  "runner": runner,
+                  "status": status
+              }
+          )
+
+          # APNs送信
+          client.send_notification(
+              device_token,
+              payload,
+              topic=settings.apns_bundle_id
+          )
+
+          LOGGER.info(
+              "Push notification sent: job=%s, device=%s, status=%s",
+              job_id[:8], device_token[:16], status
+          )
+          return True
+
+      except APNsException as e:
+          LOGGER.error("APNs error: %s (job=%s)", e, job_id)
+          return False
+      except Exception as e:
+          LOGGER.error("Failed to send push notification: %s (job=%s)", e, job_id)
+          return False
+  ```
+
+---
+
+### 4.6 job_manager.py更新
+
+**ファイル**: `job_manager.py`
+
+- [ ] notify.pyインポート追加
+  ```python
+  from notify import send_push_notification
+  ```
+
+- [ ] _execute_job()メソッド更新（プッシュ通知送信処理追加）
+  - [ ] 成功時の通知送信処理追加（`job.status = "success"` の後）
+    ```python
+    if result.get("success"):
+        job.status = "success"
+        job.exit_code = 0
+        job.stdout = result.get("output", "")
+        job.stderr = ""
+    else:
+        job.status = "failed"
+        job.exit_code = 1
+        job.stdout = result.get("output", "")
+        job.stderr = result.get("error", "")
+
+    job.finished_at = utcnow()
+    db.commit()
+
+    # ✅ プッシュ通知送信処理を追加
+    if job.notify_token:
+        try:
+            send_push_notification(
+                device_token=job.notify_token,
+                job_id=job.id,
+                runner=job.runner,
+                status=job.status
+            )
+            LOGGER.info("Push notification sent for job %s", job_id)
+        except Exception as e:
+            LOGGER.error("Failed to send push notification for job %s: %s", job_id, e)
+    else:
+        LOGGER.debug("No device token for job %s, skipping notification", job_id)
+    ```
+
+  - [ ] 例外処理時の通知送信処理追加（`except Exception` ブロック内）
+    ```python
+    except Exception:
+        LOGGER.exception("Job %s execution failed", job_id)
+        job = db.query(Job).filter_by(id=job_id).first()
+        if job:
+            job.status = "failed"
+            job.exit_code = 1
+            job.stderr = "Internal error"
+            job.finished_at = utcnow()
+            db.commit()
+
+            # ✅ 失敗時もプッシュ通知送信
+            if job.notify_token:
+                try:
+                    send_push_notification(
+                        device_token=job.notify_token,
+                        job_id=job.id,
+                        runner=job.runner,
+                        status=job.status
+                    )
+                except Exception as e:
+                    LOGGER.error("Failed to send failure notification: %s", e)
+    ```
+
+---
+
+### 4.7 テスト実装
+
+**ファイル**: `tests/test_notify.py`
+
+- [ ] テストファイル作成
+  ```bash
+  touch tests/test_notify.py
+  ```
+
+- [ ] テストケース実装
+  ```python
+  import unittest
+  from unittest.mock import patch, MagicMock
+  from notify import send_push_notification, get_apns_client
+
+  class TestNotify(unittest.TestCase):
+      @patch('notify.get_apns_client')
+      def test_send_push_notification_success(self, mock_get_client):
+          """正常系: プッシュ通知送信成功"""
+          mock_client = MagicMock()
+          mock_get_client.return_value = mock_client
+
+          result = send_push_notification(
+              device_token="a" * 64,
+              job_id="test-job-123",
+              runner="claude",
+              status="success"
+          )
+
+          self.assertTrue(result)
+          mock_client.send_notification.assert_called_once()
+
+      @patch('notify.validate_apns_config')
+      def test_get_apns_client_invalid_config(self, mock_validate):
+          """異常系: APNs設定が無効な場合"""
+          mock_validate.return_value = False
+
+          client = get_apns_client()
+
+          self.assertIsNone(client)
+
+      @patch('notify.get_apns_client')
+      def test_send_push_notification_client_unavailable(self, mock_get_client):
+          """異常系: APNsクライアントが利用不可"""
+          mock_get_client.return_value = None
+
+          result = send_push_notification(
+              device_token="a" * 64,
+              job_id="test-job-456",
+              runner="codex",
+              status="failed"
+          )
+
+          self.assertFalse(result)
+  ```
+
+- [ ] テスト実行
+  ```bash
+  python -m unittest tests.test_notify
+  ```
+
+---
+
+### 4.8 統合テスト
+
+**ファイル**: `tests/test_job_manager_with_notify.py`
+
+- [ ] JobManager + 通知送信の統合テスト実装
+  ```python
+  import unittest
+  from unittest.mock import patch, MagicMock
+  from job_manager import JobManager
+  from database import SessionLocal, init_db
+  from models import Job, Device
+
+  class TestJobManagerWithNotify(unittest.TestCase):
+      def setUp(self):
+          init_db()
+          self.db = SessionLocal()
+
+          # テスト用デバイス登録
+          device = Device(
+              device_id="test-device-notify",
+              device_token="a" * 64,
+              created_at=datetime.utcnow(),
+              updated_at=datetime.utcnow()
+          )
+          self.db.add(device)
+          self.db.commit()
+
+      @patch('job_manager.send_push_notification')
+      @patch('job_manager.SessionManager')
+      def test_job_completion_sends_notification(self, mock_session_mgr, mock_send_push):
+          """ジョブ完了時にプッシュ通知が送信される"""
+          # SessionManagerのモック設定
+          mock_mgr = MagicMock()
+          mock_mgr.execute_job.return_value = {
+              'success': True,
+              'output': 'Test output',
+              'session_id': 'test-session',
+              'error': ''
+          }
+          mock_session_mgr.return_value = mock_mgr
+
+          # ジョブ実行
+          job_manager = JobManager(session_manager=mock_mgr)
+          job_dict = job_manager.create_job(
+              runner="claude",
+              input_text="Test prompt",
+              device_id="test-device-notify",
+              background_tasks=None
+          )
+
+          # プッシュ通知送信確認
+          mock_send_push.assert_called_once()
+          call_args = mock_send_push.call_args[1]
+          self.assertEqual(call_args['job_id'], job_dict['id'])
+          self.assertEqual(call_args['runner'], 'claude')
+          self.assertEqual(call_args['status'], 'success')
+          self.assertEqual(call_args['device_token'], "a" * 64)
+  ```
+
+- [ ] 統合テスト実行
+  ```bash
+  python -m unittest tests.test_job_manager_with_notify
+  ```
+
+---
+
+### 4.9 手動E2Eテスト（実機iOS必須）
+
+- [ ] 前提条件確認
+  - [ ] iOSアプリでAPNs登録完了
+  - [ ] デバイストークン取得済み
+  - [ ] サーバーの `/register_device` でデバイス登録済み
+
+- [ ] E2Eテストシナリオ実行
+  - [ ] シナリオ1: iPhoneからジョブ投稿→完了通知受信
+    ```bash
+    # 1. iPhoneアプリからジョブ作成
+    # 2. サーバーログでプッシュ通知送信確認
+    tail -f logs/server.log | grep "Push notification sent"
+    # 3. iPhoneで通知バナー表示確認
+    # 4. 通知タップ→ジョブ詳細画面表示確認
+    ```
+
+  - [ ] シナリオ2: 失敗ジョブの通知
+    ```bash
+    # 1. 意図的に失敗するプロンプトでジョブ作成
+    # 2. "ジョブ失敗" 通知受信確認
+    ```
+
+  - [ ] シナリオ3: フォアグラウンド通知
+    ```bash
+    # 1. iPhoneアプリを開いた状態でジョブ投稿
+    # 2. フォアグラウンドでも通知バナー表示確認
+    ```
+
+---
+
+### 4.10 エラーハンドリング強化
+
+**ファイル**: `notify.py`
+
+- [ ] リトライ機構追加（オプション）
+  ```python
+  from tenacity import retry, stop_after_attempt, wait_exponential
+
+  @retry(
+      stop=stop_after_attempt(3),
+      wait=wait_exponential(multiplier=1, min=1, max=10)
+  )
+  def send_push_notification_with_retry(
+      device_token: str,
+      job_id: str,
+      runner: str,
+      status: str
+  ) -> bool:
+      """リトライ機構付きプッシュ通知送信"""
+      return send_push_notification(device_token, job_id, runner, status)
+  ```
+
+- [ ] 無効なデバイストークンの処理
+  ```python
+  def send_push_notification(device_token, job_id, runner, status) -> bool:
+      # 既存のコード...
+
+      try:
+          client.send_notification(...)
+      except APNsException as e:
+          if "Unregistered" in str(e) or "BadDeviceToken" in str(e):
+              LOGGER.warning("Invalid device token: %s, removing from DB", device_token[:16])
+              # TODO: デバイストークンをDBから削除する処理を追加
+          raise
+  ```
 
 ---
 
 ### Phase 4 完了条件
 
-- [x] 全統合テストシナリオ成功
-- [x] パフォーマンステスト合格
-- [x] エラーケース正常処理
-- [x] ログ出力正常
-- [x] DB整合性確認
+- [ ] PyAPNs2インストール完了
+- [ ] APNs認証キー配置完了
+- [ ] .env に APNs設定追加完了
+- [ ] config.py 更新完了
+- [ ] notify.py 実装完了
+- [ ] job_manager.py 更新完了（プッシュ通知送信処理追加）
+- [ ] ユニットテスト成功（test_notify.py）
+- [ ] 統合テスト成功（test_job_manager_with_notify.py）
+- [ ] 実機E2Eテスト成功（iPhone実機で通知受信確認）
 
-### Phase 4 本番テスト結果
+---
 
-**実施日**: 2025-11-18
+## Phase 5: 統合テスト・動作確認（1日）
 
-**Step 1: SessionManager 単体テスト (CLI直接実行)**
-- ✅ Claude SessionManager: 初回実行・DB永続化・セッション継続すべて成功
-- ✅ Codex SessionManager: 初回実行・DB永続化・セッション継続すべて成功
+### 目標
+実際のCLI実行を含む統合テストで全体動作を確認する（APNsプッシュ通知機能を含む）
 
-**Step 2: JobManager 統合テスト (DB + CLI)**
-- ✅ Claude ジョブ作成・実行成功 (status: success, exit_code: 0)
-- ✅ Codex ジョブ作成・実行成功 (status: success, exit_code: 0)
-- ✅ セッションDB永続化確認
-- ✅ ジョブリスト取得成功
+### 5.1 統合テストシナリオ
 
-**Step 3: API E2E テスト (HTTP + DB + CLI)**
-- ✅ Health Check (200 OK)
-- ✅ デバイス登録 (200 OK)
-- ✅ Claude ジョブ投稿・バックグラウンド実行完了（約35秒）
-- ✅ ジョブ結果確認 (status: success, exit_code: 0)
-- ✅ セッション確認 (Claude session存在確認)
-- ✅ ジョブリスト取得成功
+**ファイル**: `tests/test_integration.py`
 
-**テスト環境**:
-- MacStudio (Darwin 24.6.0)
-- Python 3.9+ (仮想環境: `.venv`)
-- Claude Code CLI (`claude --print`)
-- Codex CLI (`codex exec`)
-- SQLite (`data/jobs.db`)
+- [ ] シナリオ1: Claude初回→継続実行
+  - [ ] POST /jobs (初回)
+  - [ ] セッションID保存確認
+  - [ ] POST /jobs (継続)
+  - [ ] 会話履歴継続確認
+
+- [ ] シナリオ2: Codex初回→継続実行
+  - [ ] POST /jobs (初回)
+  - [ ] セッションID抽出確認
+  - [ ] POST /jobs (継続)
+  - [ ] 会話履歴継続確認
+
+- [ ] シナリオ3: セッション削除→再作成
+  - [ ] DELETE /sessions/claude
+  - [ ] POST /jobs (新規セッション)
+  - [ ] 新しいセッションID確認
+
+- [ ] シナリオ4: 複数デバイス同時実行
+  - [ ] device_id: test-device-1
+  - [ ] device_id: test-device-2
+  - [ ] セッション混線なし確認
+
+- [ ] シナリオ5: プッシュ通知統合テスト
+  - [ ] ジョブ完了時のプッシュ通知送信確認
+  - [ ] ジョブ失敗時のプッシュ通知送信確認
+  - [ ] notify_tokenなしの場合の正常動作確認
+
+---
+
+### 5.2 パフォーマンステスト
+
+- [ ] 同時ジョブ実行テスト
+  - [ ] 3ジョブ並列投稿
+  - [ ] 全ジョブ完了確認
+  - [ ] タイムアウトなし確認
+
+- [ ] 長時間実行テスト
+  - [ ] 5分間のプロンプト実行
+  - [ ] タイムアウト動作確認
+
+---
+
+### 5.3 エラーケーステスト
+
+- [ ] 不正なrunner指定
+  - [ ] runner: "invalid"
+  - [ ] エラーレスポンス確認
+
+- [ ] 存在しないジョブID
+  - [ ] GET /jobs/invalid-id
+  - [ ] 404確認
+
+- [ ] セッションタイムアウト
+  - [ ] 300秒超過プロンプト
+  - [ ] Timeout エラー確認
+
+- [ ] プッシュ通知エラーハンドリング
+  - [ ] APNs設定なしでのジョブ実行成功確認
+  - [ ] 無効なデバイストークンでのエラーログ確認
+
+---
+
+### 5.4 ログ・モニタリング確認
+
+- [ ] ログファイル確認
+  ```bash
+  tail -f logs/server.log
+  ```
+
+- [ ] エラーログフィルタ
+  ```bash
+  grep ERROR logs/server.log
+  ```
+
+- [ ] プッシュ通知ログ確認
+  ```bash
+  grep "Push notification" logs/server.log
+  ```
+
+- [ ] DB整合性確認
+  ```bash
+  sqlite3 data/jobs.db "SELECT * FROM device_sessions;"
+  sqlite3 data/jobs.db "SELECT id, status, runner FROM jobs ORDER BY created_at DESC LIMIT 10;"
+  ```
+
+---
+
+### Phase 5 完了条件
+
+- [ ] 全統合テストシナリオ成功（プッシュ通知含む）
+- [ ] パフォーマンステスト合格
+- [ ] エラーケース正常処理
+- [ ] ログ出力正常
+- [ ] DB整合性確認
+- [ ] プッシュ通知機能の動作確認（モック／実機）
 
 ---
 
@@ -837,7 +1339,8 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [x] Phase 1完了（データベース基盤 + セッション管理）
 - [x] Phase 2完了（ジョブ管理モデル拡張）
 - [x] Phase 3完了（FastAPI REST API層）
-- [x] Phase 4完了（統合テスト・動作確認）
+- [ ] **Phase 4完了（APNsプッシュ通知実装）** ← **必須機能（v1.2で統合テスト前に移動）**
+- [ ] Phase 5完了（統合テスト・動作確認）
 
 ### 本番環境準備
 
