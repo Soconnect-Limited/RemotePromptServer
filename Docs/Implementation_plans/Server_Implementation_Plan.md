@@ -1269,8 +1269,9 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 - [ ] main.py にSSEエンドポイント追加
   ```python
-  from sse_manager import sse_manager
+  from fastapi import Depends, Request
   from fastapi.responses import StreamingResponse
+  from sse_manager import sse_manager
   from auth import verify_api_key  # API Key認証
 
   @app.get("/jobs/{job_id}/stream", dependencies=[Depends(verify_api_key)])
@@ -1323,12 +1324,14 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   def _broadcast_sync(job_id: str, event_data: dict):
       """同期コンテキストからSSEブロードキャストを実行"""
       try:
-          loop = asyncio.get_event_loop()
-          if loop.is_running():
-              # 実行中のループにタスクをスケジュール
+          # BackgroundTasksスレッドプールではループが無いためget_running_loopで判定
+          try:
+              loop = asyncio.get_running_loop()
+              # ループが実行中の場合（FastAPIメインスレッド）
               asyncio.create_task(sse_manager.broadcast(job_id, event_data))
-          else:
-              # 新しいループで実行
+          except RuntimeError:
+              # ループが無い場合（BackgroundTasksスレッドプール）
+              # 新しいループで確実に実行
               asyncio.run(sse_manager.broadcast(job_id, event_data))
       except Exception as e:
           LOGGER.warning("Failed to broadcast SSE event: %s", e)
@@ -1372,6 +1375,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [ ] SSE接続テスト（モック使用）
   ```python
   import pytest
+  import json
   from fastapi.testclient import TestClient
   from unittest.mock import patch, MagicMock
   from main import app
