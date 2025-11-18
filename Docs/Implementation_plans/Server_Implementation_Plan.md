@@ -660,19 +660,19 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 - [x] ヘルスチェック
   ```bash
-  curl http://localhost:8000/health
+  curl http://localhost:35000/health
   ```
 
 - [x] デバイス登録テスト
   ```bash
-  curl -X POST http://localhost:8000/register_device \
+  curl -X POST http://localhost:35000/register_device \
     -H "Content-Type: application/json" \
     -d '{"device_id": "test-device-1", "device_token": "dummy-token"}'
   ```
 
 - [x] ジョブ作成テスト（Claude）
   ```bash
-  curl -X POST http://localhost:8000/jobs \
+  curl -X POST http://localhost:35000/jobs \
     -H "Content-Type: application/json" \
     -d '{"runner": "claude", "input_text": "こんにちは", "device_id": "test-device-1"}'
   ```
@@ -680,17 +680,17 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [x] ジョブ取得テスト
   ```bash
   JOB_ID="..." # 上記で取得したID
-  curl http://localhost:8000/jobs/$JOB_ID
+  curl http://localhost:35000/jobs/$JOB_ID
   ```
 
 - [x] セッション状態確認
   ```bash
-  curl "http://localhost:8000/sessions?device_id=test-device-1"
+  curl "http://localhost:35000/sessions?device_id=test-device-1"
   ```
 
 - [x] セッション削除テスト
   ```bash
-  curl -X DELETE "http://localhost:8000/sessions/claude?device_id=test-device-1"
+  curl -X DELETE "http://localhost:35000/sessions/claude?device_id=test-device-1"
   ```
 
 ---

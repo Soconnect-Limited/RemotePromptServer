@@ -756,7 +756,7 @@ async def health():
     return {"status": "ok"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=35000)
 ```
 
 #### job_manager.py
@@ -992,7 +992,7 @@ class Device(Base):
 ### 6.1 ベースURL
 
 ```
-http://100.100.30.35:8000
+http://100.100.30.35:35000
 ```
 
 ### 6.2 エンドポイント詳細
@@ -1307,7 +1307,7 @@ import Foundation
 class APIClient: ObservableObject {
     static let shared = APIClient()
     
-    private let baseURL = "http://100.100.30.35:8000"
+    private let baseURL = "http://100.100.30.35:35000"
     private let deviceId = "iphone-nao-1"
     
     func registerDevice(deviceToken: String) async throws {
@@ -2018,7 +2018,7 @@ grep ERROR ~/remote-job-server/logs/server.log
 
 ```bash
 # セッション状態API（device_id必須）
-curl "http://100.100.30.35:8000/sessions?device_id=iphone-nao-1"
+curl "http://100.100.30.35:35000/sessions?device_id=iphone-nao-1"
 
 # 応答例
 {
@@ -2052,7 +2052,7 @@ find ~/backups -name "jobs_*.db" -mtime +7 -delete
 grep "Session crashed" ~/remote-job-server/logs/server.log
 
 # セッションを削除して次回ジョブで新規セッション開始
-curl -X DELETE "http://100.100.30.35:8000/sessions/claude?device_id=iphone-nao-1"
+curl -X DELETE "http://100.100.30.35:35000/sessions/claude?device_id=iphone-nao-1"
 # 次回のジョブ投稿時に新しいセッションIDが自動生成される
 ```
 
@@ -2079,7 +2079,7 @@ from pydantic import BaseSettings
 class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 35000
     
     # Database
     DATABASE_URL: str = "sqlite:///./data/jobs.db"

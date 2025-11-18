@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/jobs.db"
     log_level: str = "INFO"
     allowed_origins: List[str] = [
-        "http://100.100.30.35:8000",
-        "http://127.0.0.1:8000",
+        "http://100.100.30.35:35000",
+        "http://127.0.0.1:35000",
     ]
 
     class Config:
