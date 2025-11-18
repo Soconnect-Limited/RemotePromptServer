@@ -1271,10 +1271,11 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   ```python
   from sse_manager import sse_manager
   from fastapi.responses import StreamingResponse
+  from auth import verify_api_key  # API Key認証
 
-  @app.get("/jobs/{job_id}/stream")
+  @app.get("/jobs/{job_id}/stream", dependencies=[Depends(verify_api_key)])
   async def stream_job_status(job_id: str, request: Request):
-      """ジョブ状態をSSEでストリーミング"""
+      """ジョブ状態をSSEでストリーミング（API Key認証必須）"""
       async def event_generator():
           async for message in sse_manager.subscribe(job_id):
               if await request.is_disconnected():
@@ -1293,16 +1294,18 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 - [ ] job_manager.py にブロードキャスト処理追加
   ```python
+  import asyncio
   from sse_manager import sse_manager
 
-  async def _execute_job(job_id: str):
+  def _execute_job(job_id: str):
+      """ジョブ実行（同期関数として維持してBackgroundTasks互換）"""
       # ... 既存のコード ...
 
       # ジョブ開始時
       job.status = "running"
       job.started_at = utcnow()
       db.commit()
-      await sse_manager.broadcast(job_id, {
+      _broadcast_sync(job_id, {
           "status": "running",
           "started_at": job.started_at.isoformat()
       })
@@ -1311,11 +1314,24 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
       job.status = "success" if result.get("success") else "failed"
       job.finished_at = utcnow()
       db.commit()
-      await sse_manager.broadcast(job_id, {
+      _broadcast_sync(job_id, {
           "status": job.status,
           "finished_at": job.finished_at.isoformat(),
           "exit_code": job.exit_code
       })
+
+  def _broadcast_sync(job_id: str, event_data: dict):
+      """同期コンテキストからSSEブロードキャストを実行"""
+      try:
+          loop = asyncio.get_event_loop()
+          if loop.is_running():
+              # 実行中のループにタスクをスケジュール
+              asyncio.create_task(sse_manager.broadcast(job_id, event_data))
+          else:
+              # 新しいループで実行
+              asyncio.run(sse_manager.broadcast(job_id, event_data))
+      except Exception as e:
+          LOGGER.warning("Failed to broadcast SSE event: %s", e)
   ```
 
 ---
@@ -1351,13 +1367,26 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `tests/test_sse.py`
 
-- [ ] SSE接続テスト
+> **注意**: SessionManager/JobManagerを**モック化**し、実CLIを呼び出さずにイベントを発火させる前提でテストを実装
+
+- [ ] SSE接続テスト（モック使用）
   ```python
   import pytest
   from fastapi.testclient import TestClient
+  from unittest.mock import patch, MagicMock
   from main import app
 
-  def test_sse_stream():
+  @patch("job_manager.SessionManager")
+  def test_sse_stream(mock_session_manager):
+      # SessionManagerをモック化して実CLIを呼ばない
+      mock_instance = MagicMock()
+      mock_instance.execute_job.return_value = {
+          "success": True,
+          "output": "Test output",
+          "session_id": "test-session-123"
+      }
+      mock_session_manager.return_value = mock_instance
+
       client = TestClient(app)
 
       # ジョブ作成
@@ -1365,11 +1394,12 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
           "runner": "claude",
           "input_text": "Test",
           "device_id": "test-device"
-      })
+      }, headers={"x-api-key": "test-api-key"})
       job_id = response.json()["id"]
 
       # SSEストリーム接続
-      with client.stream("GET", f"/jobs/{job_id}/stream") as response:
+      with client.stream("GET", f"/jobs/{job_id}/stream",
+                         headers={"x-api-key": "test-api-key"}) as response:
           assert response.status_code == 200
           assert response.headers["content-type"] == "text/event-stream"
 
@@ -1464,6 +1494,13 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   - [ ] ジョブ完了時のプッシュ通知送信確認
   - [ ] ジョブ失敗時のプッシュ通知送信確認
   - [ ] notify_tokenなしの場合の正常動作確認
+
+- [ ] シナリオ6: SSEストリーミング統合テスト
+  - [ ] 単一ジョブのSSE接続→完了まで状態更新受信
+  - [ ] 複数クライアント同時購読（同一job_id）
+  - [ ] ジョブ完了後のSSE切断確認
+  - [ ] SSE接続中のクライアント切断→再接続シナリオ
+  - [ ] API Key認証なしでのSSE接続拒否確認
 
 ---
 
