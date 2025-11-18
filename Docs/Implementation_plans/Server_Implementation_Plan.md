@@ -839,14 +839,44 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [x] Phase 3完了（FastAPI REST API層）
 - [x] Phase 4完了（統合テスト・動作確認）
 
-### 本番環境準備（後日）
+### 本番環境準備
 
-- [ ] Tailscale接続確認
-- [ ] MacStudio IPアドレス固定（100.100.30.35）
-- [ ] ファイアウォール設定（ポート8000）
-- [ ] systemdサービス登録
-- [ ] 自動起動設定
-- [ ] バックアップスクリプト設定
+- [x] Tailscale接続確認（ユーザー設定済み）
+- [x] MacStudio IPアドレス固定（100.100.30.35）（ユーザー設定済み）
+- [x] ファイアウォール設定（Tailscale 環境では不要）
+- [x] .env ファイル作成（API キー: `jg3uIg7w753xDmbH1XV1...`）
+- [x] 本番ポート(35000)起動確認（localhost 動作確認済み）
+- [x] launchd サービス登録（`com.remoteprompt.jobserver.plist`）
+- [x] 自動起動設定（launchd で設定済み）
+- [x] バックアップスクリプト設定（`scripts/backup_database.sh`、7日間保持）
+
+**launchd サービス管理コマンド**:
+```bash
+# サービス登録
+launchctl load ~/Library/LaunchAgents/com.remoteprompt.jobserver.plist
+
+# サービス起動
+launchctl start com.remoteprompt.jobserver
+
+# サービス停止
+launchctl stop com.remoteprompt.jobserver
+
+# サービス登録解除
+launchctl unload ~/Library/LaunchAgents/com.remoteprompt.jobserver.plist
+
+# サービス状態確認
+launchctl list | grep remoteprompt
+```
+
+**バックアップコマンド**:
+```bash
+# 手動バックアップ実行
+/Users/macstudio/Projects/RemotePrompt/remote-job-server/scripts/backup_database.sh
+
+# cron で毎日午前3時に自動バックアップ（オプション）
+# crontab -e で以下を追加:
+# 0 3 * * * /Users/macstudio/Projects/RemotePrompt/remote-job-server/scripts/backup_database.sh >> /Users/macstudio/Projects/RemotePrompt/remote-job-server/logs/backup.log 2>&1
+```
 
 ---
 
