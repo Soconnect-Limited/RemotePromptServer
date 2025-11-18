@@ -436,7 +436,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `config.py`
 
-- [ ] 設定クラス定義
+- [x] 設定クラス定義
   ```python
   from pydantic_settings import BaseSettings
 
@@ -464,7 +464,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `config.py`（追記）
 
-- [ ] ログ設定関数実装
+- [x] ログ設定関数実装
   ```python
   import logging
   from logging.handlers import RotatingFileHandler
@@ -496,21 +496,21 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `job_manager.py`
 
-- [ ] JobManagerクラス定義
+- [x] JobManagerクラス定義
   ```python
   class JobManager:
       def __init__(self):
           self.session_manager = SessionManager()
   ```
 
-- [ ] `create_job()` メソッド実装
+- [x] `create_job()` メソッド実装
   - [ ] Job レコード作成（UUID生成）
   - [ ] device_token取得（Device テーブル）
   - [ ] DB保存（status: queued）
   - [ ] BackgroundTasksで`_execute_job()`登録
   - [ ] 戻り値: {id, status}
 
-- [ ] `_execute_job()` メソッド実装
+- [x] `_execute_job()` メソッド実装
   - [ ] Job取得（job_id）
   - [ ] status更新: running
   - [ ] SessionManager.execute_job() 呼び出し
@@ -518,13 +518,13 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   - [ ] finished_at更新
   - [ ] APNs通知送信（後回し可）
 
-- [ ] `get_jobs()` メソッド実装
+- [x] `get_jobs()` メソッド実装
   - [ ] ページネーション（limit, offset）
   - [ ] status フィルタ
   - [ ] device_id フィルタ
   - [ ] 戻り値: List[Job]
 
-- [ ] `get_job()` メソッド実装
+- [x] `get_job()` メソッド実装
   - [ ] job_id検索
   - [ ] 戻り値: Job or 404
 
@@ -534,7 +534,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `main.py`
 
-- [ ] FastAPIアプリ初期化
+- [x] FastAPIアプリ初期化
   ```python
   from fastapi import FastAPI, BackgroundTasks, HTTPException
   from fastapi.middleware.cors import CORSMiddleware
@@ -551,7 +551,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   )
   ```
 
-- [ ] DB初期化（起動時）
+- [x] DB初期化（起動時）
   ```python
   from database import Base, engine
 
@@ -561,7 +561,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
       setup_logging()
   ```
 
-- [ ] JobManagerインスタンス作成
+- [x] JobManagerインスタンス作成
   ```python
   job_manager = JobManager()
   ```
@@ -572,7 +572,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `main.py`（または `schemas.py`）
 
-- [ ] CreateJobRequest
+- [x] CreateJobRequest
   ```python
   class CreateJobRequest(BaseModel):
       runner: str
@@ -580,7 +580,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
       device_id: str
   ```
 
-- [ ] RegisterDeviceRequest
+- [x] RegisterDeviceRequest
   ```python
   class RegisterDeviceRequest(BaseModel):
       device_id: str
@@ -595,48 +595,48 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 #### POST /register_device
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] Device INSERT or UPDATE
   - [ ] updated_at更新
   - [ ] 戻り値: {status: "registered"}
 
 #### POST /jobs
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] JobManager.create_job() 呼び出し
   - [ ] BackgroundTasks 登録
   - [ ] 戻り値: {id, status}
 
 #### GET /jobs
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] Query Parameters: limit, status, device_id
   - [ ] JobManager.get_jobs() 呼び出し
   - [ ] 戻り値: List[Job]
 
 #### GET /jobs/{job_id}
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] JobManager.get_job() 呼び出し
   - [ ] 戻り値: Job or 404
 
 #### GET /sessions
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] Query Parameters: device_id（必須）
   - [ ] SessionManager.get_session_status() 呼び出し
   - [ ] 戻り値: {claude: {...}, codex: {...}}
 
 #### DELETE /sessions/{runner}
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] Query Parameters: device_id（必須）
   - [ ] DeviceSession DELETE
   - [ ] 戻り値: {status: "deleted", runner, device_id}
 
 #### GET /health
 
-- [ ] エンドポイント実装
+- [x] エンドポイント実装
   - [ ] 戻り値: {status: "ok"}
 
 ---
@@ -816,7 +816,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 - [ ] Phase 1完了（データベース基盤 + セッション管理）
 - [ ] Phase 2完了（ジョブ管理モデル拡張）
-- [ ] Phase 3完了（FastAPI REST API層）
+- [x] Phase 3完了（FastAPI REST API層）
 - [ ] Phase 4完了（統合テスト・動作確認）
 
 ### 本番環境準備（後日）
