@@ -1,14 +1,18 @@
 """Job management logic coordinating DB operations and session execution."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from database import SessionLocal
 from models import Job
 from session_manager import SessionManager
+
+if TYPE_CHECKING:  # pragma: no cover
+    from sse_manager import SSEManager
 
 LOGGER = logging.getLogger(__name__)
 
@@ -20,8 +24,13 @@ def utcnow() -> datetime:
 class JobManager:
     """Provides CRUD operations for jobs and executes them via SessionManager."""
 
-    def __init__(self, session_manager: Optional[SessionManager] = None):
+    def __init__(
+        self,
+        session_manager: Optional[SessionManager] = None,
+        sse_manager: Optional["SSEManager"] = None,
+    ) -> None:
         self.session_manager = session_manager or SessionManager()
+        self.sse_manager = sse_manager
 
     def create_job(  # pylint: disable=too-many-arguments
         self,
@@ -66,6 +75,13 @@ class JobManager:
             job.status = "running"
             job.started_at = utcnow()
             db.commit()
+            self._broadcast_job_event(
+                job_id,
+                {
+                    "status": job.status,
+                    "started_at": job.started_at.isoformat(),
+                },
+            )
 
             LOGGER.info("Executing job %s (%s)", job_id, job.runner)
             result = self.session_manager.execute_job(
@@ -88,6 +104,15 @@ class JobManager:
 
             job.finished_at = utcnow()
             db.commit()
+            self._broadcast_job_event(
+                job_id,
+                {
+                    "status": job.status,
+                    "finished_at": job.finished_at.isoformat(),
+                    "exit_code": job.exit_code,
+                },
+                close_stream=True,
+            )
         except Exception:  # pylint: disable=broad-except
             LOGGER.exception("Job %s execution failed", job_id)
             job = db.query(Job).filter_by(id=job_id).first()
@@ -97,6 +122,15 @@ class JobManager:
                 job.stderr = "Internal error"
                 job.finished_at = utcnow()
                 db.commit()
+                self._broadcast_job_event(
+                    job_id,
+                    {
+                        "status": job.status,
+                        "finished_at": job.finished_at.isoformat(),
+                        "exit_code": job.exit_code,
+                    },
+                    close_stream=True,
+                )
         finally:
             db.close()
 
@@ -124,3 +158,45 @@ class JobManager:
             return job.to_dict() if job else None
         finally:
             db.close()
+
+    def _broadcast_job_event(
+        self,
+        job_id: str,
+        payload: dict,
+        *,
+        close_stream: bool = False,
+    ) -> None:
+        if not self.sse_manager:
+            return
+
+        async def _runner() -> None:
+            await self.sse_manager.broadcast(job_id, payload)
+            if close_stream:
+                await self.sse_manager.close(job_id)
+
+        self._run_async(_runner())
+
+    def _run_async(self, coro) -> None:
+        if not self.sse_manager:
+            return
+
+        loop = getattr(self.sse_manager, "loop", None)
+        if loop and not loop.is_closed():
+            try:
+                current_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                current_loop = None
+
+            try:
+                if current_loop is loop:
+                    loop.create_task(coro)
+                else:
+                    asyncio.run_coroutine_threadsafe(coro, loop)
+                return
+            except Exception as exc:  # pragma: no cover - scheduling errors
+                LOGGER.warning("Failed to schedule SSE coroutine threadsafe: %s", exc)
+
+        try:
+            asyncio.run(coro)
+        except RuntimeError as exc:  # pragma: no cover - nested loop
+            LOGGER.warning("Failed to run SSE coroutine: %s", exc)

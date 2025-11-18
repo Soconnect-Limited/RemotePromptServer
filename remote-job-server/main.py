@@ -3,8 +3,17 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Header, Query
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Header,
+    Query,
+    Request,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,6 +22,7 @@ from database import SessionLocal, init_db
 from job_manager import JobManager
 from models import Device, DeviceSession, utcnow
 from session_manager import SessionManager
+from sse_manager import sse_manager
 
 app = FastAPI(title="Remote Job Server")
 app.add_middleware(
@@ -21,10 +31,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 session_manager = SessionManager()
-job_manager = JobManager(session_manager=session_manager)
+job_manager = JobManager(session_manager=session_manager, sse_manager=sse_manager)
 ALLOWED_RUNNERS = {"claude", "codex"}
 
 
@@ -60,12 +71,12 @@ def startup_event() -> None:
     init_db()
 
 
-@app.post("/register_device")
 def verify_api_key(x_api_key: str = Header(...)) -> None:
     if x_api_key != settings.api_key:
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
 
+@app.post("/register_device")
 def register_device(
     req: RegisterDeviceRequest,
     db: Session = Depends(get_db),
@@ -124,6 +135,26 @@ def get_job(job_id: str, _: None = Depends(verify_api_key)) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@app.get("/jobs/{job_id}/stream", dependencies=[Depends(verify_api_key)])
+async def stream_job_status(job_id: str, request: Request) -> StreamingResponse:
+    """Stream job status updates via Server-Sent Events."""
+
+    async def event_generator():
+        async for message in sse_manager.subscribe(job_id):
+            if await request.is_disconnected():
+                break
+            yield message
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/sessions")
