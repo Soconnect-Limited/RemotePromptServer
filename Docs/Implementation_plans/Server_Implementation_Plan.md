@@ -770,21 +770,24 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ### 4.4 ログ・モニタリング確認
 
-- [ ] ログファイル確認
+- [x] ログファイル確認
   ```bash
   tail -f logs/server.log
   ```
+  **検証結果**: RotatingFileHandler が正常に動作。INFO/ERROR レベルのログが logs/server.log に出力されることを確認。
 
-- [ ] エラーログフィルタ
+- [x] エラーログフィルタ
   ```bash
   grep ERROR logs/server.log
   ```
+  **検証結果**: grep によるエラーログフィルタリングが正常に機能することを確認。
 
-- [ ] DB整合性確認
+- [x] DB整合性確認
   ```bash
   sqlite3 data/jobs.db "SELECT * FROM device_sessions;"
   sqlite3 data/jobs.db "SELECT id, status, runner FROM jobs ORDER BY created_at DESC LIMIT 10;"
   ```
+  **検証結果**: jobs, devices, device_sessions の3テーブルが正常に作成され、データの整合性を確認。
 
 ---
 
@@ -796,6 +799,35 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [x] ログ出力正常
 - [x] DB整合性確認
 
+### Phase 4 本番テスト結果
+
+**実施日**: 2025-11-18
+
+**Step 1: SessionManager 単体テスト (CLI直接実行)**
+- ✅ Claude SessionManager: 初回実行・DB永続化・セッション継続すべて成功
+- ✅ Codex SessionManager: 初回実行・DB永続化・セッション継続すべて成功
+
+**Step 2: JobManager 統合テスト (DB + CLI)**
+- ✅ Claude ジョブ作成・実行成功 (status: success, exit_code: 0)
+- ✅ Codex ジョブ作成・実行成功 (status: success, exit_code: 0)
+- ✅ セッションDB永続化確認
+- ✅ ジョブリスト取得成功
+
+**Step 3: API E2E テスト (HTTP + DB + CLI)**
+- ✅ Health Check (200 OK)
+- ✅ デバイス登録 (200 OK)
+- ✅ Claude ジョブ投稿・バックグラウンド実行完了（約35秒）
+- ✅ ジョブ結果確認 (status: success, exit_code: 0)
+- ✅ セッション確認 (Claude session存在確認)
+- ✅ ジョブリスト取得成功
+
+**テスト環境**:
+- MacStudio (Darwin 24.6.0)
+- Python 3.9+ (仮想環境: `.venv`)
+- Claude Code CLI (`claude --print`)
+- Codex CLI (`codex exec`)
+- SQLite (`data/jobs.db`)
+
 ---
 
 ## サーバー実装完了チェックリスト
@@ -805,7 +837,7 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 - [x] Phase 1完了（データベース基盤 + セッション管理）
 - [x] Phase 2完了（ジョブ管理モデル拡張）
 - [x] Phase 3完了（FastAPI REST API層）
-- [ ] Phase 4完了（統合テスト・動作確認）
+- [x] Phase 4完了（統合テスト・動作確認）
 
 ### 本番環境準備（後日）
 
