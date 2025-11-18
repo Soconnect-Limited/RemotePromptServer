@@ -504,29 +504,29 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
   ```
 
 - [x] `create_job()` メソッド実装
-  - [ ] Job レコード作成（UUID生成）
-  - [ ] device_token取得（Device テーブル）
-  - [ ] DB保存（status: queued）
-  - [ ] BackgroundTasksで`_execute_job()`登録
-  - [ ] 戻り値: {id, status}
+  - [x] Job レコード作成（UUID生成）
+  - [x] device_token取得（Device テーブル）
+  - [x] DB保存（status: queued）
+  - [x] BackgroundTasksで`_execute_job()`登録
+  - [x] 戻り値: {id, status}
 
 - [x] `_execute_job()` メソッド実装
-  - [ ] Job取得（job_id）
-  - [ ] status更新: running
-  - [ ] SessionManager.execute_job() 呼び出し
-  - [ ] 結果保存（success/failed, stdout/stderr）
-  - [ ] finished_at更新
-  - [ ] APNs通知送信（後回し可）
+  - [x] Job取得（job_id）
+  - [x] status更新: running
+  - [x] SessionManager.execute_job() 呼び出し
+  - [x] 結果保存（success/failed, stdout/stderr）
+  - [x] finished_at更新
+  - [x] APNs通知送信（後回し可）
 
 - [x] `get_jobs()` メソッド実装
-  - [ ] ページネーション（limit, offset）
-  - [ ] status フィルタ
-  - [ ] device_id フィルタ
-  - [ ] 戻り値: List[Job]
+  - [x] ページネーション（limit, offset）
+  - [x] status フィルタ
+  - [x] device_id フィルタ
+  - [x] 戻り値: List[Job]
 
 - [x] `get_job()` メソッド実装
-  - [ ] job_id検索
-  - [ ] 戻り値: Job or 404
+  - [x] job_id検索
+  - [x] 戻り値: Job or 404
 
 ---
 
@@ -596,48 +596,48 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 #### POST /register_device
 
 - [x] エンドポイント実装
-  - [ ] Device INSERT or UPDATE
-  - [ ] updated_at更新
-  - [ ] 戻り値: {status: "registered"}
+  - [x] Device INSERT or UPDATE
+  - [x] updated_at更新
+  - [x] 戻り値: {status: "registered"}
 
 #### POST /jobs
 
 - [x] エンドポイント実装
-  - [ ] JobManager.create_job() 呼び出し
-  - [ ] BackgroundTasks 登録
-  - [ ] 戻り値: {id, status}
+  - [x] JobManager.create_job() 呼び出し
+  - [x] BackgroundTasks 登録
+  - [x] 戻り値: {id, status}
 
 #### GET /jobs
 
 - [x] エンドポイント実装
-  - [ ] Query Parameters: limit, status, device_id
-  - [ ] JobManager.get_jobs() 呼び出し
-  - [ ] 戻り値: List[Job]
+  - [x] Query Parameters: limit, status, device_id
+  - [x] JobManager.get_jobs() 呼び出し
+  - [x] 戻り値: List[Job]
 
 #### GET /jobs/{job_id}
 
 - [x] エンドポイント実装
-  - [ ] JobManager.get_job() 呼び出し
-  - [ ] 戻り値: Job or 404
+  - [x] JobManager.get_job() 呼び出し
+  - [x] 戻り値: Job or 404
 
 #### GET /sessions
 
 - [x] エンドポイント実装
-  - [ ] Query Parameters: device_id（必須）
-  - [ ] SessionManager.get_session_status() 呼び出し
-  - [ ] 戻り値: {claude: {...}, codex: {...}}
+  - [x] Query Parameters: device_id（必須）
+  - [x] SessionManager.get_session_status() 呼び出し
+  - [x] 戻り値: {claude: {...}, codex: {...}}
 
 #### DELETE /sessions/{runner}
 
 - [x] エンドポイント実装
-  - [ ] Query Parameters: device_id（必須）
-  - [ ] DeviceSession DELETE
-  - [ ] 戻り値: {status: "deleted", runner, device_id}
+  - [x] Query Parameters: device_id（必須）
+  - [x] DeviceSession DELETE
+  - [x] 戻り値: {status: "deleted", runner, device_id}
 
 #### GET /health
 
 - [x] エンドポイント実装
-  - [ ] 戻り値: {status: "ok"}
+  - [x] 戻り値: {status: "ok"}
 
 ---
 
@@ -715,56 +715,56 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 **ファイル**: `tests/test_integration.py`
 
-- [ ] シナリオ1: Claude初回→継続実行
-  - [ ] POST /jobs (初回)
-  - [ ] セッションID保存確認
-  - [ ] POST /jobs (継続)
-  - [ ] 会話履歴継続確認
+- [x] シナリオ1: Claude初回→継続実行
+  - [x] POST /jobs (初回)
+  - [x] セッションID保存確認
+  - [x] POST /jobs (継続)
+  - [x] 会話履歴継続確認
 
-- [ ] シナリオ2: Codex初回→継続実行
-  - [ ] POST /jobs (初回)
-  - [ ] セッションID抽出確認
-  - [ ] POST /jobs (継続)
-  - [ ] 会話履歴継続確認
+- [x] シナリオ2: Codex初回→継続実行
+  - [x] POST /jobs (初回)
+  - [x] セッションID抽出確認
+  - [x] POST /jobs (継続)
+  - [x] 会話履歴継続確認
 
-- [ ] シナリオ3: セッション削除→再作成
-  - [ ] DELETE /sessions/claude
-  - [ ] POST /jobs (新規セッション)
-  - [ ] 新しいセッションID確認
+- [x] シナリオ3: セッション削除→再作成
+  - [x] DELETE /sessions/claude
+  - [x] POST /jobs (新規セッション)
+  - [x] 新しいセッションID確認
 
-- [ ] シナリオ4: 複数デバイス同時実行
-  - [ ] device_id: test-device-1
-  - [ ] device_id: test-device-2
-  - [ ] セッション混線なし確認
+- [x] シナリオ4: 複数デバイス同時実行
+  - [x] device_id: test-device-1
+  - [x] device_id: test-device-2
+  - [x] セッション混線なし確認
 
 ---
 
 ### 4.2 パフォーマンステスト
 
-- [ ] 同時ジョブ実行テスト
-  - [ ] 3ジョブ並列投稿
-  - [ ] 全ジョブ完了確認
-  - [ ] タイムアウトなし確認
+- [x] 同時ジョブ実行テスト
+  - [x] 3ジョブ並列投稿
+  - [x] 全ジョブ完了確認
+  - [x] タイムアウトなし確認
 
-- [ ] 長時間実行テスト
-  - [ ] 5分間のプロンプト実行
-  - [ ] タイムアウト動作確認
+- [x] 長時間実行テスト
+  - [x] 5分間のプロンプト実行
+  - [x] タイムアウト動作確認
 
 ---
 
 ### 4.3 エラーケーステスト
 
-- [ ] 不正なrunner指定
-  - [ ] runner: "invalid"
-  - [ ] エラーレスポンス確認
+- [x] 不正なrunner指定
+  - [x] runner: "invalid"
+  - [x] エラーレスポンス確認
 
-- [ ] 存在しないジョブID
-  - [ ] GET /jobs/invalid-id
-  - [ ] 404確認
+- [x] 存在しないジョブID
+  - [x] GET /jobs/invalid-id
+  - [x] 404確認
 
-- [ ] セッションタイムアウト
-  - [ ] 300秒超過プロンプト
-  - [ ] Timeout エラー確認
+- [x] セッションタイムアウト
+  - [x] 300秒超過プロンプト
+  - [x] Timeout エラー確認
 
 ---
 
@@ -802,8 +802,8 @@ REST APIエンドポイントを実装し、ジョブ管理・セッション管
 
 ### 最終確認項目
 
-- [ ] Phase 1完了（データベース基盤 + セッション管理）
-- [ ] Phase 2完了（ジョブ管理モデル拡張）
+- [x] Phase 1完了（データベース基盤 + セッション管理）
+- [x] Phase 2完了（ジョブ管理モデル拡張）
 - [x] Phase 3完了（FastAPI REST API層）
 - [ ] Phase 4完了（統合テスト・動作確認）
 

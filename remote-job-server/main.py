@@ -25,6 +25,7 @@ app.add_middleware(
 
 session_manager = SessionManager()
 job_manager = JobManager(session_manager=session_manager)
+ALLOWED_RUNNERS = {"claude", "codex"}
 
 
 def get_db() -> Session:
@@ -92,13 +93,18 @@ def create_job(
     background_tasks: BackgroundTasks,
     _: None = Depends(verify_api_key),
 ) -> JobSummary:
-    job = job_manager.create_job(
-        runner=req.runner,
-        input_text=req.input_text,
-        device_id=req.device_id,
-        notify_token=req.notify_token,
-        background_tasks=background_tasks,
-    )
+    if req.runner not in ALLOWED_RUNNERS:
+        raise HTTPException(status_code=400, detail="Unsupported runner")
+    try:
+        job = job_manager.create_job(
+            runner=req.runner,
+            input_text=req.input_text,
+            device_id=req.device_id,
+            notify_token=req.notify_token,
+            background_tasks=background_tasks,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JobSummary(id=job["id"], runner=job["runner"], status=job["status"])
 
 
