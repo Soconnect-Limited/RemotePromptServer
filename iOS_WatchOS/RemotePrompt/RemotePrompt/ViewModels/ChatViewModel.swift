@@ -191,8 +191,8 @@ final class ChatViewModel: ObservableObject {
         isLoading = true
 
         let userMessage = Message(
-            type: .user,
             roomId: roomId,
+            type: .user,
             content: prompt,
             status: .sending
         )

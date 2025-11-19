@@ -33,7 +33,7 @@ actor PreviewAPIClient: APIClientProtocol {
             finishedAt: date
         )
         jobsStorage = [sampleJob.id: sampleJob]
-        roomRunnerIndex = [key(for: sampleJob.roomId, runner: sampleJob.runner): [sampleJob]]
+        roomRunnerIndex = ["\(sampleJob.roomId)#\(sampleJob.runner)": [sampleJob]]
     }
 
     func fetchJob(id: String) async throws -> Job {
