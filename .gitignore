@@ -44,3 +44,7 @@ htmlcov/
 
 # Backup
 backups/
+
+# Secrets
+secrets/
+*.p8
