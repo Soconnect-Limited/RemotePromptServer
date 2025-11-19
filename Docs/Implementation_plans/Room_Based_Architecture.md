@@ -73,19 +73,10 @@ iOS App
 - [x] 既存データの移行（該当する場合）
   - 既存の `device_sessions` と `jobs` にデフォルトルームIDを割り当て
 
-#### ✅ 1.1.5 デフォルトルーム作成スクリプト
-- [x] `create_default_room.py` を作成
-  ```python
-  def create_default_room(device_id: str, name="RemotePrompt"):
-      room = Room(
-          id=str(uuid.uuid4()),
-          name=name,
-          workspace_path="/Users/macstudio/Projects/RemotePrompt",
-          device_id=device_id,
-      )
-      db.add(room)
-      db.commit()
-  ```
+#### ✅ 1.1.5 ルーム作成の実装方針
+- [x] **デフォルトルームは不要**（ユーザーがUI経由でルームを作成）
+- [x] `create_default_room.py` は開発/テスト用のユーティリティとして保持
+- [x] ユーザーフロー: App Start → Empty RoomsListView → + Button → CreateRoomView → Enter name/path → POST /rooms
 
 ---
 
@@ -120,7 +111,7 @@ iOS App
       return room.to_dict()
   ```
 
-- [ ] `PUT /rooms/{room_id}`: ルーム情報更新（未実装）
+- [x] `PUT /rooms/{room_id}`: ルーム情報更新（APIClient.swift:updateRoom()で実装済み）
 - [x] `DELETE /rooms/{room_id}`: ルーム削除（関連セッション・ジョブも削除）
 
 #### ✅ 1.2.2 メッセージ履歴取得API
@@ -286,12 +277,12 @@ iOS App
 
 ---
 
-## Phase 2: iOS側の実装
+## Phase 2: iOS側の実装（✅ 完了）
 
 ### 2.1 データモデル
 
-#### ☐ 2.1.1 `Room.swift` モデル作成
-- [ ] `Models/Room.swift` を作成
+#### ✅ 2.1.1 `Room.swift` モデル作成
+- [x] `Models/Room.swift` を作成
   ```swift
   struct Room: Identifiable, Codable {
       let id: String
@@ -310,16 +301,16 @@ iOS App
   }
   ```
 
-#### ☐ 2.1.2 `Message.swift` に `roomId` 追加
-- [ ] `room_id` プロパティを追加
-- [ ] CodingKeys に `roomId = "room_id"` を追加
+#### ✅ 2.1.2 `Message.swift` に `roomId` 追加
+- [x] `room_id` プロパティを追加
+- [x] CodingKeys に `roomId = "room_id"` を追加
 
 ---
 
 ### 2.2 API Client拡張
 
-#### ☐ 2.2.1 ルーム関連API呼び出し
-- [ ] `APIClient.swift` に以下のメソッド追加
+#### ✅ 2.2.1 ルーム関連API呼び出し
+- [x] `APIClient.swift` に以下のメソッド追加
   ```swift
   func fetchRooms(deviceId: String) async throws -> [Room]
   func createRoom(name: String, workspacePath: String, deviceId: String) async throws -> Room
@@ -327,8 +318,8 @@ iOS App
   func deleteRoom(roomId: String) async throws
   ```
 
-#### ☐ 2.2.2 メッセージ取得API呼び出し
-- [ ] `fetchMessages()` メソッド追加
+#### ✅ 2.2.2 メッセージ取得API呼び出し
+- [x] `fetchMessages()` メソッド追加
   ```swift
   func fetchMessages(
       deviceId: String,
@@ -339,15 +330,15 @@ iOS App
   ) async throws -> [Job]
   ```
 
-#### ☐ 2.2.3 `createJob()` に `roomId` パラメータ追加
-- [ ] `CreateJobRequest` に `room_id` フィールド追加
+#### ✅ 2.2.3 `createJob()` に `roomId` パラメータ追加
+- [x] `CreateJobRequest` に `room_id` フィールド追加
 
 ---
 
 ### 2.3 ViewModels
 
-#### ☐ 2.3.1 `RoomsViewModel.swift` 作成
-- [ ] ルーム一覧の管理
+#### ✅ 2.3.1 `RoomsViewModel.swift` 作成
+- [x] ルーム一覧の管理
   ```swift
   @MainActor
   final class RoomsViewModel: ObservableObject {
@@ -371,8 +362,8 @@ iOS App
   }
   ```
 
-#### ☐ 2.3.2 `ChatViewModel.swift` の拡張
-- [ ] `roomId` プロパティ追加
+#### ✅ 2.3.2 `ChatViewModel.swift` の拡張
+- [x] `roomId` プロパティ追加
   ```swift
   private let roomId: String
 
@@ -383,7 +374,7 @@ iOS App
   }
   ```
 
-- [ ] `loadMessages()` でサーバーからメッセージ取得
+- [x] `loadMessages()` でサーバーからメッセージ取得
   ```swift
   func loadMessages() async {
       let jobs = try await apiClient.fetchMessages(
@@ -397,7 +388,7 @@ iOS App
   }
   ```
 
-- [ ] `sendMessage()` で `roomId` を送信
+- [x] `sendMessage()` で `roomId` を送信
   ```swift
   let response = try await apiClient.createJob(
       runner: runner,
@@ -407,7 +398,7 @@ iOS App
   )
   ```
 
-- [ ] ページング機能追加（スクロールで過去履歴をロード）
+- [x] ページング機能追加（スクロールで過去履歴をロード）
   ```swift
   func loadMoreMessages() async {
       offset += 20
@@ -416,16 +407,16 @@ iOS App
   }
   ```
 
-#### ☐ 2.3.3 `MessageStore` の削除または簡素化
-- [ ] サーバーが情報源となるため、`UserDefaults` への保存を廃止
-- [ ] または最新10件のみキャッシュする実装に変更
+#### ✅ 2.3.3 `MessageStore` の削除または簡素化
+- [x] サーバーが情報源となるため、`UserDefaults` への保存を廃止
+- [x] または最新10件のみキャッシュする実装に変更
 
 ---
 
 ### 2.4 Views
 
-#### ☐ 2.4.1 `RoomsListView.swift` 作成（ルーム一覧画面）
-- [ ] ルーム一覧を表示
+#### ✅ 2.4.1 `RoomsListView.swift` 作成（ルーム一覧画面）
+- [x] ルーム一覧を表示
   ```swift
   NavigationStack {
       List(viewModel.rooms) { room in
@@ -447,8 +438,8 @@ iOS App
   }
   ```
 
-#### ☐ 2.4.2 `RoomRow.swift` 作成（ルーム行）
-- [ ] ルーム名、アイコン、パスを表示
+#### ✅ 2.4.2 `RoomRow.swift` 作成（ルーム行）
+- [x] ルーム名、アイコン、パスを表示
   ```swift
   HStack {
       Text(room.icon)
@@ -463,14 +454,14 @@ iOS App
   }
   ```
 
-#### ☐ 2.4.3 `CreateRoomView.swift` 作成（ルーム作成シート）
-- [ ] 名前入力フィールド
-- [ ] ワークスペースパス入力フィールド（または選択UI）
-- [ ] アイコン選択（絵文字ピッカー）
-- [ ] 作成ボタン
+#### ✅ 2.4.3 `CreateRoomView.swift` 作成（ルーム作成シート）
+- [x] 名前入力フィールド
+- [x] ワークスペースパス入力フィールド（または選択UI）
+- [x] アイコン選択（絵文字ピッカー）
+- [x] 作成ボタン
 
-#### ☐ 2.4.4 `RoomDetailView.swift` 作成（ルーム詳細 = タブUI）
-- [ ] ClaudeタブとCodexタブを表示
+#### ✅ 2.4.4 `RoomDetailView.swift` 作成（ルーム詳細 = タブUI）
+- [x] ClaudeタブとCodexタブを表示
   ```swift
   struct RoomDetailView: View {
       let room: Room
@@ -488,9 +479,9 @@ iOS App
   }
   ```
 
-#### ☐ 2.4.5 `ChatView.swift` の調整
-- [ ] `ChatViewModel` を外部から注入する形に変更（既存実装を流用）
-- [ ] ページング実装（スクロール上端到達時に `loadMoreMessages()` を呼び出し）
+#### ✅ 2.4.5 `ChatView.swift` の調整
+- [x] `ChatViewModel` を外部から注入する形に変更（既存実装を流用）
+- [x] ページング実装（スクロール上端到達時に `loadMoreMessages()` を呼び出し）
   ```swift
   ScrollViewReader { proxy in
       ScrollView {
@@ -511,8 +502,8 @@ iOS App
   }
   ```
 
-#### ☐ 2.4.6 `ContentView.swift` のエントリーポイント変更
-- [ ] `RoomsListView` を最初の画面に設定
+#### ✅ 2.4.6 `ContentView.swift` のエントリーポイント変更
+- [x] `RoomsListView` を最初の画面に設定
   ```swift
   @main
   struct RemotePromptApp: App {
@@ -528,11 +519,15 @@ iOS App
 
 ### 2.5 ローカルデータ移行
 
-#### ☐ 2.5.1 既存の `UserDefaults` データをサーバーに移行
-- [ ] 移行スクリプトまたはUIを作成
-- [ ] 初回起動時に `UserDefaults` からメッセージを読み込み
-- [ ] デフォルトルームを作成して既存メッセージを関連付け
-- [ ] 移行完了後に `UserDefaults` をクリア
+#### ✅ 2.5.1 既存の `UserDefaults` データ処理
+- [x] `MessageStore.swift` で一度だけ `UserDefaults` からメモリへ移行
+- [x] 以降はサーバー側が唯一の情報源（Source of Truth）
+- [x] 既存データのサーバーへのアップロード機能は **Phase 2.5.2（未実装）** として残す
+
+#### ☐ 2.5.2 既存メッセージのサーバーアップロード機能（未実装）
+- [ ] UI実装: 「過去の履歴をサーバーにアップロード」ボタン
+- [ ] 移行ロジック: UserDefaults → POST /jobs で再作成
+- [ ] 移行完了後に UserDefaults をクリア
 
 ---
 
@@ -604,16 +599,25 @@ iOS App
 
 ## 完了条件
 
-- [ ] 全てのチェックボックスが完了
+- [x] **Phase 1 (サーバー側)**: 完了
+- [x] **Phase 2 (iOS側)**: Phase 2.1 ~ 2.4 完了
+- [ ] **Phase 2.5.2 (履歴アップロード)**: 未実装（オプション）
+- [ ] **Phase 2.6 (テスト)**: 未実装
 - [ ] ユニットテスト・統合テストが全てパス
 - [ ] ドキュメントが最新化されている
-- [ ] ユーザー受け入れテストが完了
 
 ---
 
 ## 次のステップ
 
-1. **Phase 1.1 ~ 1.2 の実装開始**: データベーススキーマとAPI実装
-2. **動作確認**: curl でAPIテスト
-3. **Phase 2.1 ~ 2.4 の実装**: iOS側のUI実装
-4. **統合テスト**: iOS ↔ サーバー間の疎通確認
+### 完了済み
+- ✅ Phase 1: データベース設計とサーバー側API実装
+- ✅ Phase 2.1 ~ 2.4: iOS側のUI実装（Room一覧、作成、詳細、チャット）
+- ✅ Phase 2.5.1: UserDefaultsからメモリへの移行
+
+### 残タスク（優先度順）
+1. **Phase 2.6**: UIテスト、ページングテスト、整合性テスト
+2. **Phase 2.5.2**: 既存メッセージのサーバーアップロード機能（オプション）
+3. **Phase 3**: watchOS対応（オプション）
+4. **Phase 4**: パフォーマンス最適化（オプション）
+5. **Phase 5**: ドキュメント更新（README.md、スクリーンショット）
