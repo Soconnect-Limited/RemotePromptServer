@@ -196,6 +196,37 @@ final class APIClient {
         return try decoder.decode(Room.self, from: data)
     }
 
+    func updateRoom(roomId: String, name: String, workspacePath: String, deviceId: String, icon: String = "folder") async throws -> Room {
+        guard let url = URL(string: "\(Constants.baseURL)/rooms/\(roomId)") else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: String] = [
+            "device_id": deviceId,
+            "name": name,
+            "workspace_path": workspacePath,
+            "icon": icon
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode(Room.self, from: data)
+    }
+
     func deleteRoom(roomId: String, deviceId: String) async throws {
         guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)") else {
             throw APIError.invalidURL
@@ -219,6 +250,45 @@ final class APIClient {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
         }
+    }
+
+    func fetchMessages(
+        deviceId: String,
+        roomId: String,
+        runner: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ) async throws -> [Job] {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/messages") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [
+            URLQueryItem(name: "device_id", value: deviceId),
+            URLQueryItem(name: "room_id", value: roomId),
+            URLQueryItem(name: "runner", value: runner),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset))
+        ]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode([Job].self, from: data)
     }
 
     static func getDeviceId() -> String {

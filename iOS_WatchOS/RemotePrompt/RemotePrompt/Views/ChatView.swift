@@ -1,15 +1,24 @@
 import SwiftUI
 
 struct ChatView: View {
-    @StateObject private var viewModel = ChatViewModel(runner: "claude")
+    @ObservedObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var hasFinishedInitialFetch = false
+
+    init(viewModel: ChatViewModel) {
+        _viewModel = ObservedObject(wrappedValue: viewModel)
+    }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            ZStack {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
+                            if viewModel.canLoadMoreHistory {
+                                historyLoader
+                            }
+
                             ForEach(viewModel.messages) { message in
                                 MessageBubble(message: message)
                                     .id(message.id)
@@ -18,56 +27,66 @@ struct ChatView: View {
                         .padding(.vertical)
                     }
                     .background(Color(.systemBackground))
-                    .onAppear {
-                        scrollProxy = proxy
-                        // 初期表示時に最下部へスクロール
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    .onAppear { scrollProxy = proxy }
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if !viewModel.isHistoryLoading {
+                            hasFinishedInitialFetch = true
+                        }
+                        if !viewModel.isLoadingMoreHistory {
                             scrollToBottom()
                         }
                     }
-                    .onChange(of: viewModel.messages.count) { _ in
-                        scrollToBottom()
-                    }
                 }
 
-                Divider()
+                if viewModel.isHistoryLoading && viewModel.messages.isEmpty {
+                    ProgressView("履歴を読み込み中...")
+                        .padding()
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(12)
+                }
+            }
 
-                InputBar(
-                    text: $viewModel.inputText,
-                    onSend: viewModel.sendMessage,
-                    isLoading: viewModel.isLoading
-                )
+            Divider()
+
+            InputBar(
+                text: $viewModel.inputText,
+                onSend: viewModel.sendMessage,
+                isLoading: viewModel.isLoading
+            )
+        }
+        .refreshable {
+            await viewModel.loadLatestMessages()
+        }
+        .onChange(of: viewModel.isHistoryLoading) { loading in
+            if !loading {
+                hasFinishedInitialFetch = true
             }
-            .navigationTitle("Claude Chat")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Text("RemotePrompt")
-                        .font(.headline)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button("履歴をクリア", role: .destructive) {
-                            viewModel.clearChat()
-                        }
-                        Button("Codexに切り替え") {
-                            // TODO: Runner切り替え
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
+        }
+        .alert("エラー", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+    }
+
+    private var historyLoader: some View {
+        Group {
+            if viewModel.isLoadingMoreHistory {
+                ProgressView()
+            } else {
+                Text("過去の履歴を読み込み")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .alert("エラー", isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {
-                    viewModel.errorMessage = nil
-                }
-            } message: {
-                Text(viewModel.errorMessage ?? "")
-            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 8)
+        .onAppear {
+            guard hasFinishedInitialFetch else { return }
+            Task { await viewModel.loadMoreMessages() }
         }
     }
 
@@ -79,4 +98,8 @@ struct ChatView: View {
             }
         }
     }
+}
+
+#Preview {
+    ChatView(viewModel: ChatViewModel(runner: "claude", roomId: "preview"))
 }

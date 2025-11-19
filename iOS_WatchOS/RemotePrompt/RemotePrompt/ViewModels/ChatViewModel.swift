@@ -7,23 +7,122 @@ final class ChatViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isHistoryLoading = false
+    @Published var isLoadingMoreHistory = false
+    @Published var canLoadMoreHistory = true
 
     private let apiClient = APIClient.shared
     private let messageStore = MessageStore()
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
     private let runner: String
+    private let roomId: String  // v3.0: Room ID (暫定的にデフォルトルーム使用)
+    private let deviceId = APIClient.getDeviceId()
+    private let historyPageSize = 20
+    private var historyOffset = 0
 
-    init(runner: String = "claude") {
+    init(runner: String = "claude", roomId: String = "default-room") {
         self.runner = runner
-        loadMessages()
+        self.roomId = roomId
+        messageStore.setActiveContext(roomId: roomId, runner: runner)
+        messages = messageStore.messages
         Task {
+            await loadLatestMessages()
             await recoverIncompleteJobs()
         }
     }
 
-    func loadMessages() {
-        messages = messageStore.messages
+    func loadLatestMessages() async {
+        await fetchHistory(reset: true)
+    }
+
+    func loadMoreMessages() async {
+        await fetchHistory(reset: false)
+    }
+
+    private func fetchHistory(reset: Bool) async {
+        if reset {
+            guard !isHistoryLoading else { return }
+            isHistoryLoading = true
+        } else {
+            guard canLoadMoreHistory, !isLoadingMoreHistory else { return }
+            isLoadingMoreHistory = true
+        }
+
+        defer {
+            if reset {
+                isHistoryLoading = false
+            } else {
+                isLoadingMoreHistory = false
+            }
+        }
+
+        do {
+            let offsetValue = reset ? 0 : historyOffset
+            let jobs = try await apiClient.fetchMessages(
+                deviceId: deviceId,
+                roomId: roomId,
+                runner: runner,
+                limit: historyPageSize,
+                offset: offsetValue
+            )
+
+            canLoadMoreHistory = jobs.count == historyPageSize
+            historyOffset = reset ? jobs.count : historyOffset + jobs.count
+
+            let historicalMessages = convertJobsToMessages(jobs)
+            let combinedMessages = reset ? historicalMessages : (historicalMessages + messages)
+
+            messageStore.replaceAll(combinedMessages)
+            messages = messageStore.messages
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func convertJobsToMessages(_ jobs: [Job]) -> [Message] {
+        var result: [Message] = []
+        for job in jobs {
+            if let prompt = job.inputText, !prompt.isEmpty {
+                let userMessage = Message(
+                    id: "\(job.id)-user",
+                    jobId: job.id,
+                    roomId: job.roomId,
+                    type: .user,
+                    content: prompt,
+                    status: .completed,
+                    createdAt: job.createdAt ?? Date()
+                )
+                result.append(userMessage)
+            }
+
+            let assistantMessage = Message(
+                id: "\(job.id)-assistant",
+                jobId: job.id,
+                roomId: job.roomId,
+                type: .assistant,
+                content: job.stdout ?? "",
+                status: mapStatus(from: job.status),
+                createdAt: job.startedAt ?? job.createdAt ?? Date(),
+                finishedAt: job.finishedAt,
+                errorMessage: job.stderr
+            )
+            result.append(assistantMessage)
+        }
+        return result
+    }
+
+    private func mapStatus(from status: String) -> MessageStatus {
+        switch status.lowercased() {
+        case "queued":
+            return .queued
+        case "running":
+            return .running
+        case "failed":
+            return .failed
+        default:
+            return .completed
+        }
     }
 
     private func recoverIncompleteJobs() async {
@@ -69,6 +168,7 @@ final class ChatViewModel: ObservableObject {
 
         let userMessage = Message(
             type: .user,
+            roomId: roomId,
             content: prompt,
             status: .sending
         )
@@ -81,7 +181,8 @@ final class ChatViewModel: ObservableObject {
                 let response = try await apiClient.createJob(
                     runner: runner,
                     prompt: prompt,
-                    deviceId: APIClient.getDeviceId()
+                    deviceId: deviceId,
+                    roomId: roomId  // v3.0: Room ID追加
                 )
 
                 var updatedUser = userMessage
@@ -91,12 +192,14 @@ final class ChatViewModel: ObservableObject {
 
                 let assistantMessage = Message(
                     jobId: response.id,
+                    roomId: roomId,
                     type: .assistant,
                     content: "",
                     status: .queued
                 )
                 messages.append(assistantMessage)
                 messageStore.addMessage(assistantMessage)
+                historyOffset += 1
 
                 startSSEStreaming(jobId: response.id, messageId: assistantMessage.id)
             } catch {
@@ -238,7 +341,9 @@ final class ChatViewModel: ObservableObject {
         }
         sseConnections.removeAll()
         messages.removeAll()
-        messageStore.clearAll()
+        messageStore.clear()
+        historyOffset = 0
+        canLoadMoreHistory = true
     }
 
     deinit {
