@@ -1,6 +1,7 @@
 """FastAPI application exposing the Remote Job Server API."""
 from __future__ import annotations
 
+import uuid
 from typing import List, Optional
 
 from fastapi import (
@@ -20,9 +21,10 @@ from sqlalchemy.orm import Session
 from config import setup_logging, settings
 from database import SessionLocal, init_db
 from job_manager import JobManager
-from models import Device, DeviceSession, utcnow
+from models import Device, DeviceSession, Job, Room, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
+from utils.path_validator import validate_workspace_path
 
 app = FastAPI(title="Remote Job Server")
 app.add_middleware(
@@ -56,7 +58,15 @@ class CreateJobRequest(BaseModel):
     runner: str
     input_text: str
     device_id: str
+    room_id: str
     notify_token: Optional[str] = None
+
+
+class CreateRoomRequest(BaseModel):
+    device_id: str
+    name: str
+    workspace_path: str
+    icon: str = "folder"
 
 
 class JobSummary(BaseModel):
@@ -74,6 +84,65 @@ def startup_event() -> None:
 def verify_api_key(x_api_key: str = Header(...)) -> None:
     if x_api_key != settings.api_key:
         raise HTTPException(status_code=401, detail="Invalid API Key")
+
+
+# ========== Room Management APIs ==========
+
+
+@app.get("/rooms")
+def get_rooms(
+    device_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[dict]:
+    rooms = db.query(Room).filter_by(device_id=device_id).order_by(Room.updated_at.desc()).all()
+    return [room.to_dict() for room in rooms]
+
+
+@app.post("/rooms")
+def create_room(
+    req: CreateRoomRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    try:
+        validated_path = validate_workspace_path(req.workspace_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    room = Room(
+        id=str(uuid.uuid4()),
+        name=req.name,
+        workspace_path=validated_path,
+        icon=req.icon,
+        device_id=req.device_id,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.add(room)
+    db.commit()
+    db.refresh(room)
+    return room.to_dict()
+
+
+@app.delete("/rooms/{room_id}")
+def delete_room(
+    room_id: str,
+    device_id: str,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    room = db.query(Room).filter_by(id=room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.device_id != device_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    db.query(DeviceSession).filter_by(room_id=room_id).delete()
+    db.query(Job).filter_by(room_id=room_id).delete()
+    db.delete(room)
+    db.commit()
+    return {"status": "ok"}
 
 
 @app.post("/register_device")
@@ -102,15 +171,21 @@ def register_device(
 def create_job(
     req: CreateJobRequest,
     background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> JobSummary:
     if req.runner not in ALLOWED_RUNNERS:
         raise HTTPException(status_code=400, detail="Unsupported runner")
+    room = db.query(Room).filter_by(id=req.room_id, device_id=req.device_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
     try:
         job = job_manager.create_job(
             runner=req.runner,
             input_text=req.input_text,
             device_id=req.device_id,
+            room_id=req.room_id,
+            workspace_path=room.workspace_path,
             notify_token=req.notify_token,
             background_tasks=background_tasks,
         )
@@ -157,30 +232,46 @@ async def stream_job_status(job_id: str, request: Request) -> StreamingResponse:
     )
 
 
-@app.get("/sessions")
-def get_sessions(
-    device_id: str = Query(...),
-    _: None = Depends(verify_api_key),
-) -> dict:
-    return {
-        "claude": session_manager.get_session_status("claude", device_id),
-        "codex": session_manager.get_session_status("codex", device_id),
-    }
-
-
-@app.delete("/sessions/{runner}")
-def delete_session(
+@app.get("/messages")
+def get_messages(
+    device_id: str,
+    room_id: str,
     runner: str,
-    device_id: str = Query(...),
+    limit: int = 20,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[dict]:
+    room = db.query(Room).filter_by(id=room_id, device_id=device_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    jobs = (
+        db.query(Job)
+        .filter_by(device_id=device_id, room_id=room_id, runner=runner)
+        .order_by(Job.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return [job.to_dict() for job in reversed(jobs)]
+
+
+@app.delete("/sessions")
+def delete_session(
+    device_id: str,
+    room_id: str,
+    runner: str,
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> dict:
-    record = db.query(DeviceSession).filter_by(device_id=device_id, runner=runner).first()
-    if not record:
-        raise HTTPException(status_code=404, detail="Session not found")
-    db.delete(record)
+    deleted = (
+        db.query(DeviceSession)
+        .filter_by(device_id=device_id, room_id=room_id, runner=runner)
+        .delete()
+    )
     db.commit()
-    return {"status": "deleted", "runner": runner, "device_id": device_id}
+    return {"status": "ok", "deleted": deleted}
 
 
 @app.get("/health")
