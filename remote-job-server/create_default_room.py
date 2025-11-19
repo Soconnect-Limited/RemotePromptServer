@@ -11,19 +11,29 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
-def create_default_room(device_id: str, name: str, workspace_path: str) -> str:
+def create_default_room(device_id: str, name: str, workspace_path: str, room_id: str = None) -> str:
     """Create a room if it does not already exist."""
     db = SessionLocal()
     try:
-        existing = db.query(Room).filter_by(device_id=device_id, name=name).first()
-        if existing:
-            print(f"✅ Room '{name}' already exists for device {device_id}")
-            print(f"   Room ID: {existing.id}")
-            print(f"   Workspace: {existing.workspace_path}")
-            return existing.id
+        # Check by room_id first if provided
+        if room_id:
+            existing = db.query(Room).filter_by(id=room_id).first()
+            if existing:
+                print(f"✅ Room '{name}' (ID: {room_id}) already exists")
+                print(f"   Device: {existing.device_id}")
+                print(f"   Workspace: {existing.workspace_path}")
+                return existing.id
+        else:
+            # Check by device_id and name
+            existing = db.query(Room).filter_by(device_id=device_id, name=name).first()
+            if existing:
+                print(f"✅ Room '{name}' already exists for device {device_id}")
+                print(f"   Room ID: {existing.id}")
+                print(f"   Workspace: {existing.workspace_path}")
+                return existing.id
 
         room = Room(
-            id=str(uuid.uuid4()),
+            id=room_id or str(uuid.uuid4()),
             name=name,
             workspace_path=workspace_path,
             icon="folder",
@@ -34,8 +44,7 @@ def create_default_room(device_id: str, name: str, workspace_path: str) -> str:
         db.add(room)
         db.commit()
         db.refresh(room)
-        print(f"✅ Created default room '{name}' for device {device_id}")
-        print(f"   Room ID: {room.id}")
+        print(f"✅ Created default room '{name}' (ID: {room.id}) for device {device_id}")
         print(f"   Workspace: {room.workspace_path}")
         return room.id
     finally:
@@ -43,9 +52,17 @@ def create_default_room(device_id: str, name: str, workspace_path: str) -> str:
 
 
 if __name__ == "__main__":
-    DEVICE_ID = "iphone-test-1"
-    ROOM_NAME = "RemotePrompt"
+    # Create default room with fixed ID for iOS app compatibility
+    DEFAULT_ROOM_ID = "default-room"
+    DEFAULT_DEVICE_ID = "any-device"  # This room can be used by any device
+    ROOM_NAME = "Default Room"
     WORKSPACE_PATH = "/Users/macstudio/Projects/RemotePrompt"
 
-    room_id = create_default_room(DEVICE_ID, ROOM_NAME, WORKSPACE_PATH)
-    print(f"\nℹ️  Use this room_id in API requests: {room_id}")
+    print("Creating default room for iOS app...")
+    room_id = create_default_room(
+        device_id=DEFAULT_DEVICE_ID,
+        name=ROOM_NAME,
+        workspace_path=WORKSPACE_PATH,
+        room_id=DEFAULT_ROOM_ID
+    )
+    print(f"\nℹ️  iOS app will use room_id: {room_id}")

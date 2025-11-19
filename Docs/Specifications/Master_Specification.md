@@ -2286,6 +2286,27 @@ struct MessageBubble: View {
 }
 ```
 
+#### RoomsViewModel.swift（v3.0で追加）
+
+- `@MainActor` 管理で `rooms`, `isLoading`, `errorMessage` を公開。
+- `loadRooms()` は APIキー検証 → `GET /rooms` で取得 → `updated_at`/`created_at` 降順でソート。
+- `createRoom` / `updateRoom` / `deleteRoom` は `APIClient` の対応メソッドをラップし、成功時に `rooms` 配列を即時更新。
+- すべてのメソッドで `Constants.isAPIKeyConfigured` を確認し、未設定時はユーザーに案内する。
+
+#### MessageStore（v3.0アップデート）
+
+- `(roomId, runner)` をキーにしたインメモリキャッシュを保持し、既定で直近100件のみ保存。
+- サーバーが唯一の情報源であるため永続化は廃止し、初期化時に `UserDefaults["chat_messages"]` が存在すれば読み込み→現行フォーマットへ変換→クリアする移行ロジックを実装。
+- `setActiveContext` / `replaceAll` / `addMessage` / `updateMessage` / `clear` で対象ルームだけを更新し、他ルームのキャッシュには影響しない。
+
+#### ChatView.swift（v3.0アップデート）
+
+- `ChatView` は `ChatViewModel` を外部注入（`@ObservedObject`）し、`RoomDetailView` からClaude/Codex別インスタンスを共有できる。
+- `ScrollViewReader + LazyVStack` の先頭にページングトリガーを設け、初回ロード完了後に上端へスクロールしたタイミングで `loadMoreMessages()` を実行。
+- `.refreshable` で `loadLatestMessages()` を呼び出し、サーバー履歴を再取得。
+- 入力バーは `viewModel.isLoading` と連動し、送信中はボタンを無効化。エラーは `viewModel.errorMessage` を監視してアラート表示。
+```
+
 ### 8.5 Info.plist（ATS設定）
 
 ```xml
