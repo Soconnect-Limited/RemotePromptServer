@@ -1,0 +1,106 @@
+import SwiftUI
+
+struct MessageBubble: View {
+    let message: Message
+
+    var body: some View {
+        HStack(alignment: .top) {
+            if message.type == .assistant || message.type == .system {
+                avatar
+            } else {
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: message.type == .user ? .trailing : .leading, spacing: 4) {
+                bubble
+                statusRow
+            }
+
+            if message.type == .user {
+                avatar
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var bubble: some View {
+        Group {
+            if message.type == .assistant {
+                if message.content.isEmpty && message.isRunning {
+                    ProgressView("応答を生成中...")
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.systemGray6))
+                } else if message.content.isEmpty {
+                    Text("結果を待機中…")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                } else {
+                    MarkdownView(content: message.content)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                }
+            } else {
+                Text(message.content)
+                    .foregroundColor(message.type == .user ? .white : .primary)
+                    .padding(12)
+                    .background(message.type == .user ? Color.blue : Color(.systemGray5))
+            }
+        }
+        .cornerRadius(16)
+    }
+
+    private var statusRow: some View {
+        HStack(spacing: 4) {
+            if message.isRunning {
+                ProgressView()
+                    .scaleEffect(0.6)
+            }
+            Text(statusText)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if message.status == .completed {
+                Image(systemName: "checkmark")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            } else if message.status == .failed {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var avatar: some View {
+        Circle()
+            .fill(message.type == .user ? Color.blue : Color.gray.opacity(0.5))
+            .frame(width: 28, height: 28)
+            .overlay(
+                Text(message.type == .user ? "U" : "AI")
+                    .font(.caption2)
+                    .foregroundColor(.white)
+            )
+    }
+
+    private var statusText: String {
+        switch message.status {
+        case .sending:
+            return "送信中"
+        case .queued:
+            return "待機中"
+        case .running:
+            return "実行中"
+        case .completed:
+            if let finished = message.finishedAt {
+                return finished.formatted(date: .omitted, time: .shortened)
+            }
+            return "完了"
+        case .failed:
+            return "失敗"
+        }
+    }
+}

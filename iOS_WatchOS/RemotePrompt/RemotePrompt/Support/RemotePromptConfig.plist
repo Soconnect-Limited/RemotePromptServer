@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>RemotePromptBaseURL</key>
+    <string>http://100.100.30.35:35000</string>
+    <key>RemotePromptAPIKey</key>
+    <string></string>
+</dict>
+</plist>

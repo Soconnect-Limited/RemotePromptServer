@@ -1753,6 +1753,20 @@ extension Notification.Name {
     static let openJobDetail = Notification.Name("openJobDetail")
 }
 ```
+### 8.7 Markdownレンダリング要件
+
+- `Views/MarkdownView.swift` は `MarkdownUI` がリンク可能な環境では `Markdown(content)` を使用し、GitHub互換テーマでの描画とフォント指定を行う。
+- `MarkdownUI` がビルド対象から除外される watchOS / 一部CI構成に対応するため、`Support/MarkdownRenderer` を介して `AttributedString` を生成し、`ScrollView + Text` で確実に描画する。
+- `MarkdownRenderer.render(_:)` は `AttributedString(markdown:)` を実行し、例外時はプレーンテキストへフォールバックする。依存性注入可能な `Parser` 引数を持ち、ユニットテストで異常系を再現できる。
+- テスト要件: `RemotePromptTests/MarkdownRendererTests.swift` で (1) Markdown構文の変換、(2) 強制失敗時のフォールバック、(3) 空文字の取り扱いを `Testing` フレームワークで検証する。
+
+### 8.8 APIキー設定と構成値解決
+
+- `Support/AppConfiguration.swift` が Info.plist → `Support/RemotePromptConfig.plist` → 環境変数 (`REMOTE_PROMPT_BASE_URL` / `REMOTE_PROMPT_API_KEY`) の順で値を解決し、`Constants` から `baseURL` と `apiKey` を提供する。
+- `Support/RemotePromptConfig.plist` はリポジトリに雛形を含め、ローカル開発者がAPIキーやカスタムBaseURLを直接編集できる。CIでは環境変数で上書きする。
+- APIキーは未設定の場合 `AppConfiguration.apiKey` が `nil` を返し、`Constants.isAPIKeyConfigured` で状態確認できる。`x-api-key` ヘッダーは送信されず、アプリ内でユーザー通知を行う。
+- `RemotePromptTests/AppConfigurationTests.swift` で Info > Config > Env の優先順位とフォールバック、APIキー未設定時の`nil`返却を `Testing` フレームワークで検証する。
+- `ChatViewModel` は送信時にAPIキー未設定を検出すると送信処理を中断し、`errorMessage` アラートで「RemotePromptConfig.plist / Info.plist / 環境変数を設定して再実行」と案内する。
 
 ---
 
