@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
     <key>RemotePromptBaseURL</key>
-    <string>http://100.100.30.35:35000</string>
+    <string>https://remoteprompt.soconnect.co.jp:8443</string>
     <key>RemotePromptAPIKey</key>
-    <string></string>
+    <string>jg3uIg7w753xDmbH1XV1KQhAs3MqL_ms5iZGjYoKoMA</string>
 </dict>
 </plist>

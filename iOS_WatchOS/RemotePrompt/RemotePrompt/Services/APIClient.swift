@@ -3,6 +3,7 @@ import Foundation
 enum APIError: Error, LocalizedError {
     case invalidURL
     case httpError(Int)
+    case missingAPIKey
 
     var errorDescription: String? {
         switch self {
@@ -10,6 +11,8 @@ enum APIError: Error, LocalizedError {
             return "無効なURLです"
         case .httpError(let code):
             return "サーバーエラー(\(code))"
+        case .missingAPIKey:
+            return "APIキーが未設定です。RemotePromptConfig.plistを確認してください。"
         }
     }
 }
@@ -42,7 +45,34 @@ final class APIClient {
 
     private init() {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+
+            // Use DateFormatter for Python's ISO8601 format with microseconds
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            // Fallback to milliseconds (3 digits)
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            // Fallback to no fractional seconds
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format: \(dateString)")
+        }
         self.decoder = decoder
 
         let encoder = JSONEncoder()
@@ -55,11 +85,13 @@ final class APIClient {
             throw APIError.invalidURL
         }
 
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        if let apiKey = Constants.apiKey {
-            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        }
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
@@ -75,11 +107,13 @@ final class APIClient {
             throw APIError.invalidURL
         }
 
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        if let apiKey = Constants.apiKey {
-            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        }
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let payload = CreateJobRequest(

@@ -26,32 +26,42 @@ struct MessageBubble: View {
     }
 
     private var bubble: some View {
-        Group {
+        HStack(alignment: .top, spacing: 0) {
             if message.type == .assistant {
-                if message.content.isEmpty && message.isRunning {
-                    ProgressView("応答を生成中...")
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.systemGray6))
-                } else if message.content.isEmpty {
-                    Text("結果を待機中…")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                } else {
-                    MarkdownView(content: message.content)
-                        .padding(12)
-                        .background(Color(.systemGray6))
+                Group {
+                    if message.content.isEmpty && message.isRunning {
+                        ProgressView("応答を生成中...")
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(16)
+                    } else if message.content.isEmpty {
+                        Text("結果を待機中…")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(16)
+                    } else {
+                        MarkdownView(content: message.content)
+                            .padding(12)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(16)
+                    }
                 }
+                .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .leading)
+
+                Spacer(minLength: 0)
             } else {
+                Spacer(minLength: 0)
+
                 Text(message.content)
                     .foregroundColor(message.type == .user ? .white : .primary)
                     .padding(12)
                     .background(message.type == .user ? Color.blue : Color(.systemGray5))
+                    .cornerRadius(16)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .trailing)
             }
         }
-        .cornerRadius(16)
     }
 
     private var statusRow: some View {

@@ -85,7 +85,8 @@ final class ChatViewModel: ObservableObject {
                 )
 
                 var updatedUser = userMessage
-                updatedUser.status = .queued
+                updatedUser.status = .completed
+                updatedUser.finishedAt = Date()
                 updateMessage(updatedUser)
 
                 let assistantMessage = Message(
@@ -117,29 +118,35 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func startSSEStreaming(jobId: String, messageId: String) {
+        print("DEBUG: Starting SSE streaming for job \(jobId)")
         if let existing = sseConnections[jobId] {
+            print("DEBUG: Disconnecting existing SSE connection")
             existing.disconnect()
         }
 
         let manager = SSEManager()
         sseConnections[jobId] = manager
-        manager.connect(jobId: jobId)
 
         var connectionCancellables = Set<AnyCancellable>()
 
+        // IMPORTANT: 購読をconnect()の前に設定
         manager.$jobStatus
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
+                print("DEBUG: Received job status update: \(status)")
                 self?.updateMessageStatus(messageId: messageId, status: status)
             }
             .store(in: &connectionCancellables)
 
         manager.$isConnected
-            .receive(on: RunLoop.main)
+            .dropFirst() // 初期値(false)をスキップ
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] connected in
+                print("DEBUG: SSE connection status changed: \(connected)")
                 guard let self else { return }
                 if !connected {
-                    Task {
+                    print("DEBUG: SSE disconnected, fetching final result")
+                    Task { @MainActor in
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
                     }
@@ -149,13 +156,17 @@ final class ChatViewModel: ObservableObject {
 
         manager.$errorMessage
             .compactMap { $0 }
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
+                print("DEBUG: SSE error: \(message)")
                 self?.errorMessage = message
             }
             .store(in: &connectionCancellables)
 
         sseCancellables[jobId] = connectionCancellables
+
+        // 購読設定後にconnect()を呼び出す
+        manager.connect(jobId: jobId)
     }
 
     private func cleanupConnection(for jobId: String) {
@@ -187,7 +198,9 @@ final class ChatViewModel: ObservableObject {
 
     private func fetchFinalResult(jobId: String, messageId: String) async {
         do {
+            print("DEBUG: Fetching final result for job \(jobId)")
             let job = try await apiClient.fetchJob(id: jobId)
+            print("DEBUG: Successfully fetched job, status: \(job.status)")
             guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
 
             var message = messages[index]
@@ -200,8 +213,15 @@ final class ChatViewModel: ObservableObject {
 
             messages[index] = message
             messageStore.updateMessage(message)
+        } catch let decodingError as DecodingError {
+            print("DEBUG: Decoding error: \(decodingError)")
+            errorMessage = "データ解析エラー: \(decodingError.localizedDescription)"
+        } catch let apiError as APIError {
+            print("DEBUG: API error: \(apiError)")
+            errorMessage = apiError.localizedDescription
         } catch {
-            errorMessage = error.localizedDescription
+            print("DEBUG: Unknown error: \(error)")
+            errorMessage = "不明なエラー: \(error.localizedDescription)"
         }
     }
 

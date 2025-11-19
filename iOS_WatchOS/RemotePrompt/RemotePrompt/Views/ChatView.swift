@@ -18,7 +18,13 @@ struct ChatView: View {
                         .padding(.vertical)
                     }
                     .background(Color(.systemBackground))
-                    .onAppear { scrollProxy = proxy }
+                    .onAppear {
+                        scrollProxy = proxy
+                        // 初期表示時に最下部へスクロール
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            scrollToBottom()
+                        }
+                    }
                     .onChange(of: viewModel.messages.count) { _ in
                         scrollToBottom()
                     }

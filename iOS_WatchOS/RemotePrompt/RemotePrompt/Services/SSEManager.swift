@@ -23,7 +23,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
     func connect(jobId: String) {
         self.jobId = jobId
-        disconnect()
+
+        // 既存のタスクがあればキャンセル（isConnected状態は変更しない）
+        task?.cancel()
+        task = nil
+        buffer.removeAll()
 
         guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
             errorMessage = "無効なSSE URL"
@@ -55,8 +59,12 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         buffer.append(data)
-        guard let chunk = String(data: buffer, encoding: .utf8) else { return }
+        guard let chunk = String(data: buffer, encoding: .utf8) else {
+            print("SSE DEBUG: Failed to decode buffer as UTF-8")
+            return
+        }
         let events = chunk.components(separatedBy: "\n\n")
+        print("SSE DEBUG: Received \(events.count) events")
 
         for index in 0..<(events.count - 1) {
             let eventBlock = events[index]
@@ -72,11 +80,18 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 }
                 .joined()
 
-            guard !dataPayload.isEmpty, let jsonData = dataPayload.data(using: .utf8) else { continue }
+            guard !dataPayload.isEmpty, let jsonData = dataPayload.data(using: .utf8) else {
+                print("SSE DEBUG: Empty payload or failed to convert to data")
+                continue
+            }
+            print("SSE DEBUG: Attempting to decode: \(dataPayload)")
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
+                print("SSE DEBUG: Decoded event - status: \(event.status)")
                 DispatchQueue.main.async {
                     self.jobStatus = event.status
                 }
+            } else {
+                print("SSE DEBUG: Failed to decode JSON")
             }
         }
 

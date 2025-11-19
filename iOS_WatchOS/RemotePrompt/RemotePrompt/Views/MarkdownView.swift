@@ -17,11 +17,9 @@ struct MarkdownView: View {
                 )
             )
 #else
-        ScrollView(.horizontal, showsIndicators: false) {
-            Text(MarkdownRenderer.render(content))
-                .font(.system(.body, design: .rounded))
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        Text(MarkdownRenderer.render(content))
+            .font(.system(.body, design: .rounded))
+            .fixedSize(horizontal: false, vertical: true)
 #endif
     }
 }
