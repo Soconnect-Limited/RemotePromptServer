@@ -15,12 +15,14 @@ struct InputBar: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .disabled(isLoading)
+                .accessibilityIdentifier("chat.input")
 
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
                     .foregroundStyle(canSend ? Color.blue : Color.gray)
             }
+            .accessibilityIdentifier("chat.send")
             .disabled(!canSend)
         }
         .padding(.horizontal)

@@ -39,7 +39,23 @@ struct CreateJobResponse: Codable {
     let status: String
 }
 
-final class APIClient {
+protocol APIClientProtocol {
+    func fetchJob(id: String) async throws -> Job
+    func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse
+    func fetchRooms(deviceId: String) async throws -> [Room]
+    func createRoom(name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
+    func updateRoom(roomId: String, name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
+    func deleteRoom(roomId: String, deviceId: String) async throws
+    func fetchMessages(
+        deviceId: String,
+        roomId: String,
+        runner: String,
+        limit: Int,
+        offset: Int
+    ) async throws -> [Job]
+}
+
+final class APIClient: APIClientProtocol {
     static let shared = APIClient()
 
     private let decoder: JSONDecoder

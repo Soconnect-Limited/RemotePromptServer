@@ -1,8 +1,29 @@
 import SwiftUI
 
 struct RoomsListView: View {
-    @StateObject private var viewModel = RoomsViewModel()
+    @StateObject private var viewModel: RoomsViewModel
     @State private var showingCreateRoom = false
+    private let detailAPIClient: APIClientProtocol
+
+    init(viewModel: RoomsViewModel? = nil) {
+        if let viewModel {
+            _viewModel = StateObject(wrappedValue: viewModel)
+            self.detailAPIClient = viewModel.apiClient
+        } else if AppEnvironment.isUITesting {
+            let previewClient = PreviewAPIClient()
+            let vm = RoomsViewModel(
+                apiClient: previewClient,
+                deviceIdProvider: { "uitest-device" },
+                skipAPIKeyCheck: true
+            )
+            _viewModel = StateObject(wrappedValue: vm)
+            self.detailAPIClient = previewClient
+        } else {
+            let vm = RoomsViewModel()
+            _viewModel = StateObject(wrappedValue: vm)
+            self.detailAPIClient = vm.apiClient
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,12 +52,13 @@ struct RoomsListView: View {
                         }
                         .onDelete(perform: deleteRooms)
                     }
+                    .accessibilityIdentifier("rooms.list")
                     .listStyle(.plain)
                 }
             }
             .navigationTitle("Rooms")
             .navigationDestination(for: Room.self) { room in
-                RoomDetailView(room: room)
+                RoomDetailView(room: room, apiClient: detailAPIClient)
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -44,7 +66,9 @@ struct RoomsListView: View {
                         showingCreateRoom = true
                     } label: {
                         Image(systemName: "plus")
+                            .accessibilityIdentifier("rooms.add.icon")
                     }
+                    .accessibilityIdentifier("rooms.add")
                 }
             }
             .task {

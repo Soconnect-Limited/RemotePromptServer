@@ -11,10 +11,103 @@ import XCTest
 @MainActor
 final class RoomBasedArchitectureTests: XCTestCase {
 
-    // MARK: - Phase 2.6.1: UI Tests (Unit Test Level)
+    // MARK: - Helpers
+
+    final class MockAPIClient: APIClientProtocol {
+        var rooms: [Room] = []
+        var jobsById: [String: Job] = [:]
+        var fetchMessagesResponses: [Int: [Job]] = [:]
+        var lastCreateJob: CreateJobRequest?
+
+        func fetchJob(id: String) async throws -> Job {
+            guard let job = jobsById[id] else { throw APIError.invalidURL }
+            return job
+        }
+
+        func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse {
+            let job = Job(
+                id: UUID().uuidString,
+                runner: runner,
+                inputText: prompt,
+                deviceId: deviceId,
+                roomId: roomId,
+                status: "success",
+                stdout: "ok",
+                stderr: nil,
+                exitCode: 0,
+                createdAt: Date(),
+                startedAt: Date(),
+                finishedAt: Date()
+            )
+            jobsById[job.id] = job
+            lastCreateJob = CreateJobRequest(runner: runner, inputText: prompt, deviceId: deviceId, roomId: roomId, notifyToken: nil)
+            return CreateJobResponse(id: job.id, runner: runner, status: job.status)
+        }
+
+        func fetchRooms(deviceId: String) async throws -> [Room] {
+            rooms
+        }
+
+        func createRoom(name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room {
+            let room = Room(
+                id: UUID().uuidString,
+                name: name,
+                workspacePath: workspacePath,
+                icon: icon,
+                deviceId: deviceId,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            rooms.append(room)
+            return room
+        }
+
+        func updateRoom(roomId: String, name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room {
+            guard let idx = rooms.firstIndex(where: { $0.id == roomId }) else { throw APIError.invalidURL }
+            var room = rooms[idx]
+            room.name = name
+            room.workspacePath = workspacePath
+            room.icon = icon
+            rooms[idx] = room
+            return room
+        }
+
+        func deleteRoom(roomId: String, deviceId: String) async throws {
+            rooms.removeAll { $0.id == roomId }
+        }
+
+        func fetchMessages(
+            deviceId: String,
+            roomId: String,
+            runner: String,
+            limit: Int,
+            offset: Int
+        ) async throws -> [Job] {
+            let page = fetchMessagesResponses[offset] ?? []
+            return page.filter { $0.roomId == roomId && $0.runner == runner }
+        }
+    }
+
+    private func makeJob(index: Int, roomId: String, runner: String = "claude") -> Job {
+        Job(
+            id: "job-\(index)",
+            runner: runner,
+            inputText: "Input #\(index)",
+            deviceId: "device",
+            roomId: roomId,
+            status: "success",
+            stdout: "Output #\(index)",
+            stderr: nil,
+            exitCode: 0,
+            createdAt: Date(),
+            startedAt: Date(),
+            finishedAt: Date()
+        )
+    }
+
+    // MARK: - Phase 2.6.1: UI Tests (Unit Level)
 
     func testRoomModelCodable() throws {
-        // Given: Room data
         let room = Room(
             id: "test-room-id",
             name: "Test Room",
@@ -25,13 +118,11 @@ final class RoomBasedArchitectureTests: XCTestCase {
             updatedAt: Date()
         )
 
-        // When: Encoding and decoding
         let encoder = JSONEncoder()
         let data = try encoder.encode(room)
         let decoder = JSONDecoder()
         let decoded = try decoder.decode(Room.self, from: data)
 
-        // Then: Should match
         XCTAssertEqual(decoded.id, room.id)
         XCTAssertEqual(decoded.name, room.name)
         XCTAssertEqual(decoded.workspacePath, room.workspacePath)
@@ -40,29 +131,12 @@ final class RoomBasedArchitectureTests: XCTestCase {
     }
 
     func testJobModelWithRoomId() throws {
-        // Given: Job data with roomId
-        let job = Job(
-            id: "job-123",
-            runner: "claude",
-            inputText: "Test prompt",
-            deviceId: "device-123",
-            roomId: "room-123",
-            status: "success",
-            stdout: "Test output",
-            stderr: nil,
-            exitCode: 0,
-            createdAt: Date(),
-            startedAt: Date(),
-            finishedAt: Date()
-        )
-
-        // Then: roomId should be required (not optional)
+        let job = makeJob(index: 1, roomId: "room-123")
         XCTAssertEqual(job.roomId, "room-123")
         XCTAssertFalse(job.isRunning)
     }
 
     func testMessageWithRoomId() {
-        // Given: Message with roomId
         let message = Message(
             id: "msg-123",
             jobId: "job-123",
@@ -73,7 +147,6 @@ final class RoomBasedArchitectureTests: XCTestCase {
             createdAt: Date()
         )
 
-        // Then: roomId should be set
         XCTAssertEqual(message.roomId, "room-123")
         XCTAssertEqual(message.type, .user)
         XCTAssertEqual(message.status, .completed)
@@ -82,83 +155,106 @@ final class RoomBasedArchitectureTests: XCTestCase {
     // MARK: - Phase 2.6.2: Pagination Tests
 
     func testChatViewModelPaginationState() async {
-        // Given: ChatViewModel with roomId
-        let viewModel = ChatViewModel(runner: "claude", roomId: "test-room")
+        let mock = MockAPIClient()
+        let viewModel = ChatViewModel(
+            runner: "claude",
+            roomId: "room-1",
+            apiClient: mock,
+            messageStore: MessageStore(),
+            deviceIdProvider: { "device" },
+            autoLoadMessages: false,
+            enableStreaming: false,
+            validateAPIKey: false
+        )
 
-        // Then: Initial pagination state
         XCTAssertTrue(viewModel.canLoadMoreHistory)
         XCTAssertFalse(viewModel.isLoadingMoreHistory)
         XCTAssertFalse(viewModel.isHistoryLoading)
         XCTAssertEqual(viewModel.messages.count, 0)
     }
 
-    func testMessageConversion() {
-        // Given: Jobs data
-        let jobs = [
-            Job(
-                id: "job-1",
-                runner: "claude",
-                inputText: "Hello",
-                deviceId: "device-1",
-                roomId: "room-1",
-                status: "success",
-                stdout: "Hi there",
-                stderr: nil,
-                exitCode: 0,
-                createdAt: Date(),
-                startedAt: Date(),
-                finishedAt: Date()
-            )
-        ]
+    func testMessageConversionProducesUserAndAssistantMessages() {
+        let mock = MockAPIClient()
+        let viewModel = ChatViewModel(
+            runner: "claude",
+            roomId: "room-1",
+            apiClient: mock,
+            messageStore: MessageStore(),
+            deviceIdProvider: { "device" },
+            autoLoadMessages: false,
+            enableStreaming: false,
+            validateAPIKey: false
+        )
 
-        // When: Converting to messages (using ChatViewModel's private method indirectly)
-        // Note: This tests the data model structure
+        let jobs = [makeJob(index: 1, roomId: "room-1")]
+        let messages = viewModel.convertJobsToMessages(jobs)
 
-        // Then: Should create user + assistant messages
-        // Each job creates 2 messages: user (input) + assistant (output)
-        let expectedMessagesCount = 2
-        XCTAssertEqual(expectedMessagesCount, 2)
+        XCTAssertEqual(messages.count, 2)
+        XCTAssertEqual(messages[0].type, .user)
+        XCTAssertEqual(messages[1].type, .assistant)
     }
 
-    func testPaginationOffsetCalculation() {
-        // Given: Pagination parameters
-        let pageSize = 20
-        var offset = 0
+    func testPaginationOffsetCalculation() async {
+        let mock = MockAPIClient()
+        let roomId = "room-1"
+        let firstPage = [makeJob(index: 1, roomId: roomId), makeJob(index: 2, roomId: roomId)]
+        let secondPage = [makeJob(index: 3, roomId: roomId)]
+        mock.fetchMessagesResponses = [0: firstPage, 2: secondPage]
 
-        // When: First load
-        offset = 0
-        XCTAssertEqual(offset, 0)
+        let viewModel = ChatViewModel(
+            runner: "claude",
+            roomId: roomId,
+            apiClient: mock,
+            messageStore: MessageStore(),
+            deviceIdProvider: { "device" },
+            autoLoadMessages: false,
+            enableStreaming: false,
+            validateAPIKey: false
+        )
 
-        // When: After first page loaded (20 items)
-        offset += pageSize
-        XCTAssertEqual(offset, 20)
+        await viewModel.loadLatestMessages()
+        XCTAssertEqual(viewModel.messages.count, 4)
+        XCTAssertEqual(viewModel.historyOffsetSnapshot, 2)
+        XCTAssertTrue(viewModel.canLoadMoreHistory)
 
-        // When: After second page loaded (20 items)
-        offset += pageSize
-        XCTAssertEqual(offset, 40)
+        await viewModel.loadMoreMessages()
+        XCTAssertEqual(viewModel.messages.count, 6)
+        XCTAssertEqual(viewModel.historyOffsetSnapshot, 3)
+        XCTAssertFalse(viewModel.canLoadMoreHistory)
     }
 
     // MARK: - Phase 2.6.3: Consistency Tests
 
     func testRoomsViewModelInitialState() {
-        // Given: RoomsViewModel
-        let viewModel = RoomsViewModel()
+        let mock = MockAPIClient()
+        let initialRooms = [
+            Room(
+                id: "room-1",
+                name: "RemotePrompt",
+                workspacePath: "/Users/test/RemotePrompt",
+                icon: "📁",
+                deviceId: "device",
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        ]
+        let viewModel = RoomsViewModel(
+            apiClient: mock,
+            deviceIdProvider: { "device" },
+            skipAPIKeyCheck: true,
+            initialRooms: initialRooms
+        )
 
-        // Then: Initial state should be empty
-        XCTAssertEqual(viewModel.rooms.count, 0)
+        XCTAssertEqual(viewModel.rooms.count, 1)
         XCTAssertFalse(viewModel.isLoading)
         XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.rooms.first?.name, "RemotePrompt")
     }
 
     func testMessageStoreContextSwitching() {
-        // Given: MessageStore
         let store = MessageStore()
-
-        // When: Set context for room1 + claude
         store.setActiveContext(roomId: "room-1", runner: "claude")
 
-        // Then: Context should be set
-        // Add a message
         let message1 = Message(
             type: .user,
             roomId: "room-1",
@@ -168,22 +264,15 @@ final class RoomBasedArchitectureTests: XCTestCase {
         store.addMessage(message1)
         XCTAssertEqual(store.messages.count, 1)
 
-        // When: Switch to room2 + codex
         store.setActiveContext(roomId: "room-2", runner: "codex")
-
-        // Then: Messages should be empty (different context)
         XCTAssertEqual(store.messages.count, 0)
 
-        // When: Switch back to room1 + claude
         store.setActiveContext(roomId: "room-1", runner: "claude")
-
-        // Then: Original message should still be there
         XCTAssertEqual(store.messages.count, 1)
         XCTAssertEqual(store.messages.first?.content, "Test 1")
     }
 
     func testMessageStoreReplaceAll() {
-        // Given: MessageStore with existing messages
         let store = MessageStore()
         store.setActiveContext(roomId: "room-1", runner: "claude")
 
@@ -196,31 +285,18 @@ final class RoomBasedArchitectureTests: XCTestCase {
         store.addMessage(oldMessage)
         XCTAssertEqual(store.messages.count, 1)
 
-        // When: Replace all messages
         let newMessages = [
-            Message(
-                type: .user,
-                roomId: "room-1",
-                content: "New message 1",
-                status: .completed
-            ),
-            Message(
-                type: .user,
-                roomId: "room-1",
-                content: "New message 2",
-                status: .completed
-            )
+            Message(type: .user, roomId: "room-1", content: "New message 1", status: .completed),
+            Message(type: .user, roomId: "room-1", content: "New message 2", status: .completed)
         ]
         store.replaceAll(newMessages)
 
-        // Then: Should have new messages only
         XCTAssertEqual(store.messages.count, 2)
         XCTAssertEqual(store.messages[0].content, "New message 1")
         XCTAssertEqual(store.messages[1].content, "New message 2")
     }
 
     func testMessageStoreClear() {
-        // Given: MessageStore with messages
         let store = MessageStore()
         store.setActiveContext(roomId: "room-1", runner: "claude")
 
@@ -233,19 +309,14 @@ final class RoomBasedArchitectureTests: XCTestCase {
         store.addMessage(message)
         XCTAssertEqual(store.messages.count, 1)
 
-        // When: Clear
         store.clear()
-
-        // Then: Should be empty
         XCTAssertEqual(store.messages.count, 0)
     }
 
     func testDeviceIdPersistence() {
-        // Given: Multiple calls to getDeviceId
         let deviceId1 = APIClient.getDeviceId()
         let deviceId2 = APIClient.getDeviceId()
 
-        // Then: Should return same ID (persisted in UserDefaults)
         XCTAssertEqual(deviceId1, deviceId2)
         XCTAssertFalse(deviceId1.isEmpty)
     }

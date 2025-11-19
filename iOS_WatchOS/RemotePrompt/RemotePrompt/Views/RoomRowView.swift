@@ -20,6 +20,7 @@ struct RoomRowView: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .accessibilityIdentifier("roomRow.\(room.id)")
     }
 }
 

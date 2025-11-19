@@ -18,14 +18,32 @@ struct RoomDetailView: View {
     }
 
     let room: Room
+    private let apiClient: APIClientProtocol
     @StateObject private var claudeViewModel: ChatViewModel
     @StateObject private var codexViewModel: ChatViewModel
     @State private var selectedTab: RunnerTab = .claude
 
-    init(room: Room) {
+    init(room: Room, apiClient: APIClientProtocol = APIClient.shared, enableStreaming: Bool = !AppEnvironment.isUITesting) {
         self.room = room
-        _claudeViewModel = StateObject(wrappedValue: ChatViewModel(runner: "claude", roomId: room.id))
-        _codexViewModel = StateObject(wrappedValue: ChatViewModel(runner: "codex", roomId: room.id))
+        self.apiClient = apiClient
+        _claudeViewModel = StateObject(
+            wrappedValue: ChatViewModel(
+                runner: "claude",
+                roomId: room.id,
+                apiClient: apiClient,
+                enableStreaming: enableStreaming,
+                validateAPIKey: !AppEnvironment.isUITesting
+            )
+        )
+        _codexViewModel = StateObject(
+            wrappedValue: ChatViewModel(
+                runner: "codex",
+                roomId: room.id,
+                apiClient: apiClient,
+                enableStreaming: enableStreaming,
+                validateAPIKey: !AppEnvironment.isUITesting
+            )
+        )
     }
 
     var body: some View {

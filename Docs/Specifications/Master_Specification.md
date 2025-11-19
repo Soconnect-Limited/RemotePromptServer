@@ -2305,6 +2305,12 @@ struct MessageBubble: View {
 - `ScrollViewReader + LazyVStack` の先頭にページングトリガーを設け、初回ロード完了後に上端へスクロールしたタイミングで `loadMoreMessages()` を実行。
 - `.refreshable` で `loadLatestMessages()` を呼び出し、サーバー履歴を再取得。
 - 入力バーは `viewModel.isLoading` と連動し、送信中はボタンを無効化。エラーは `viewModel.errorMessage` を監視してアラート表示。
+
+#### AppEnvironment / PreviewAPIClient（v3.0補強）
+
+- `Support/AppEnvironment.swift` が `isUITesting` を公開し、`-UITestMode` 引数でUIテスト専用モードに切り替え可能。
+- `PreviewAPIClient`（`APIClientProtocol` 準拠）がインメモリデータを返し、ネットワークやAPIキーに依存しないE2Eテスト/プレビューを実現。
+- `RoomsListView`/`RoomDetailView`/`ChatViewModel` は環境に応じて API クライアント・SSE・APIキー検証を切り替えるイニシャライザを持つ。
 ```
 
 ### 8.5 Info.plist（ATS設定）

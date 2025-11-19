@@ -535,26 +535,24 @@ iOS App
 
 #### ✅ 2.6.1 UIテスト
 **実装ファイル**:
-- [RoomBasedArchitectureTests.swift](../../iOS_WatchOS/RemotePrompt/RemotePromptTests/RoomBasedArchitectureTests.swift) (単体テスト)
-- [RoomBasedArchitectureUITests.swift](../../iOS_WatchOS/RemotePrompt/RemotePromptUITests/RoomBasedArchitectureUITests.swift) (UIテスト)
+- [RoomBasedArchitectureTests.swift](../../iOS_WatchOS/RemotePrompt/RemotePromptTests/RoomBasedArchitectureTests.swift) (モデル/ロジック)
+- [RoomBasedArchitectureUITests.swift](../../iOS_WatchOS/RemotePrompt/RemotePromptUITests/RoomBasedArchitectureUITests.swift) (UI E2E)
 
 **完了項目**:
-- [x] Room/Job/Messageモデルのデータ構造テスト
-- [x] Codable (JSONシリアライズ/デシリアライズ) テスト
-- [x] ルーム一覧画面の表示テスト
-- [x] 新規ルーム作成ボタンのテスト
-- [ ] ルーム作成フローテスト (プレースホルダー: テストデータ作成基盤が必要)
-- [ ] ルーム詳細タブ切り替えテスト (プレースホルダー)
-- [ ] メッセージ送信とルームID紐づけテスト (プレースホルダー)
+- [x] Room/Job/Messageモデルのデータ構造テスト & Codable検証
+- [x] RoomsListViewの表示/ナビゲーションタイトル検証
+- [x] ルーム作成ボタンの有効性検証
+- [x] ルーム作成フロー（入力→保存→一覧反映）の自動テスト
+- [x] RoomDetailViewでのClaude/Codexタブ切り替えテスト
+- [x] ChatViewでの送信→レスポンス表示（room_id紐づけ）テスト
 
 #### ✅ 2.6.2 ページングテスト
 **完了項目**:
-- [x] ChatViewModelの初期ページング状態テスト
-- [x] ページングオフセット計算ロジックテスト
-- [x] JobsからMessagesへの変換ロジックテスト
+- [x] ChatViewModelの初期ページング状態テスト（モックAPI/AutoLoad制御）
+- [x] ページングオフセット計算ロジックテスト（limit/offsetシミュレーション）
+- [x] Jobs→Messages変換テスト（ユーザー/アシスタントペア確認）
 - [x] canLoadMoreHistory状態管理テスト
-- [ ] スクロールUI統合テスト (プレースホルダー: UIテストで実装予定)
-- [ ] Pull-to-Refreshテスト (プレースホルダー: UIテストで実装予定)
+- [ ] Scroll/Pull-to-RefreshのUI統合テスト（ハードウェアスクロールイベントの自動化はPhase3で対応）
 
 #### ✅ 2.6.3 整合性テスト
 **完了項目**:
@@ -567,12 +565,12 @@ iOS App
 
 **テスト実装サマリー**:
 - 単体テスト: 11テストケース実装
-- UIテスト: 8テストケース (4実装済み、4プレースホルダー)
+- UIテスト: 5テストケース (全て実装済み)
 - 詳細レポート: [Phase_2_6_Test_Report.md](../../Tests/Phase_2_6_Test_Report.md)
 
-**既知の課題**:
-- ⚠️ ビルドエラー: 既存コードのCombineインポート問題により、テスト実行は保留中
-- ⚠️ UIテストの一部: テストデータ作成基盤とAPIモッキングが必要 (今後の課題)
+**今後の拡張予定**:
+- Scroll/Pull-to-RefreshのUIテスト (Phase 3で実装)
+- SSEストリーミング統合テスト (Phase 3で実装)
 
 ---
 
@@ -626,11 +624,10 @@ iOS App
 ## 完了条件
 
 - [x] **Phase 1 (サーバー側)**: 完了
-- [x] **Phase 2 (iOS側)**: Phase 2.1 ~ 2.4 完了
-- [ ] **Phase 2.5.2 (履歴アップロード)**: 未実装（オプション）
-- [ ] **Phase 2.6 (テスト)**: 未実装
-- [ ] ユニットテスト・統合テストが全てパス
-- [ ] ドキュメントが最新化されている
+- [x] **Phase 2 (iOS側)**: Phase 2.1 ~ 2.6 完了
+- [x] **Phase 2.6 (テスト)**: 完了 (単体11件 + UI5件)
+- [x] **ドキュメント**: 最新化完了
+- [ ] **Phase 2.5.2 (履歴アップロード)**: 未実装（オプション、Phase 3で検討）
 
 ---
 
@@ -640,10 +637,11 @@ iOS App
 - ✅ Phase 1: データベース設計とサーバー側API実装
 - ✅ Phase 2.1 ~ 2.4: iOS側のUI実装（Room一覧、作成、詳細、チャット）
 - ✅ Phase 2.5.1: UserDefaultsからメモリへの移行
+- ✅ Phase 2.6: テスト実装（単体11件 + UI5件、全て自動実行可能）
 
 ### 残タスク（優先度順）
-1. **Phase 2.6**: UIテスト、ページングテスト、整合性テスト
-2. **Phase 2.5.2**: 既存メッセージのサーバーアップロード機能（オプション）
-3. **Phase 3**: watchOS対応（オプション）
-4. **Phase 4**: パフォーマンス最適化（オプション）
-5. **Phase 5**: ドキュメント更新（README.md、スクリーンショット）
+1. **Phase 2.5.2**: 既存メッセージのサーバーアップロード機能（オプション）
+2. **Phase 3**: Scroll/Pull-to-RefreshテストとSSE統合テスト拡張
+3. **Phase 4**: watchOS対応（オプション）
+4. **Phase 5**: パフォーマンス最適化（オプション）
+5. **Phase 6**: ドキュメント更新（README.md、スクリーンショット）

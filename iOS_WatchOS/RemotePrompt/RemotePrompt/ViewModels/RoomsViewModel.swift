@@ -2,12 +2,25 @@ import Foundation
 
 @MainActor
 final class RoomsViewModel: ObservableObject {
-    @Published var rooms: [Room] = []
+    @Published var rooms: [Room]
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private let apiClient = APIClient.shared
-    private let deviceId = APIClient.getDeviceId()
+    let apiClient: APIClientProtocol
+    private let deviceId: String
+    private let shouldValidateAPIKey: Bool
+
+    init(
+        apiClient: APIClientProtocol = APIClient.shared,
+        deviceIdProvider: @escaping () -> String = APIClient.getDeviceId,
+        skipAPIKeyCheck: Bool = false,
+        initialRooms: [Room] = []
+    ) {
+        self.apiClient = apiClient
+        self.deviceId = deviceIdProvider()
+        self.shouldValidateAPIKey = !skipAPIKeyCheck
+        self.rooms = initialRooms
+    }
 
     func loadRooms() async {
         guard ensureAPIKeyConfigured() else { return }
@@ -70,6 +83,7 @@ final class RoomsViewModel: ObservableObject {
     }
 
     private func ensureAPIKeyConfigured() -> Bool {
+        guard shouldValidateAPIKey else { return true }
         guard Constants.isAPIKeyConfigured else {
             errorMessage = Constants.missingAPIKeyMessage
             return false

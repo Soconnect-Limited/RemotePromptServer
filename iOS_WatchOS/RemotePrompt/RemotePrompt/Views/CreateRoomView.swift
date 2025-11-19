@@ -20,8 +20,11 @@ struct CreateRoomView: View {
             Form {
                 Section(header: Text("基本情報")) {
                     TextField("ルーム名", text: $name)
+                        .accessibilityIdentifier("createRoom.name")
                     TextField("ワークスペースパス", text: $workspacePath)
+                        .accessibilityIdentifier("createRoom.workspacePath")
                     TextField("アイコン (絵文字)", text: $icon)
+                        .accessibilityIdentifier("createRoom.icon")
                         .textInputAutocapitalization(.never)
                 }
 
@@ -47,6 +50,7 @@ struct CreateRoomView: View {
                             Text("作成")
                         }
                     }
+                    .accessibilityIdentifier("createRoom.submit")
                     .disabled(!canSubmit)
                 }
             }

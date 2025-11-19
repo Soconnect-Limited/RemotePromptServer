@@ -11,24 +11,48 @@ final class ChatViewModel: ObservableObject {
     @Published var isLoadingMoreHistory = false
     @Published var canLoadMoreHistory = true
 
-    private let apiClient = APIClient.shared
-    private let messageStore = MessageStore()
+    private let apiClient: APIClientProtocol
+    private let messageStore: MessageStore
+    private let deviceIdProvider: () -> String
+    private let enableStreaming: Bool
+    private let shouldAutoLoadMessages: Bool
+    private let shouldValidateAPIKey: Bool
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
     private let runner: String
     private let roomId: String  // v3.0: Room ID (暫定的にデフォルトルーム使用)
-    private let deviceId = APIClient.getDeviceId()
+    private let deviceId: String
     private let historyPageSize = 20
     private var historyOffset = 0
 
-    init(runner: String = "claude", roomId: String = "default-room") {
+    var historyOffsetSnapshot: Int { historyOffset }
+
+    init(
+        runner: String = "claude",
+        roomId: String = "default-room",
+        apiClient: APIClientProtocol = APIClient.shared,
+        messageStore: MessageStore = MessageStore(),
+        deviceIdProvider: @escaping () -> String = APIClient.getDeviceId,
+        autoLoadMessages: Bool = true,
+        enableStreaming: Bool = true,
+        validateAPIKey: Bool = true
+    ) {
         self.runner = runner
         self.roomId = roomId
+        self.apiClient = apiClient
+        self.messageStore = messageStore
+        self.deviceIdProvider = deviceIdProvider
+        self.enableStreaming = enableStreaming
+        self.shouldAutoLoadMessages = autoLoadMessages
+        self.shouldValidateAPIKey = validateAPIKey
+        self.deviceId = deviceIdProvider()
         messageStore.setActiveContext(roomId: roomId, runner: runner)
         messages = messageStore.messages
-        Task {
-            await loadLatestMessages()
-            await recoverIncompleteJobs()
+        if autoLoadMessages {
+            Task {
+                await loadLatestMessages()
+                await recoverIncompleteJobs()
+            }
         }
     }
 
@@ -80,7 +104,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private func convertJobsToMessages(_ jobs: [Job]) -> [Message] {
+    func convertJobsToMessages(_ jobs: [Job]) -> [Message] {
         var result: [Message] = []
         for job in jobs {
             if let prompt = job.inputText, !prompt.isEmpty {
@@ -213,6 +237,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func ensureAPIKeyConfigured() -> Bool {
+        guard shouldValidateAPIKey else { return true }
         guard Constants.isAPIKeyConfigured else {
             errorMessage = Constants.missingAPIKeyMessage
             return false
@@ -221,6 +246,12 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func startSSEStreaming(jobId: String, messageId: String) {
+        guard enableStreaming else {
+            Task { @MainActor in
+                await self.fetchFinalResult(jobId: jobId, messageId: messageId)
+            }
+            return
+        }
         print("DEBUG: Starting SSE streaming for job \(jobId)")
         if let existing = sseConnections[jobId] {
             print("DEBUG: Disconnecting existing SSE connection")
