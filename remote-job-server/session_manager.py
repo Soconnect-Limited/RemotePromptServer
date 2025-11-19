@@ -14,7 +14,8 @@ from models import DeviceSession
 
 LOGGER = logging.getLogger(__name__)
 CODEx_SESSION_PATTERN = re.compile(r"session id:\s+([a-f0-9\-]{36})", re.IGNORECASE)
-DEFAULT_TRUSTED_DIR = Path(os.getenv("CLAUDE_TRUSTED_DIR", ".")).resolve()
+# Default to project root (parent of remote-job-server directory)
+DEFAULT_TRUSTED_DIR = Path(os.getenv("CLAUDE_TRUSTED_DIR", Path(__file__).parent.parent)).resolve()
 
 
 class ClaudeSessionManager:
@@ -24,24 +25,24 @@ class ClaudeSessionManager:
         self.trusted_directory = Path(trusted_directory)
 
     # --- DB helpers -----------------------------------------------------
-    def _get_session_id_from_db(self, device_id: str) -> Optional[str]:
+    def _get_session_id_from_db(self, device_id: str, room_id: str) -> Optional[str]:
         db = SessionLocal()
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id=device_id, runner="claude")
+                .filter_by(device_id=device_id, room_id=room_id, runner="claude")
                 .first()
             )
             return record.session_id if record else None
         finally:
             db.close()
 
-    def _save_session_id_to_db(self, device_id: str, session_id: str) -> None:
+    def _save_session_id_to_db(self, device_id: str, room_id: str, session_id: str) -> None:
         db = SessionLocal()
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id=device_id, runner="claude")
+                .filter_by(device_id=device_id, room_id=room_id, runner="claude")
                 .first()
             )
             if record:
@@ -49,6 +50,7 @@ class ClaudeSessionManager:
             else:
                 record = DeviceSession(
                     device_id=device_id,
+                    room_id=room_id,
                     runner="claude",
                     session_id=session_id,
                 )
@@ -66,21 +68,26 @@ class ClaudeSessionManager:
         self,
         prompt: str,
         device_id: str,
+        room_id: str,
+        workspace_path: Optional[str] = None,
         continue_session: bool = True,
     ) -> Dict[str, Optional[str]]:
         cmd = ["claude", "--print", "--output-format", "text"]
         session_id = None
 
         if continue_session:
-            session_id = self._get_session_id_from_db(device_id)
+            session_id = self._get_session_id_from_db(device_id, room_id)
 
         if session_id:
             cmd.extend(["--resume", session_id])
-            LOGGER.info("Resuming Claude session %s for %s", session_id, device_id)
+            LOGGER.info("Resuming Claude session %s for %s in room %s", session_id, device_id, room_id)
         else:
             session_id = str(uuid.uuid4())
             cmd.extend(["--session-id", session_id])
-            LOGGER.info("Starting new Claude session %s for %s", session_id, device_id)
+            LOGGER.info("Starting new Claude session %s for %s in room %s", session_id, device_id, room_id)
+
+        # Use workspace_path if provided, otherwise use default trusted_directory
+        work_dir = Path(workspace_path) if workspace_path else self.trusted_directory
 
         try:
             result = subprocess.run(
@@ -89,7 +96,7 @@ class ClaudeSessionManager:
                 capture_output=True,
                 text=True,
                 timeout=300,
-                cwd=self.trusted_directory,
+                cwd=work_dir,
             )
         except subprocess.TimeoutExpired:
             LOGGER.error("Claude session timed out for %s", device_id)
@@ -104,7 +111,7 @@ class ClaudeSessionManager:
             }
 
         if result.returncode == 0:
-            self._save_session_id_to_db(device_id, session_id)
+            self._save_session_id_to_db(device_id, room_id, session_id)
 
         return {
             "success": result.returncode == 0,
@@ -117,24 +124,24 @@ class ClaudeSessionManager:
 class CodexSessionManager:
     """Manage codex exec sessions with DB-backed persistence."""
 
-    def _get_session_id_from_db(self, device_id: str) -> Optional[str]:
+    def _get_session_id_from_db(self, device_id: str, room_id: str) -> Optional[str]:
         db = SessionLocal()
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id=device_id, runner="codex")
+                .filter_by(device_id=device_id, room_id=room_id, runner="codex")
                 .first()
             )
             return record.session_id if record else None
         finally:
             db.close()
 
-    def _save_session_id_to_db(self, device_id: str, session_id: str) -> None:
+    def _save_session_id_to_db(self, device_id: str, room_id: str, session_id: str) -> None:
         db = SessionLocal()
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id=device_id, runner="codex")
+                .filter_by(device_id=device_id, room_id=room_id, runner="codex")
                 .first()
             )
             if record:
@@ -142,6 +149,7 @@ class CodexSessionManager:
             else:
                 record = DeviceSession(
                     device_id=device_id,
+                    room_id=room_id,
                     runner="codex",
                     session_id=session_id,
                 )
@@ -157,17 +165,21 @@ class CodexSessionManager:
         self,
         prompt: str,
         device_id: str,
+        room_id: str,
+        workspace_path: Optional[str] = None,
         continue_session: bool = True,
     ) -> Dict[str, Optional[str]]:
         cmd = ["codex", "exec"]
         session_id = None
 
         if continue_session:
-            session_id = self._get_session_id_from_db(device_id)
+            session_id = self._get_session_id_from_db(device_id, room_id)
             if session_id:
                 cmd.extend(["resume", session_id])
-                LOGGER.info("Resuming Codex session %s for %s", session_id, device_id)
+                LOGGER.info("Resuming Codex session %s for %s in room %s", session_id, device_id, room_id)
 
+        # Use workspace_path if provided (Codex doesn't use cwd in subprocess.run)
+        # But we'll keep the parameter for consistency with ClaudeSessionManager
         try:
             result = subprocess.run(
                 cmd,
@@ -175,6 +187,7 @@ class CodexSessionManager:
                 capture_output=True,
                 text=True,
                 timeout=300,
+                cwd=Path(workspace_path) if workspace_path else None,
             )
         except subprocess.TimeoutExpired:
             LOGGER.error("Codex session timed out for %s", device_id)
@@ -188,7 +201,7 @@ class CodexSessionManager:
         match = CODEx_SESSION_PATTERN.search(combined_output)
         if result.returncode == 0 and match:
             extracted = match.group(1)
-            self._save_session_id_to_db(device_id, extracted)
+            self._save_session_id_to_db(device_id, room_id, extracted)
 
         return {
             "success": result.returncode == 0,
@@ -210,12 +223,18 @@ class SessionManager:
         runner: str,
         prompt: str,
         device_id: str,
+        room_id: str,
+        workspace_path: Optional[str] = None,
         continue_session: bool = True,
     ) -> Dict[str, Optional[str]]:
         if runner == "claude":
-            return self.claude_manager.execute_job(prompt, device_id, continue_session)
+            return self.claude_manager.execute_job(
+                prompt, device_id, room_id, workspace_path, continue_session
+            )
         if runner == "codex":
-            return self.codex_manager.execute_job(prompt, device_id, continue_session)
+            return self.codex_manager.execute_job(
+                prompt, device_id, room_id, workspace_path, continue_session
+            )
         raise ValueError(f"Unknown runner: {runner}")
 
     def get_session_status(self, runner: str, device_id: str) -> Dict[str, Optional[str]]:

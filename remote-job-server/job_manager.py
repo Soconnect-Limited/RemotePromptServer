@@ -37,6 +37,8 @@ class JobManager:
         runner: str,
         input_text: str,
         device_id: str,
+        room_id: str,
+        workspace_path: str,
         notify_token: Optional[str] = None,
         background_tasks: Optional[object] = None,
     ) -> dict:
@@ -45,6 +47,7 @@ class JobManager:
             runner=runner,
             input_text=input_text,
             device_id=device_id,
+            room_id=room_id,
             status="queued",
             notify_token=notify_token,
             created_at=utcnow(),
@@ -58,13 +61,13 @@ class JobManager:
             db.close()
 
         if background_tasks is not None:
-            background_tasks.add_task(self._execute_job, job.id)
+            background_tasks.add_task(self._execute_job, job.id, workspace_path)
         else:
-            self._execute_job(job.id)
+            self._execute_job(job.id, workspace_path)
 
         return job.to_dict()
 
-    def _execute_job(self, job_id: str) -> None:
+    def _execute_job(self, job_id: str, workspace_path: str) -> None:
         db = SessionLocal()
         try:
             job = db.query(Job).filter_by(id=job_id).first()
@@ -83,11 +86,13 @@ class JobManager:
                 },
             )
 
-            LOGGER.info("Executing job %s (%s)", job_id, job.runner)
+            LOGGER.info("Executing job %s (%s) in workspace %s", job_id, job.runner, workspace_path)
             result = self.session_manager.execute_job(
                 runner=job.runner,
                 prompt=job.input_text,
                 device_id=job.device_id,
+                room_id=job.room_id,
+                workspace_path=workspace_path,
                 continue_session=True,
             )
 
