@@ -5,6 +5,7 @@ struct Job: Codable, Identifiable {
     let runner: String
     let inputText: String?
     let deviceId: String?
+    let roomId: String
     var status: String
     let stdout: String?
     let stderr: String?
@@ -22,6 +23,7 @@ struct Job: Codable, Identifiable {
         case runner
         case inputText = "input_text"
         case deviceId = "device_id"
+        case roomId = "room_id"
         case status
         case stdout
         case stderr
