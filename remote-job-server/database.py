@@ -1,16 +1,16 @@
 """Database configuration for the Remote Job Server."""
 from __future__ import annotations
 
-import os
 from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from config import settings
 from db import Base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/jobs.db")
+DATABASE_URL = settings.database_url
 
 
 engine = create_engine(
