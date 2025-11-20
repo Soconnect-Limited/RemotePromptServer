@@ -4,6 +4,7 @@ struct ChatView: View {
     @ObservedObject private var viewModel: ChatViewModel
     @State private var scrollProxy: ScrollViewProxy?
     @State private var hasFinishedInitialFetch = false
+    @FocusState private var isInputFocused: Bool
 
     init(viewModel: ChatViewModel) {
         _viewModel = ObservedObject(wrappedValue: viewModel)
@@ -51,7 +52,8 @@ struct ChatView: View {
             InputBar(
                 text: $viewModel.inputText,
                 onSend: viewModel.sendMessage,
-                isLoading: viewModel.isLoading
+                isLoading: viewModel.isLoading,
+                isFocused: $isInputFocused
             )
         }
         .refreshable {
