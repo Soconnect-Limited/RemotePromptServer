@@ -38,7 +38,7 @@ def session_scope() -> Generator:
 def init_db() -> None:
     """Create database tables based on model metadata."""
     # Import inside function to ensure models register with the Base metadata.
-    from models import Device, DeviceSession, Job, Room  # pylint: disable=import-outside-toplevel
+    from models import Device, DeviceSession, Job, Room, Thread  # pylint: disable=import-outside-toplevel
 
     Base.metadata.create_all(bind=engine)
     _ensure_room_settings_column()
