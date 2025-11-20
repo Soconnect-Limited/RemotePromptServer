@@ -7,7 +7,10 @@ struct RoomDetailView: View {
 
         var id: String { rawValue }
         var title: String {
-            rawValue.capitalized
+            switch self {
+            case .claude: return "Claude Code"
+            case .codex: return "Codex"
+            }
         }
         var systemImage: String {
             switch self {
@@ -89,31 +92,8 @@ struct RoomDetailView: View {
     }
 
     private func roomTab(viewModel: ChatViewModel) -> some View {
-        VStack(spacing: 0) {
-            roomHeader
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.systemGray6))
-
-            ChatView(viewModel: viewModel)
-                .background(Color(.systemBackground))
-        }
-    }
-
-    private var roomHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text(room.icon.isEmpty ? "📁" : room.icon)
-                    .font(.title2)
-                Text(room.name)
-                    .font(.headline)
-            }
-            Text(room.workspacePath)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
-                .truncationMode(.middle)
-        }
+        ChatView(viewModel: viewModel)
+            .background(Color(.systemBackground))
     }
 }
 
