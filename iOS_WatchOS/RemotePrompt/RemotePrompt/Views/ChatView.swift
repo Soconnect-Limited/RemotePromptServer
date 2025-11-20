@@ -28,11 +28,23 @@ struct ChatView: View {
                         .padding(.vertical)
                     }
                     .background(Color(.systemBackground))
-                    .onAppear { scrollProxy = proxy }
+                    .onAppear {
+                        scrollProxy = proxy
+                        // 初回表示時に最下部へスクロール
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            scrollToBottom()
+                        }
+                    }
                     .onChange(of: viewModel.messages.count) { _ in
                         if !viewModel.isHistoryLoading {
                             hasFinishedInitialFetch = true
                         }
+                        if !viewModel.isLoadingMoreHistory {
+                            scrollToBottom()
+                        }
+                    }
+                    .onChange(of: viewModel.messages.map { $0.content + $0.status.rawValue }) { _ in
+                        // メッセージ内容やステータスが更新されたら最下部へスクロール
                         if !viewModel.isLoadingMoreHistory {
                             scrollToBottom()
                         }
