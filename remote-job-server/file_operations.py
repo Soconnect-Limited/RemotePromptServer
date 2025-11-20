@@ -41,11 +41,13 @@ def list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]:
         if entry.name.endswith(".bak"):
             continue
         if entry.is_dir():
+            path = entry.relative_to(base).as_posix()
             results.append(
                 {
+                    "id": path,
                     "name": entry.name,
                     "type": "directory",
-                    "path": entry.relative_to(base).as_posix(),
+                    "path": path,
                     "size": None,
                     "modified_at": datetime.fromtimestamp(
                         entry.stat().st_mtime, timezone.utc
@@ -54,11 +56,13 @@ def list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]:
             )
         elif entry.is_file() and entry.suffix.lower() == ".md":
             stat = entry.stat()
+            path = entry.relative_to(base).as_posix()
             results.append(
                 {
+                    "id": path,
                     "name": entry.name,
                     "type": "markdown_file",
-                    "path": entry.relative_to(base).as_posix(),
+                    "path": path,
                     "size": stat.st_size,
                     "modified_at": datetime.fromtimestamp(
                         stat.st_mtime, timezone.utc
