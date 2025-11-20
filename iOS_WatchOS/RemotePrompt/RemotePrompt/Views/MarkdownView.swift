@@ -16,10 +16,12 @@ struct MarkdownView: View {
                     foregroundColor: .primary
                 )
             )
+            .textSelection(.enabled)
 #else
         Text(MarkdownRenderer.render(content))
             .font(.system(.body, design: .rounded))
             .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
 #endif
     }
 }
