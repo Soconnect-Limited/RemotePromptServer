@@ -40,6 +40,7 @@ class JobManager:
         room_id: str,
         workspace_path: str,
         settings: Optional[dict] = None,
+        thread_id: Optional[str] = None,
         notify_token: Optional[str] = None,
         background_tasks: Optional[object] = None,
     ) -> dict:
@@ -49,6 +50,7 @@ class JobManager:
             input_text=input_text,
             device_id=device_id,
             room_id=room_id,
+            thread_id=thread_id,
             status="queued",
             notify_token=notify_token,
             created_at=utcnow(),
@@ -93,6 +95,7 @@ class JobManager:
                 prompt=job.input_text,
                 device_id=job.device_id,
                 room_id=job.room_id,
+                thread_id=job.thread_id,
                 workspace_path=workspace_path,
                 continue_session=True,
                 settings=settings,

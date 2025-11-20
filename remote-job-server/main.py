@@ -82,6 +82,7 @@ class CreateJobRequest(BaseModel):
     device_id: str
     room_id: str
     notify_token: Optional[str] = None
+    thread_id: Optional[str] = None
 
 
 class CreateRoomRequest(BaseModel):
@@ -334,6 +335,7 @@ def create_job(
     room = db.query(Room).filter_by(id=req.room_id, device_id=req.device_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
+    thread_id = req.thread_id or "default"
     try:
         room_settings = json.loads(room.settings) if room.settings else None
     except json.JSONDecodeError:
@@ -346,6 +348,7 @@ def create_job(
             room_id=req.room_id,
             workspace_path=room.workspace_path,
             settings=room_settings,
+            thread_id=thread_id,
             notify_token=req.notify_token,
             background_tasks=background_tasks,
         )

@@ -42,6 +42,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _ensure_room_settings_column()
+    _ensure_thread_columns()
 
 
 def _ensure_room_settings_column() -> None:
@@ -56,3 +57,51 @@ def _ensure_room_settings_column() -> None:
         columns = [row[1] for row in result.fetchall()]
         if "settings" not in columns:
             conn.execute(text("ALTER TABLE rooms ADD COLUMN settings TEXT"))
+
+
+def _ensure_thread_columns() -> None:
+    """Add thread_id support to jobs and device_sessions if missing.
+
+    - jobs: add nullable thread_id column and index (if not exists).
+    - device_sessions: rebuild table to include thread_id and update unique index
+      to (device_id, room_id, runner, thread_id).
+    """
+
+    with engine.begin() as conn:
+        # jobs.thread_id
+        jobs_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(jobs)"))]
+        if "thread_id" not in jobs_cols:
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN thread_id TEXT"))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_room_thread ON jobs (room_id, thread_id)"
+            ))
+
+        # device_sessions.thread_id + unique index rebuild if absent
+        ds_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(device_sessions)"))]
+        if "thread_id" not in ds_cols:
+            conn.executescript(
+                """
+                PRAGMA foreign_keys=off;
+                CREATE TABLE device_sessions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    room_id TEXT NOT NULL,
+                    runner TEXT NOT NULL,
+                    thread_id TEXT,
+                    session_id TEXT NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    UNIQUE(device_id, room_id, runner, thread_id)
+                );
+                INSERT INTO device_sessions_new (
+                    id, device_id, room_id, runner, thread_id, session_id, created_at, updated_at
+                )
+                SELECT id, device_id, room_id, runner, NULL, session_id, created_at, updated_at
+                FROM device_sessions;
+                DROP TABLE device_sessions;
+                ALTER TABLE device_sessions_new RENAME TO device_sessions;
+                CREATE INDEX IF NOT EXISTS idx_device_room_runner_thread
+                    ON device_sessions (device_id, room_id, runner, thread_id);
+                PRAGMA foreign_keys=on;
+                """
+            )

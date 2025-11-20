@@ -1,9 +1,20 @@
 """SQLAlchemy model definitions for the Remote Job Server."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, Index
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Index,
+    ForeignKey,
+)
+from sqlalchemy.orm import relationship
 
 from db import Base
 
@@ -25,6 +36,9 @@ class Room(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
+    # Relationships
+    threads = relationship("Thread", back_populates="room", cascade="all, delete-orphan")
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -37,25 +51,63 @@ class Room(Base):
         }
 
 
+class Thread(Base):
+    __tablename__ = "threads"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False, default="無題")
+    runner = Column(String(20), nullable=False, index=True)  # 'claude' or 'codex'
+    device_id = Column(String(100), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True)
+
+    # Relationships
+    room = relationship("Room", back_populates="threads")
+    jobs = relationship("Job", back_populates="thread", cascade="all, delete-orphan")
+    sessions = relationship("DeviceSession", back_populates="thread", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_threads_room_runner", "room_id", "runner"),
+        Index("idx_threads_updated_at", "updated_at"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "room_id": self.room_id,
+            "name": self.name,
+            "runner": self.runner,
+            "device_id": self.device_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class DeviceSession(Base):
     __tablename__ = "device_sessions"
     __table_args__ = (
-        UniqueConstraint("device_id", "room_id", "runner", name="uq_device_room_runner"),
-        Index("idx_device_room_runner", "device_id", "room_id", "runner"),
+        UniqueConstraint(
+            "device_id",
+            "room_id",
+            "runner",
+            "thread_id",
+            name="uq_device_room_runner_thread",
+        ),
+        Index("idx_device_room_runner_thread", "device_id", "room_id", "runner", "thread_id"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(String(100), nullable=False)
     room_id = Column(String(36), nullable=False)
     runner = Column(String(20), nullable=False)
+    thread_id = Column(String(36), ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(String(64), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    # Relationships
+    thread = relationship("Thread", back_populates="sessions")
 
 
 class Device(Base):
@@ -65,12 +117,7 @@ class Device(Base):
     device_id = Column(String(100), unique=True, nullable=False)
     device_token = Column(String(255), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
-    updated_at = Column(
-        DateTime,
-        nullable=False,
-        default=utcnow,
-        onupdate=utcnow,
-    )
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
 class Job(Base):
@@ -81,6 +128,7 @@ class Job(Base):
     input_text = Column(Text, nullable=False)
     device_id = Column(String(100), nullable=False)
     room_id = Column(String(36), nullable=False)
+    thread_id = Column(String(36), ForeignKey("threads.id"), nullable=True)
     status = Column(String(20), nullable=False)
     exit_code = Column(Integer)
     stdout = Column(Text)
@@ -90,6 +138,14 @@ class Job(Base):
     notify_token = Column(String(255))
     created_at = Column(DateTime, nullable=False, default=utcnow)
 
+    # Relationships
+    thread = relationship("Thread", back_populates="jobs")
+
+    __table_args__ = (
+        Index("idx_jobs_thread_id", "thread_id"),
+        Index("idx_jobs_room_thread", "room_id", "thread_id"),
+    )
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -97,6 +153,7 @@ class Job(Base):
             "input_text": self.input_text,
             "device_id": self.device_id,
             "room_id": self.room_id,
+            "thread_id": self.thread_id,
             "status": self.status,
             "exit_code": self.exit_code,
             "stdout": self.stdout,
@@ -104,4 +161,5 @@ class Job(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "notify_token": self.notify_token,
         }

@@ -38,7 +38,7 @@ class SessionManagerTestCase(TestCase):
         )
 
         manager = ClaudeSessionManager(trusted_directory=".")
-        result = manager.execute_job("hello", "device-a", room_id="room-1")
+        result = manager.execute_job("hello", "device-a", room_id="room-1", thread_id="t-1")
 
         self.assertTrue(result["success"])
         self.assertEqual(result["session_id"], str(fake_uuid))
@@ -47,7 +47,7 @@ class SessionManagerTestCase(TestCase):
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id="device-a", runner="claude")
+                .filter_by(device_id="device-a", runner="claude", room_id="room-1", thread_id="t-1")
                 .first()
             )
             self.assertIsNotNone(record)
@@ -72,7 +72,7 @@ session id: 123e4567-e89b-12d3-a456-426614174000
         )
 
         manager = CodexSessionManager()
-        result = manager.execute_job("hi", "device-b", room_id="room-2")
+        result = manager.execute_job("hi", "device-b", room_id="room-2", thread_id="t-2")
 
         self.assertTrue(result["success"])
         self.assertEqual(
@@ -83,7 +83,7 @@ session id: 123e4567-e89b-12d3-a456-426614174000
         try:
             record = (
                 db.query(DeviceSession)
-                .filter_by(device_id="device-b", runner="codex")
+                .filter_by(device_id="device-b", runner="codex", room_id="room-2", thread_id="t-2")
                 .first()
             )
             self.assertIsNotNone(record)

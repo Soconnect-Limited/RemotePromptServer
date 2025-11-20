@@ -17,6 +17,7 @@ class Settings(BaseSettings):
         "http://100.100.30.35:35000",
         "http://127.0.0.1:35000",
     ]
+    threads_compat_mode: bool = True  # thread_id省略を許可する互換モード（Phase A/Bで使用）
 
     model_config = SettingsConfigDict(
         env_file=".env",
