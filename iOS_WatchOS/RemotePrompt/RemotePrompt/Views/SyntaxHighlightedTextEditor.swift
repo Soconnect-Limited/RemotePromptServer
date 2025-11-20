@@ -8,12 +8,14 @@ struct SyntaxHighlightedTextEditor: View {
         ZStack(alignment: .topLeading) {
             TextEditor(text: $text)
                 .padding(4)
-                .opacity(0.05) // keep cursor & editing
+                .opacity(0) // Fully transparent - only provides cursor & editing
+                .background(Color.clear)
             ScrollView {
                 Text(highlighter.highlight(text))
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .allowsHitTesting(false) // Let taps pass through to TextEditor
         }
         .font(.system(.body, design: .monospaced))
     }
