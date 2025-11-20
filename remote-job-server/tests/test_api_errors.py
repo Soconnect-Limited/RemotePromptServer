@@ -23,7 +23,12 @@ class APIErrorTests(TestCase):
     def test_invalid_runner_returns_400(self) -> None:
         res = self.client.post(
             "/jobs",
-            json={"runner": "invalid", "input_text": "test", "device_id": "err"},
+            json={
+                "runner": "invalid",
+                "input_text": "test",
+                "device_id": "err",
+                "room_id": "room-x",
+            },
             headers=self.headers,
         )
         self.assertEqual(res.status_code, 400)

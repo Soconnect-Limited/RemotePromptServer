@@ -174,7 +174,14 @@ final class APIClient: APIClientProtocol {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
         }
-        struct SettingsResponse: Codable { let roomId: String; let settings: RoomSettings? }
+        struct SettingsResponse: Codable {
+            let roomId: String
+            let settings: RoomSettings?
+            enum CodingKeys: String, CodingKey {
+                case roomId = "room_id"
+                case settings
+            }
+        }
         let decoded = try decoder.decode(SettingsResponse.self, from: data)
         return decoded.settings
     }
@@ -203,7 +210,14 @@ final class APIClient: APIClientProtocol {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
         }
-        struct SettingsResponse: Codable { let roomId: String; let settings: RoomSettings? }
+        struct SettingsResponse: Codable {
+            let roomId: String
+            let settings: RoomSettings?
+            enum CodingKeys: String, CodingKey {
+                case roomId = "room_id"
+                case settings
+            }
+        }
         let decoded = try decoder.decode(SettingsResponse.self, from: data)
         return decoded.settings
     }

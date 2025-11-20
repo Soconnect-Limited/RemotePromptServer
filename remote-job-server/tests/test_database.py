@@ -26,6 +26,8 @@ class JobModelTests(unittest.TestCase):
             runner="claude",
             input_text="テスト",
             device_id="device-1",
+            room_id="room-1",
+            thread_id="thread-1",
             status="queued",
             exit_code=None,
             stdout=None,
@@ -47,6 +49,8 @@ class JobModelTests(unittest.TestCase):
             runner="codex",
             input_text="hello",
             device_id="device-2",
+            room_id="room-2",
+            thread_id="thread-2",
             status="queued",
         )
         self.db.add(job)

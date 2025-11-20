@@ -19,9 +19,6 @@ CODEx_SESSION_PATTERN = re.compile(r"session id:\s+([a-f0-9\-]{36})", re.IGNOREC
 DEFAULT_TRUSTED_DIR = Path(os.getenv("CLAUDE_TRUSTED_DIR", Path(__file__).parent.parent)).resolve()
 
 
-DEFAULT_THREAD_ID = "default"
-
-
 class ClaudeSessionManager:
     """Manage claude --print sessions with DB-backed persistence."""
 
@@ -79,12 +76,13 @@ class ClaudeSessionManager:
         settings: Optional[dict] = None,
         thread_id: Optional[str] = None,
     ) -> Dict[str, Optional[str]]:
+        if not thread_id:
+            raise ValueError("thread_id is required for session management")
         cmd = build_claude_command(settings)
         session_id = None
-        thread = thread_id or DEFAULT_THREAD_ID
 
         if continue_session:
-            session_id = self._get_session_id_from_db(device_id, room_id, thread)
+            session_id = self._get_session_id_from_db(device_id, room_id, thread_id)
 
         if session_id:
             cmd.extend(["--resume", session_id])
@@ -93,7 +91,7 @@ class ClaudeSessionManager:
                 session_id,
                 device_id,
                 room_id,
-                thread,
+                thread_id,
             )
         else:
             session_id = str(uuid.uuid4())
@@ -103,7 +101,7 @@ class ClaudeSessionManager:
                 session_id,
                 device_id,
                 room_id,
-                thread,
+                thread_id,
             )
 
         # Use workspace_path if provided, otherwise use default trusted_directory
@@ -131,7 +129,7 @@ class ClaudeSessionManager:
             }
 
         if result.returncode == 0:
-            self._save_session_id_to_db(device_id, room_id, thread, session_id)
+            self._save_session_id_to_db(device_id, room_id, thread_id, session_id)
 
         return {
             "success": result.returncode == 0,
@@ -192,15 +190,22 @@ class CodexSessionManager:
         settings: Optional[dict] = None,
         thread_id: Optional[str] = None,
     ) -> Dict[str, Optional[str]]:
+        if not thread_id:
+            raise ValueError("thread_id is required for session management")
         cmd = build_codex_command(settings)
         session_id = None
-        thread = thread_id or DEFAULT_THREAD_ID
 
         if continue_session:
-            session_id = self._get_session_id_from_db(device_id, room_id, thread)
+            session_id = self._get_session_id_from_db(device_id, room_id, thread_id)
             if session_id:
                 cmd.extend(["resume", session_id])
-                LOGGER.info("Resuming Codex session %s for %s in room %s", session_id, device_id, room_id)
+                LOGGER.info(
+                    "Resuming Codex session %s for %s in room %s thread %s",
+                    session_id,
+                    device_id,
+                    room_id,
+                    thread_id,
+                )
 
         # Use workspace_path if provided (Codex doesn't use cwd in subprocess.run)
         # But we'll keep the parameter for consistency with ClaudeSessionManager
@@ -225,7 +230,7 @@ class CodexSessionManager:
         match = CODEx_SESSION_PATTERN.search(combined_output)
         if result.returncode == 0 and match:
             extracted = match.group(1)
-            self._save_session_id_to_db(device_id, room_id, thread, extracted)
+            self._save_session_id_to_db(device_id, room_id, thread_id, extracted)
 
         return {
             "success": result.returncode == 0,

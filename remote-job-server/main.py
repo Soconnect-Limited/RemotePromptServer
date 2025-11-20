@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 import json
+import logging
 from typing import List, Optional
 
 from fastapi import (
@@ -24,7 +25,7 @@ from contextlib import asynccontextmanager
 from config import setup_logging, settings
 from database import SessionLocal, init_db
 from job_manager import JobManager
-from models import Device, DeviceSession, Job, Room, utcnow
+from models import Device, DeviceSession, Job, Room, Thread, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
 from utils.path_validator import validate_workspace_path
@@ -39,6 +40,8 @@ from utils.settings_validator import (
 from auth_helpers import verify_room_ownership
 from file_operations import list_files, read_file, write_file, WriteResult
 from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
+
+LOGGER = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
@@ -80,7 +83,7 @@ class CreateJobRequest(BaseModel):
     runner: str
     input_text: str
     device_id: str
-    room_id: str
+    room_id: Optional[str] = None
     notify_token: Optional[str] = None
     thread_id: Optional[str] = None
 
@@ -98,9 +101,63 @@ class JobSummary(BaseModel):
     status: str
 
 
+class ThreadResponse(BaseModel):
+    id: str
+    room_id: str
+    name: str
+    runner: str
+    device_id: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class CreateThreadRequest(BaseModel):
+    name: Optional[str] = None
+    runner: str
+
+
+class UpdateThreadRequest(BaseModel):
+    name: Optional[str] = None
+
+
 def verify_api_key(x_api_key: str = Header(...)) -> None:
     if x_api_key != settings.api_key:
         raise HTTPException(status_code=401, detail="Invalid API Key")
+
+
+def ensure_room_owned(room_id: str, device_id: str, db: Session) -> Room:
+    room = db.query(Room).filter_by(id=room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.device_id != device_id:
+        raise HTTPException(status_code=403, detail="Room not owned by device")
+    return room
+
+
+def _get_or_create_default_thread(db: Session, room: Room, runner: str) -> Thread:
+    thread = (
+        db.query(Thread)
+        .filter_by(room_id=room.id, runner=runner)
+        .order_by(Thread.created_at.asc())
+        .first()
+    )
+    if thread:
+        LOGGER.info("[COMPAT] Using default thread %s for room=%s runner=%s", thread.id, room.id, runner)
+        return thread
+
+    thread = Thread(
+        room_id=room.id,
+        runner=runner,
+        name=f"{runner.title()} 会話",
+        device_id=room.device_id,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    LOGGER.warning("[COMPAT] Created default thread %s for room=%s runner=%s", thread.id, room.id, runner)
+    return thread
 
 
 # ========== Room Management APIs ==========
@@ -220,6 +277,98 @@ async def update_room_settings(
     return {"room_id": room_id, "settings": sanitized}
 
 
+# ========== Thread Management APIs ==========
+
+
+@app.get("/rooms/{room_id}/threads", response_model=List[ThreadResponse])
+def list_threads(
+    room_id: str,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[ThreadResponse]:
+    room = ensure_room_owned(room_id, device_id, db)
+    threads = (
+        db.query(Thread)
+        .filter_by(room_id=room.id)
+        .order_by(Thread.updated_at.desc())
+        .all()
+    )
+    return [ThreadResponse(**t.to_dict()) for t in threads]
+
+
+@app.post("/rooms/{room_id}/threads", response_model=ThreadResponse)
+def create_thread(
+    room_id: str,
+    req: CreateThreadRequest,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> ThreadResponse:
+    room = ensure_room_owned(room_id, device_id, db)
+    if req.runner not in ALLOWED_RUNNERS:
+        raise HTTPException(status_code=400, detail="Unsupported runner")
+
+    name = (req.name or "無題").strip()
+    if not name or len(name) > 100:
+        raise HTTPException(status_code=400, detail="Name must be 1-100 characters")
+
+    thread = Thread(
+        room_id=room.id,
+        name=name,
+        runner=req.runner,
+        device_id=room.device_id,
+        created_at=utcnow(),
+        updated_at=utcnow(),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+    LOGGER.info("[NEW] Created thread %s room=%s runner=%s", thread.id, room.id, req.runner)
+    return ThreadResponse(**thread.to_dict())
+
+
+@app.patch("/threads/{thread_id}", response_model=ThreadResponse)
+def update_thread(
+    thread_id: str,
+    req: UpdateThreadRequest,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> ThreadResponse:
+    thread = db.query(Thread).filter_by(id=thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    room = ensure_room_owned(thread.room_id, device_id, db)
+    if req.name is not None:
+        name = req.name.strip()
+        if not name or len(name) > 100:
+            raise HTTPException(status_code=400, detail="Name must be 1-100 characters")
+        thread.name = name
+    thread.updated_at = utcnow()
+    db.commit()
+    db.refresh(thread)
+    LOGGER.info("[NEW] Updated thread %s room=%s", thread.id, room.id)
+    return ThreadResponse(**thread.to_dict())
+
+
+@app.delete("/threads/{thread_id}", status_code=204)
+def delete_thread(
+    thread_id: str,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> Response:
+    thread = db.query(Thread).filter_by(id=thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    ensure_room_owned(thread.room_id, device_id, db)
+    db.delete(thread)
+    db.commit()
+    LOGGER.info("[NEW] Deleted thread %s", thread_id)
+    return Response(status_code=204)
+
+
 # ========== File Browser APIs ==========
 
 
@@ -332,10 +481,25 @@ def create_job(
 ) -> JobSummary:
     if req.runner not in ALLOWED_RUNNERS:
         raise HTTPException(status_code=400, detail="Unsupported runner")
-    room = db.query(Room).filter_by(id=req.room_id, device_id=req.device_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
-    thread_id = req.thread_id or "default"
+    if not req.room_id:
+        raise HTTPException(status_code=400, detail="room_id is required")
+    room = ensure_room_owned(req.room_id, req.device_id, db)
+
+    if req.thread_id:
+        thread = db.query(Thread).filter_by(id=req.thread_id).first()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        if thread.room_id != room.id:
+            raise HTTPException(status_code=400, detail="Thread does not belong to room")
+        if thread.runner != req.runner:
+            raise HTTPException(status_code=400, detail="Thread runner mismatch")
+        thread_id = thread.id
+        LOGGER.info("[NEW] /jobs using thread_id=%s room=%s runner=%s", thread_id, room.id, req.runner)
+    else:
+        if not settings.threads_compat_mode:
+            raise HTTPException(status_code=400, detail="thread_id is required when THREADS_COMPAT_MODE=false")
+        thread = _get_or_create_default_thread(db, room, req.runner)
+        thread_id = thread.id
     try:
         room_settings = json.loads(room.settings) if room.settings else None
     except json.JSONDecodeError:
@@ -400,23 +564,31 @@ def get_messages(
     device_id: str,
     room_id: str,
     runner: str,
+    thread_id: Optional[str] = Query(None),
     limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> List[dict]:
-    room = db.query(Room).filter_by(id=room_id, device_id=device_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+    room = ensure_room_owned(room_id, device_id, db)
+    query = db.query(Job).filter_by(device_id=device_id, room_id=room_id, runner=runner)
 
-    jobs = (
-        db.query(Job)
-        .filter_by(device_id=device_id, room_id=room_id, runner=runner)
-        .order_by(Job.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-        .all()
-    )
+    if thread_id:
+        thread = db.query(Thread).filter_by(id=thread_id).first()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+        if thread.room_id != room.id:
+            raise HTTPException(status_code=400, detail="Thread does not belong to room")
+        if thread.runner != runner:
+            raise HTTPException(status_code=400, detail="Thread runner mismatch")
+        query = query.filter(Job.thread_id == thread_id)
+        LOGGER.info("[NEW] /messages thread_id=%s room=%s runner=%s", thread_id, room.id, runner)
+    else:
+        if not settings.threads_compat_mode:
+            raise HTTPException(status_code=400, detail="thread_id is required when THREADS_COMPAT_MODE=false")
+        LOGGER.info("[COMPAT] /messages without thread_id room=%s runner=%s", room.id, runner)
+
+    jobs = query.order_by(Job.created_at.desc()).limit(limit).offset(offset).all()
     return [job.to_dict() for job in reversed(jobs)]
 
 
@@ -425,14 +597,27 @@ def delete_session(
     device_id: str,
     room_id: str,
     runner: str,
+    thread_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> dict:
-    deleted = (
-        db.query(DeviceSession)
-        .filter_by(device_id=device_id, room_id=room_id, runner=runner)
-        .delete()
-    )
+    ensure_room_owned(room_id, device_id, db)
+
+    if thread_id:
+        deleted = (
+            db.query(DeviceSession)
+            .filter_by(device_id=device_id, room_id=room_id, runner=runner, thread_id=thread_id)
+            .delete()
+        )
+    else:
+        if not settings.threads_compat_mode:
+            raise HTTPException(status_code=400, detail="thread_id is required when THREADS_COMPAT_MODE=false")
+        deleted = (
+            db.query(DeviceSession)
+            .filter_by(device_id=device_id, room_id=room_id, runner=runner)
+            .delete()
+        )
+
     db.commit()
     return {"status": "ok", "deleted": deleted}
 

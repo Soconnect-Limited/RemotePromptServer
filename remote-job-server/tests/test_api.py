@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient  # pylint: disable=wrong-import-positi
 
 import main  # pylint: disable=wrong-import-position
 from database import Base, engine, init_db, SessionLocal  # pylint: disable=wrong-import-position
-from models import DeviceSession, utcnow  # pylint: disable=wrong-import-position
+from models import DeviceSession, Room, Thread, utcnow  # pylint: disable=wrong-import-position
 
 
 class APITests(TestCase):
@@ -82,11 +82,32 @@ class APITests(TestCase):
     def test_session_endpoints(self) -> None:
         db = SessionLocal()
         try:
+            room = Room(
+                id="room-xyz",
+                name="tmp",
+                workspace_path="/tmp",
+                icon="folder",
+                device_id="dev-2",
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+            thread = Thread(
+                id="thread-xyz",
+                room_id="room-xyz",
+                name="thread",
+                runner="claude",
+                device_id="dev-2",
+                created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+            db.add(room)
+            db.add(thread)
             db.add(
                 DeviceSession(
                     device_id="dev-2",
                     room_id="room-xyz",
                     runner="claude",
+                    thread_id="thread-xyz",
                     session_id="session-1",
                     created_at=utcnow(),
                     updated_at=utcnow(),
@@ -98,7 +119,12 @@ class APITests(TestCase):
 
         res = self.client.delete(
             "/sessions",
-            params={"device_id": "dev-2", "room_id": "room-xyz", "runner": "claude"},
+            params={
+                "device_id": "dev-2",
+                "room_id": "room-xyz",
+                "runner": "claude",
+                "thread_id": "thread-xyz",
+            },
             headers=self.headers,
         )
         self.assertEqual(res.status_code, 200)

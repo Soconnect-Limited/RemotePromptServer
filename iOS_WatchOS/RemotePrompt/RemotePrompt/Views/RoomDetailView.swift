@@ -90,7 +90,7 @@ struct RoomDetailView: View {
             FileBrowserView(room: room)
         }
         .sheet(isPresented: $showRoomSettings) {
-            RoomSettingsView(room: room)
+            RoomSettingsView(room: room, runner: selectedTab.rawValue)
         }
     }
 

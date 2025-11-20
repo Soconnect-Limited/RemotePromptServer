@@ -9,11 +9,13 @@ final class RoomSettingsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     let room: Room
+    let runner: String
     private let apiClient: APIClientProtocol
     private let deviceId: String
 
-    init(room: Room, apiClient: APIClientProtocol = APIClient.shared, deviceId: String = APIClient.getDeviceId()) {
+    init(room: Room, runner: String, apiClient: APIClientProtocol = APIClient.shared, deviceId: String = APIClient.getDeviceId()) {
         self.room = room
+        self.runner = runner
         self.apiClient = apiClient
         self.deviceId = deviceId
     }
@@ -36,7 +38,18 @@ final class RoomSettingsViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            _ = try await apiClient.updateRoomSettings(roomId: room.id, deviceId: deviceId, settings: settings)
+            // サーバーから最新の全設定を取得してマージ
+            let currentSettings = try await apiClient.getRoomSettings(roomId: room.id, deviceId: deviceId) ?? .default
+
+            // 編集中のrunner設定のみ更新、他のrunnerはそのまま
+            let mergedSettings: RoomSettings
+            if runner == "claude" {
+                mergedSettings = RoomSettings(claude: settings.claude, codex: currentSettings.codex)
+            } else {
+                mergedSettings = RoomSettings(claude: currentSettings.claude, codex: settings.codex)
+            }
+
+            _ = try await apiClient.updateRoomSettings(roomId: room.id, deviceId: deviceId, settings: mergedSettings)
             return true
         } catch {
             errorMessage = error.localizedDescription

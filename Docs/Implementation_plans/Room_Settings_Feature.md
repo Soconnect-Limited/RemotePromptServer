@@ -626,44 +626,54 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 ### Phase 3: iOS UI実装 (8-12時間)
 
 #### 3.1 設定画面ナビゲーション
-- [ ] `RoomDetailView`にToolbarItem「設定」ボタン追加
-- [ ] `NavigationLink`で`RoomSettingsView`へ遷移
-- [ ] `RoomSettingsView`スケルトン作成
+- [x] `RoomDetailView`にToolbarItem「設定」ボタン追加（InputBar経由）
+- [x] `.sheet`で`RoomSettingsView`へ遷移
+- [x] `RoomSettingsView`に`runner: String`パラメータを追加
+- [x] **Runner別表示**: 選択中のrunner（Claude/Codex）の設定のみ表示
+  - [x] `RoomDetailView`から`selectedTab.rawValue`を渡す
+  - [x] ナビゲーションタイトルを動的変更（"Claude設定" or "Codex設定"）
 
 #### 3.2 Claude Settings UI
-- [ ] `ClaudeSettingsSection`コンポーネント作成
-- [ ] Model選択: `Picker`（Sonnet/Opus/Haiku）
-- [ ] Permission Mode選択: `Picker`（Default/Ask/Deny）
-- [ ] Tools選択: `List`+`Toggle`（Bash, Edit, Read等）
-- [ ] Custom Flags: `TextField`（カンマ区切り入力）
-  - [ ] 配列⇔文字列変換ロジック
-  - [ ] バリデーション表示（10個以上でエラー）
+- [x] Section("Claude")内にClaude設定を配置
+- [x] Model選択: `Picker`（Sonnet/Opus/Haiku）
+- [x] Permission Mode選択: `Picker`（Default/Ask/Deny）
+- [x] Tools選択: `ToolsEditor`（Toggle方式）
+- [x] Custom Flags: `CustomFlagsEditor`（カンマ区切り入力）
+  - [x] 配列⇔文字列変換ロジック
 
 #### 3.3 Codex Settings UI
-- [ ] `CodexSettingsSection`コンポーネント作成
-- [ ] Model選択: `Picker`（GPT-5.1/GPT-5.1-Codex/GPT-5.1-Codex-Mini/GPT-5.1-Codex-Max）
-- [ ] Sandbox選択: `Picker`（read-only/workspace-write/danger-full-access）
-- [ ] Approval Policy選択: `Picker`（untrusted/on-failure/on-request/never）
-- [ ] Reasoning Effort選択: `Picker`（low/medium/high/extra-high）
-  - [ ] 選択肢を小文字・ハイフン付きで表示（ALLOWED_VALUESと一致）
-- [ ] Custom Flags: `TextField`（カンマ区切り入力）
-  - [ ] 配列⇔文字列変換ロジック
-  - [ ] バリデーション表示（10個以上でエラー、予約オプション禁止メッセージ）
+- [x] Section("Codex")内にCodex設定を配置
+- [x] Model選択: `Picker`（GPT-5.1/GPT-5.1-Codex/GPT-5.1-Codex-Mini/GPT-5.1-Codex-Max）
+- [x] Sandbox選択: `Picker`（read-only/workspace-write/danger-full-access）
+- [x] Approval Policy選択: `Picker`（untrusted/on-failure/on-request/never）
+- [x] Reasoning Effort選択: `Picker`（low/medium/high/extra-high）
+- [x] Custom Flags: `CustomFlagsEditor`（カンマ区切り入力）
 
 #### 3.4 保存・リセット機能
-- [ ] Toolbarに「保存」ボタン
-  - [ ] `updateSettings()`呼び出し
-  - [ ] 成功時トースト表示・画面閉じる
-  - [ ] 失敗時エラーアラート表示
-- [ ] 「デフォルトに戻す」ボタン
-  - [ ] 確認アラート表示
-  - [ ] `RoomSettings.default`で上書き・保存
+- [x] Toolbarに「保存」ボタン
+  - [x] `save()`呼び出し（サーバーから最新設定取得→マージ→保存）
+  - [x] 成功時画面を閉じる
+  - [x] 失敗時エラーアラート表示
+- [x] 「デフォルトに戻す」ボタン（bottomBar）
+  - [x] `setDefaultToServer()`呼び出し（settings=nullで送信）
+  - [x] 成功時画面を閉じる
 
 #### 3.5 ローディング・エラー表示
-- [ ] 画面表示時`loadSettings()`呼び出し
-- [ ] ローディング中`ProgressView`表示
-- [ ] エラー時エラーメッセージ+リトライボタン
-- [ ] settings=nullの場合デフォルト値で初期化
+- [x] 画面表示時`load()`呼び出し（.task修飾子）
+- [x] ローディング中`ProgressView`表示（.overlay）
+- [x] エラー時エラーアラート表示
+- [x] settings=nullの場合デフォルト値で初期化
+
+#### 3.6 Runner別設定マージロジック
+- [x] `RoomSettingsViewModel`に`runner: String`を追加
+- [x] `save()`メソッドで保存時の設定マージを実装:
+  ```swift
+  let currentSettings = try await getRoomSettings() ?? .default
+  let mergedSettings = runner == "claude"
+      ? RoomSettings(claude: settings.claude, codex: currentSettings.codex)
+      : RoomSettings(claude: currentSettings.claude, codex: settings.codex)
+  ```
+- [x] これにより、Claude設定を編集してもCodex設定は保持される
 
 ---
 
@@ -991,8 +1001,10 @@ codex --help
 | 2025-11-20 | 1.4 | GPT-5.1モデルファミリー対応（ユーザー指摘）:<br>・Codexモデルリストを最新版に更新: `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5.1-codex-max`<br>・デフォルトモデルを`gpt-5.1-codex`に変更<br>・ALLOWED_VALUES、FR-4 UI、Phase 3.3 UI、参考情報、テストケース（V3, C7, C10）を更新<br>・GPT-5.1ファミリーの説明追加（2025年11月19日リリース、77.9% SWE-Bench Verified、compaction技術） | Claude |
 | 2025-11-20 | 1.5 | Reasoning Effort対応（ユーザー指摘）:<br>・Codex設定に`reasoning_effort`フィールド追加（`low`, `medium`, `high`, `extra-high`）<br>・デフォルト値を`medium`に設定<br>・FR-2、FR-4、ALLOWED_VALUES、CodexSettings構造体、Phase 3.3 UI、Codex CLI仕様を更新<br>・`build_codex_command()`に`-r`/`--reasoning-effort`オプション追加<br>・RESERVED_FLAGSに`-r`/`--reasoning-effort`を追加（custom_flags迂回防止） | Claude |
 | 2025-11-20 | 1.6 | 値表記ゆれ修正・テスト整備（ユーザー指摘）:<br>・**UI表記統一**: 「Extra high」→「extra-high」に修正（ALLOWED_VALUESと一致、400エラー防止）<br>・**バリデーションテスト追加**: V21-V24追加（reasoning_effort正常/異常/予約オプション -r 検証）、件数を24件に更新<br>・**CLIテスト追加**: C11-C12追加（-r単体・複合検証）、件数を12件に更新<br>・Phase 1.2、Phase 5.1、完了条件のテスト件数を更新<br>・FR-4に「そのまま送信」の注記追加 | Claude |
+| 2025-11-20 | 1.7 | Runner別UI表示・設定マージ実装（Phase 3完了）:<br>・**Runner別表示**: `RoomSettingsView`に`runner: String`パラメータ追加、選択中のrunner設定のみ表示<br>・**APIClient CodingKeys修正**: `SettingsResponse`に`room_id`マッピング追加（デコードエラー解消）<br>・**設定マージロジック**: `save()`で最新設定取得→編集runner部分のみ更新→未編集runner保持<br>・**ナビゲーション**: `RoomDetailView`から`selectedTab.rawValue`を渡す、タイトル動的変更<br>・Phase 3.1-3.6を完了にマーク | Claude |
 
 ---
 
-**実装計画 v1.6 完成**
-**次のステップ**: ユーザーレビュー → 修正 → Phase 1実装開始
+**実装計画 v1.7 完成**
+**Phase 3 (iOS UI実装) 完了**
+**次のステップ**: Phase 4 (watchOS対応) → Phase 5 (テスト)

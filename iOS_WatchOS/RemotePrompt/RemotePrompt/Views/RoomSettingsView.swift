@@ -2,45 +2,49 @@ import SwiftUI
 
 struct RoomSettingsView: View {
     let room: Room
+    let runner: String
     @StateObject private var viewModel: RoomSettingsViewModel
     @Environment(\.dismiss) private var dismiss
 
-    init(room: Room) {
+    init(room: Room, runner: String) {
         self.room = room
-        _viewModel = StateObject(wrappedValue: RoomSettingsViewModel(room: room))
+        self.runner = runner
+        _viewModel = StateObject(wrappedValue: RoomSettingsViewModel(room: room, runner: runner))
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Claude") {
-                    Picker("Model", selection: $viewModel.settings.claude.model) {
-                        ForEach(["sonnet", "opus", "haiku"], id: \.self) { Text($0) }
+                if runner == "claude" {
+                    Section("Claude") {
+                        Picker("Model", selection: $viewModel.settings.claude.model) {
+                            ForEach(["sonnet", "opus", "haiku"], id: \.self) { Text($0) }
+                        }
+                        Picker("Permission", selection: $viewModel.settings.claude.permissionMode) {
+                            ForEach(["default", "ask", "deny"], id: \.self) { Text($0) }
+                        }
+                        ToolsEditor(tools: $viewModel.settings.claude.tools)
+                        CustomFlagsEditor(flags: $viewModel.settings.claude.customFlags)
                     }
-                    Picker("Permission", selection: $viewModel.settings.claude.permissionMode) {
-                        ForEach(["default", "ask", "deny"], id: \.self) { Text($0) }
+                } else {
+                    Section("Codex") {
+                        Picker("Model", selection: $viewModel.settings.codex.model) {
+                            ForEach(["gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"], id: \.self) { Text($0) }
+                        }
+                        Picker("Sandbox", selection: $viewModel.settings.codex.sandbox) {
+                            ForEach(["read-only", "workspace-write", "danger-full-access"], id: \.self) { Text($0) }
+                        }
+                        Picker("Approval", selection: $viewModel.settings.codex.approvalPolicy) {
+                            ForEach(["untrusted", "on-failure", "on-request", "never"], id: \.self) { Text($0) }
+                        }
+                        Picker("Reasoning", selection: $viewModel.settings.codex.reasoningEffort) {
+                            ForEach(["low", "medium", "high", "extra-high"], id: \.self) { Text($0) }
+                        }
+                        CustomFlagsEditor(flags: $viewModel.settings.codex.customFlags)
                     }
-                    ToolsEditor(tools: $viewModel.settings.claude.tools)
-                    CustomFlagsEditor(flags: $viewModel.settings.claude.customFlags)
-                }
-
-                Section("Codex") {
-                    Picker("Model", selection: $viewModel.settings.codex.model) {
-                        ForEach(["gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"], id: \.self) { Text($0) }
-                    }
-                    Picker("Sandbox", selection: $viewModel.settings.codex.sandbox) {
-                        ForEach(["read-only", "workspace-write", "danger-full-access"], id: \.self) { Text($0) }
-                    }
-                    Picker("Approval", selection: $viewModel.settings.codex.approvalPolicy) {
-                        ForEach(["untrusted", "on-failure", "on-request", "never"], id: \.self) { Text($0) }
-                    }
-                    Picker("Reasoning", selection: $viewModel.settings.codex.reasoningEffort) {
-                        ForEach(["low", "medium", "high", "extra-high"], id: \.self) { Text($0) }
-                    }
-                    CustomFlagsEditor(flags: $viewModel.settings.codex.customFlags)
                 }
             }
-            .navigationTitle("設定")
+            .navigationTitle("\(runner == "claude" ? "Claude" : "Codex")設定")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
@@ -129,13 +133,16 @@ private struct CustomFlagsEditor: View {
 }
 
 #Preview {
-    RoomSettingsView(room: Room(
-        id: UUID().uuidString,
-        name: "Preview Room",
-        workspacePath: "/tmp",
-        icon: "📁",
-        deviceId: "device",
-        createdAt: Date(),
-        updatedAt: Date()
-    ))
+    RoomSettingsView(
+        room: Room(
+            id: UUID().uuidString,
+            name: "Preview Room",
+            workspacePath: "/tmp",
+            icon: "📁",
+            deviceId: "device",
+            createdAt: Date(),
+            updatedAt: Date()
+        ),
+        runner: "claude"
+    )
 }
