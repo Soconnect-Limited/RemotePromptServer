@@ -1,7 +1,8 @@
 # ルームごとのCLI設定機能 実装計画
 
-**バージョン**: v1.0
+**バージョン**: v1.6（値表記統一・テスト整備版）
 **作成日**: 2025-11-20
+**更新日**: 2025-11-20
 **対象**: RemotePrompt iOS/watchOS アプリケーション
 **要件**: ルームごとにClaude Code及びCodexのCLI設定（モデル、パーミッション、ツール等）を管理可能にする
 
@@ -27,8 +28,8 @@
 
 Codexには以下の設定オプションがある：
 - モード選択: Agent (full access) / Chat
-- モデル選択: GPT-4 / GPT-3.5等
-- Reasoning effort選択
+- モデル選択: GPT-5.1 / GPT-5.1-Codex / GPT-5.1-Codex-Mini / GPT-5.1-Codex-Max等
+- Reasoning Effort選択: low / medium / high / extra-high
 
 Claude Codeにも以下のオプションがある：
 - `--model`: sonnet / opus
@@ -64,10 +65,10 @@ Claude Codeにも以下のオプションがある：
     "custom_flags": []
   },
   "codex": {
-    "model": "gpt-4",
+    "model": "gpt-5.1-codex",
     "sandbox": "workspace-write",
     "approval_policy": "on-failure",
-    "enable_search": false,
+    "reasoning_effort": "medium",
     "custom_flags": []
   }
 }
@@ -88,17 +89,17 @@ Claude Codeにも以下のオプションがある：
     - Tools: チェックボックスリスト（Bash, Edit, Read, Write, Grep, Glob等）
     - Custom Flags: テキストフィールド（カンマ区切り）
   - **Codex**:
-    - Model選択: GPT-4 / GPT-3.5 / GPT-4 Turbo等
-    - Sandbox: workspace-write / workspace-read / isolated等
-    - Approval Policy: on-failure / always / never
-    - Web Search: トグルスイッチ
+    - Model選択: GPT-5.1 / GPT-5.1-Codex / GPT-5.1-Codex-Mini / GPT-5.1-Codex-Max
+    - Sandbox: read-only / workspace-write / danger-full-access
+    - Approval Policy: untrusted / on-failure / on-request / never
+    - Reasoning Effort: low / medium / high / extra-high (Picker選択肢、そのまま送信)
     - Custom Flags: テキストフィールド（カンマ区切り）
 
 #### FR-5: サーバー側CLI実行
 - job作成時に`rooms.settings`から設定を読み込み
 - CLIコマンドラインに設定を反映:
   - Claude Code: `claude --model sonnet --permission-mode default --tools Bash,Edit ...`
-  - Codex: `codex -m gpt-4 -s workspace-write -a on-failure --search ...`
+  - Codex: `codex -m gpt-5.1-codex -s workspace-write -a on-failure ...`
 - 設定がNULLの場合はデフォルト動作
 
 ### 非機能要件
@@ -162,10 +163,10 @@ GET /rooms/{room_id}/settings?device_id={device_id}
       "custom_flags": []
     },
     "codex": {
-      "model": "gpt-4",
+      "model": "gpt-5.1-codex",
       "sandbox": "workspace-write",
       "approval_policy": "on-failure",
-      "enable_search": false,
+      "reasoning_effort": "medium",
       "custom_flags": []
     }
   }
@@ -180,17 +181,20 @@ GET /rooms/{room_id}/settings?device_id={device_id}
 }
 ```
 
+**注意**: `settings: null`の場合、クライアントはデフォルト設定を使用する。
+
 **エラーレスポンス**:
 | コード | 条件 | レスポンス |
 |--------|------|------------|
 | 401 | device_id不正 | `{"error": "Unauthorized", "message": "Invalid device_id"}` |
 | 403 | room所有権なし | `{"error": "Forbidden", "message": "No ownership of this room"}` |
 | 404 | room_id不在 | `{"error": "Not Found", "message": "Room not found"}` |
+| 413 | JSONサイズ超過 | `{"error": "Payload Too Large", "message": "Settings JSON exceeds 10KB limit"}` |
 | 500 | サーバーエラー | `{"error": "Internal Server Error", "message": "..."}` |
 
 #### PUT /rooms/{room_id}/settings
 
-**リクエスト**:
+**リクエスト例1（設定更新）**:
 ```
 PUT /rooms/{room_id}/settings?device_id={device_id}
 Content-Type: application/json
@@ -203,14 +207,23 @@ Content-Type: application/json
     "custom_flags": ["--verbose"]
   },
   "codex": {
-    "model": "gpt-4-turbo",
-    "sandbox": "isolated",
-    "approval_policy": "always",
-    "enable_search": true,
+    "model": "gpt-5.1-codex-max",
+    "sandbox": "workspace-write",
+    "approval_policy": "untrusted",
+    "reasoning_effort": "high",
     "custom_flags": []
   }
 }
 ```
+
+**リクエスト例2（デフォルトにリセット）**:
+```
+PUT /rooms/{room_id}/settings?device_id={device_id}
+Content-Type: application/json
+
+null
+```
+**注意**: `null`をボディに送信すると、`settings`列がNULLに更新され、デフォルト設定が適用される。
 
 **レスポンス** (200 OK):
 ```json
@@ -232,7 +245,20 @@ Content-Type: application/json
 }
 ```
 
-**エラーレスポンス**: GET /settingsと同様（401/403/404/500）
+**エラーレスポンス**: GET /settingsと同様（401/403/404/413/500）
+
+**サイズ制限の実装**:
+```python
+@app.put("/rooms/{room_id}/settings")
+async def update_settings(room_id: str, request: Request, device_id: str = Query(...)):
+    # リクエストボディサイズチェック（10KB制限）
+    body = await request.body()
+    if len(body) > 10_240:  # 10KB
+        raise HTTPException(413, detail="Settings JSON exceeds 10KB limit")
+
+    # 以下、既存処理（パース、バリデーション、DB更新）
+    ...
+```
 
 ### バリデーション仕様
 
@@ -250,9 +276,10 @@ ALLOWED_VALUES = {
         ],
     },
     "codex": {
-        "model": ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"],
-        "sandbox": ["workspace-write", "workspace-read", "isolated", "full-access"],
-        "approval_policy": ["on-failure", "always", "never"],
+        "model": ["gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"],
+        "sandbox": ["read-only", "workspace-write", "danger-full-access"],
+        "approval_policy": ["untrusted", "on-failure", "on-request", "never"],
+        "reasoning_effort": ["low", "medium", "high", "extra-high"],
     }
 }
 ```
@@ -261,26 +288,68 @@ ALLOWED_VALUES = {
 
 - 最大10個まで
 - 各フラグは`--`または`-`で始まる
+- **予約オプション（設定済みパラメータ）は禁止**: `--model`, `--tools`, `-s`, `-a`等を`custom_flags`に含めると、設定を迂回できてしまう
 - 危険なフラグ（`--exec`, `--eval`, `--unsafe`等）は拒否
+- シェルメタ文字（`;`, `|`, `&`, `$`等）を含むフラグは拒否
 - 最大長: 各フラグ100文字
 
 ```python
+# 予約済みオプション（custom_flagsで指定不可）
+RESERVED_FLAGS = {
+    "claude": ["--model", "--permission-mode", "--tools"],
+    "codex": ["-m", "--model", "-s", "--sandbox", "-a", "--ask-for-approval", "-r", "--reasoning-effort"]
+}
+
 DANGEROUS_FLAGS = [
     "--exec", "--eval", "--unsafe", "--allow-root",
-    "--disable-sandbox", "--no-verify"
+    "--disable-sandbox", "--no-verify", "--rm", "--delete"
 ]
 
-def validate_custom_flags(flags: list[str]) -> None:
+SHELL_META_CHARS = [";", "|", "&", "$", "`", "(", ")", "<", ">", "\n", "\r"]
+
+def validate_custom_flags(flags: list[str], ai_type: str) -> None:
+    """
+    custom_flagsのバリデーション
+
+    Args:
+        flags: カスタムフラグのリスト
+        ai_type: "claude" または "codex"
+
+    Raises:
+        ValueError: バリデーションエラー
+    """
     if len(flags) > 10:
         raise ValueError("Too many custom flags (max 10)")
 
+    reserved = RESERVED_FLAGS.get(ai_type, [])
+
     for flag in flags:
+        # 形式チェック
         if not flag.startswith("-"):
             raise ValueError(f"Invalid flag format: {flag}")
+
+        # 長さチェック
         if len(flag) > 100:
             raise ValueError(f"Flag too long: {flag}")
+
+        # フラグ名部分を抽出（値部分を除外）
+        # 例: "--model=opus" → "--model", "-s workspace-write" → "-s"
+        flag_name = flag.split("=")[0].split()[0]
+
+        # 予約オプションチェック
+        if flag_name in reserved:
+            raise ValueError(
+                f"Reserved flag cannot be used in custom_flags: {flag_name}. "
+                f"Use the dedicated setting field instead."
+            )
+
+        # 危険フラグチェック
         if any(dangerous in flag.lower() for dangerous in DANGEROUS_FLAGS):
             raise ValueError(f"Dangerous flag detected: {flag}")
+
+        # シェルメタ文字チェック
+        if any(char in flag for char in SHELL_META_CHARS):
+            raise ValueError(f"Invalid character in flag: {flag}")
 ```
 
 ### CLI実行時の設定反映
@@ -337,16 +406,18 @@ def build_codex_command(prompt: str, settings: dict | None) -> list[str]:
         if "approval_policy" in cfg:
             cmd.extend(["-a", cfg["approval_policy"]])
 
-        # Web search
-        if cfg.get("enable_search", False):
-            cmd.append("--search")
+        # Reasoning effort
+        if "reasoning_effort" in cfg:
+            cmd.extend(["-r", cfg["reasoning_effort"]])
 
-        # Custom flags
+        # Custom flags（予約オプションは既にバリデーションで排除済み）
         if "custom_flags" in cfg:
             cmd.extend(cfg["custom_flags"])
 
     return cmd
 ```
+
+**注意**: `enable_search`フィールドは削除されました。Web search機能が必要な場合は`custom_flags`に`["--search"]`を追加してください（ただし、Codex CLIで`--search`が実際に存在するか要確認）。
 
 ### iOS/watchOS データモデル
 
@@ -392,23 +463,23 @@ struct CodexSettings: Codable, Equatable {
     var model: String
     var sandbox: String
     var approvalPolicy: String
-    var enableSearch: Bool
+    var reasoningEffort: String
     var customFlags: [String]
 
     enum CodingKeys: String, CodingKey {
         case model
         case sandbox
         case approvalPolicy = "approval_policy"
-        case enableSearch = "enable_search"
+        case reasoningEffort = "reasoning_effort"
         case customFlags = "custom_flags"
     }
 
     static var `default`: CodexSettings {
         CodexSettings(
-            model: "gpt-4",
+            model: "gpt-5.1-codex",
             sandbox: "workspace-write",
             approvalPolicy: "on-failure",
-            enableSearch: false,
+            reasoningEffort: "medium",
             customFlags: []
         )
     }
@@ -487,14 +558,20 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 
 #### 1.2 バリデーションロジック
 - [ ] `ALLOWED_VALUES`定義
+- [ ] `RESERVED_FLAGS`定義（予約オプション）
 - [ ] `DANGEROUS_FLAGS`定義
-- [ ] `validate_settings(settings: dict) -> None`関数実装
-  - [ ] model名検証
-  - [ ] permission_mode/sandbox等の値検証
-  - [ ] tools配列検証
-  - [ ] custom_flags検証（危険フラグ、長さ、個数）
-  - [ ] JSONサイズ検証（10KB以内）
-- [ ] ユニットテスト作成（正常系・異常系各10ケース以上）
+- [ ] `SHELL_META_CHARS`定義
+- [ ] `validate_settings(settings: dict | None) -> None`関数実装
+  - [ ] **settings=Noneの場合は即座にreturn（デフォルト設定を使用）**
+  - [ ] model名検証（ALLOWED_VALUESリスト照合）
+  - [ ] permission_mode/sandbox/approval_policy/reasoning_effort等の値検証
+  - [ ] tools配列検証（ALLOWED_VALUESリスト照合）
+  - [ ] custom_flags検証:
+    - [ ] 予約オプション拒否（`validate_custom_flags(flags, ai_type)`）
+    - [ ] 危険フラグ拒否
+    - [ ] シェルメタ文字拒否
+    - [ ] 長さ・個数制限
+- [ ] ユニットテスト作成（**24ケース、上記V1-V24に対応**）
 
 #### 1.3 REST API実装
 - [ ] `GET /rooms/{room_id}/settings`エンドポイント
@@ -505,11 +582,12 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 - [ ] `PUT /rooms/{room_id}/settings`エンドポイント
   - [ ] device_id認証
   - [ ] room所有権チェック
-  - [ ] リクエストボディパース
-  - [ ] バリデーション実行
-  - [ ] settings列更新
+  - [ ] **リクエストボディサイズチェック（10KB制限、413返却）**
+  - [ ] リクエストボディパース（`null`の場合も対応）
+  - [ ] バリデーション実行（`validate_settings()`）
+  - [ ] settings列更新（`null`の場合はDB列をNULLに更新）
   - [ ] JSONレスポンス返却
-- [ ] エラーハンドリング（401/403/404/400/500）
+- [ ] エラーハンドリング（401/403/404/400/413/500）
 - [ ] API統合テスト作成
 
 #### 1.4 CLI実行ロジック変更
@@ -563,11 +641,14 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 
 #### 3.3 Codex Settings UI
 - [ ] `CodexSettingsSection`コンポーネント作成
-- [ ] Model選択: `Picker`（GPT-4/GPT-4 Turbo/GPT-3.5/o1等）
-- [ ] Sandbox選択: `Picker`（workspace-write/read/isolated/full-access）
-- [ ] Approval Policy選択: `Picker`（on-failure/always/never）
-- [ ] Web Search: `Toggle`
+- [ ] Model選択: `Picker`（GPT-5.1/GPT-5.1-Codex/GPT-5.1-Codex-Mini/GPT-5.1-Codex-Max）
+- [ ] Sandbox選択: `Picker`（read-only/workspace-write/danger-full-access）
+- [ ] Approval Policy選択: `Picker`（untrusted/on-failure/on-request/never）
+- [ ] Reasoning Effort選択: `Picker`（low/medium/high/extra-high）
+  - [ ] 選択肢を小文字・ハイフン付きで表示（ALLOWED_VALUESと一致）
 - [ ] Custom Flags: `TextField`（カンマ区切り入力）
+  - [ ] 配列⇔文字列変換ロジック
+  - [ ] バリデーション表示（10個以上でエラー、予約オプション禁止メッセージ）
 
 #### 3.4 保存・リセット機能
 - [ ] Toolbarに「保存」ボタン
@@ -607,16 +688,17 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 ### Phase 5: テスト (6-8時間)
 
 #### 5.1 サーバー側テスト
-- [ ] バリデーション単体テスト（30ケース以上）
-  - [ ] 正常系: 全パターンの許可値
-  - [ ] 異常系: 不正なmodel名、危険フラグ、長すぎるフラグ等
+- [ ] バリデーション単体テスト（**24ケース、上記V1-V24に対応**）
+  - [ ] 正常系: 全パターンの許可値（model, sandbox, approval_policy, reasoning_effort等）
+  - [ ] 異常系: 不正なmodel名、危険フラグ、**予約オプション（-r含む）**、長すぎるフラグ等
   - [ ] 境界値: custom_flags 10個/11個、JSON 10KB/10KB+1等
-- [ ] API統合テスト（15ケース以上）
+  - [ ] **settings=null処理（デフォルト設定適用確認）**
+- [ ] API統合テスト（**10ケース以上**）
   - [ ] GET /settings: 認証成功/失敗、所有権あり/なし、settings有/無
-  - [ ] PUT /settings: 更新成功、バリデーションエラー、認証失敗等
-- [ ] CLI構築テスト
+  - [ ] PUT /settings: 更新成功、バリデーションエラー、認証失敗、**413サイズ超過**、**null更新**等
+- [ ] CLI構築テスト（**12ケース、上記C1-C12に対応**）
   - [ ] `build_claude_command()`出力確認
-  - [ ] `build_codex_command()`出力確認
+  - [ ] `build_codex_command()`出力確認（**-rオプション含む**）
   - [ ] settings=NULLの場合のデフォルト動作確認
 
 #### 5.2 iOS/watchOS UI テスト
@@ -660,17 +742,24 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 
 | ID | リスク内容 | 影響度 | 対策 |
 |----|-----------|-------|------|
-| R1 | custom_flagsによるコマンドインジェクション | 高 | 危険フラグブラックリスト、シェルメタ文字拒否、subprocess引数リスト渡し |
-| R2 | 巨大なsettings JSONによるDB負荷 | 中 | 10KBサイズ制限、413エラー返却 |
-| R3 | 不正なmodel名によるCLI実行失敗 | 中 | 許可値リストでバリデーション、job失敗時エラーログ記録 |
-| R4 | 複数デバイスの設定競合 | 低 | Last-Write-Wins方式、楽観的ロック（将来的にversion列追加） |
-| R5 | 既存機能への影響（settings=NULL処理） | 中 | フォールバック処理、既存機能の回帰テスト |
-| R6 | watchOS画面サイズでUI崩れ | 低 | シンプルなList+NavigationLink構成、実機テスト |
+| R1 | custom_flagsによるコマンドインジェクション | 高 | 予約オプション禁止、危険フラグブラックリスト、シェルメタ文字拒否、subprocess引数リスト渡し |
+| R2 | custom_flagsで予約オプション迂回（設定上書き） | **高** | **RESERVED_FLAGSリストで`--model`/`-s`/`-a`等を禁止、バリデーションで拒否** |
+| R3 | 巨大なsettings JSONによるDB負荷・OOM | 中 | **リクエストボディサイズ10KB制限（FastAPI層で即座にチェック）、413エラー返却** |
+| R4 | 不正なmodel名によるCLI実行失敗 | 中 | 許可値リストでバリデーション、job失敗時エラーログ記録 |
+| R5 | 複数デバイスの設定競合 | 低 | Last-Write-Wins方式、楽観的ロック（将来的にversion列追加） |
+| R6 | 既存機能への影響（settings=NULL処理） | 中 | フォールバック処理、既存機能の回帰テスト |
+| R7 | watchOS画面サイズでUI崩れ | 低 | シンプルなList+NavigationLink構成、実機テスト |
 
 ### 対策詳細
 
-#### R1対策: コマンドインジェクション
+#### R1対策: コマンドインジェクション & R2対策: 予約オプション迂回
 ```python
+# 予約済みオプション（custom_flagsで指定不可）
+RESERVED_FLAGS = {
+    "claude": ["--model", "--permission-mode", "--tools"],
+    "codex": ["-m", "--model", "-s", "--sandbox", "-a", "--ask-for-approval", "-r", "--reasoning-effort"]
+}
+
 # 危険フラグのブラックリスト
 DANGEROUS_FLAGS = [
     "--exec", "--eval", "--unsafe", "--allow-root",
@@ -680,17 +769,47 @@ DANGEROUS_FLAGS = [
 # シェルメタ文字のチェック
 SHELL_META_CHARS = [";", "|", "&", "$", "`", "(", ")", "<", ">", "\n", "\r"]
 
-def validate_custom_flags(flags: list[str]) -> None:
+def validate_custom_flags(flags: list[str], ai_type: str) -> None:
+    reserved = RESERVED_FLAGS.get(ai_type, [])
+
     for flag in flags:
-        # 危険フラグ
+        # フラグ名部分を抽出（値部分を除外）
+        flag_name = flag.split("=")[0].split()[0]
+
+        # 予約オプションチェック（R2対策）
+        if flag_name in reserved:
+            raise ValueError(
+                f"Reserved flag cannot be used in custom_flags: {flag_name}. "
+                f"Use the dedicated setting field instead."
+            )
+
+        # 危険フラグ（R1対策）
         if any(d in flag.lower() for d in DANGEROUS_FLAGS):
             raise ValueError(f"Dangerous flag: {flag}")
-        # シェルメタ文字
+
+        # シェルメタ文字（R1対策）
         if any(c in flag for c in SHELL_META_CHARS):
             raise ValueError(f"Invalid character in flag: {flag}")
 ```
 
-#### R4対策: 設定競合
+**重要**: 予約オプション（`--model`, `-s`, `-a`等）を`custom_flags`に入れることは禁止。これにより、ユーザーが設定済みのパラメータを`custom_flags`で上書きして迂回する攻撃を防ぎます。
+
+#### R3対策: 10KBサイズ制限の強制
+```python
+@app.put("/rooms/{room_id}/settings")
+async def update_settings(room_id: str, request: Request, device_id: str = Query(...)):
+    # リクエストボディサイズチェック（10KB制限）
+    body = await request.body()
+    if len(body) > 10_240:  # 10KB
+        raise HTTPException(413, detail="Settings JSON exceeds 10KB limit")
+
+    # 以下、既存処理（パース、バリデーション、DB更新）
+    ...
+```
+
+**重要**: FastAPI層で`request.body()`取得直後にサイズチェックを実施することで、巨大なJSONによるOOM攻撃を防ぎます。
+
+#### R5対策: 設定競合
 **Phase 1実装**: Last-Write-Wins（最後の更新が勝つ）
 **Phase 2計画**: 楽観的ロック
 ```sql
@@ -714,19 +833,28 @@ if current_version != request_version:
 |----|-----------|-------|---------|
 | V1 | 正常: Claude model=sonnet | `{"claude": {"model": "sonnet"}}` | 受理 |
 | V2 | 正常: Claude model=opus | `{"claude": {"model": "opus"}}` | 受理 |
-| V3 | 正常: Codex model=gpt-4 | `{"codex": {"model": "gpt-4"}}` | 受理 |
+| V3 | 正常: Codex model=gpt-5.1-codex | `{"codex": {"model": "gpt-5.1-codex"}}` | 受理 |
 | V4 | 異常: 不正なmodel名 | `{"claude": {"model": "gpt-10"}}` | 400 Bad Request |
 | V5 | 異常: 危険フラグ --exec | `{"claude": {"custom_flags": ["--exec"]}}` | 400 Bad Request |
 | V6 | 異常: シェルメタ文字 ; | `{"claude": {"custom_flags": ["--flag;rm -rf"]}}` | 400 Bad Request |
-| V7 | 境界値: custom_flags 10個 | `{"custom_flags": ["--a", ..., "--j"]}` (10個) | 受理 |
-| V8 | 境界値: custom_flags 11個 | `{"custom_flags": ["--a", ..., "--k"]}` (11個) | 400 Bad Request |
-| V9 | 境界値: JSON 10KB | 10240バイトのJSON | 受理 |
-| V10 | 境界値: JSON 10KB+1 | 10241バイトのJSON | 400 Bad Request |
-| V11 | 異常: 不正なpermission_mode | `{"claude": {"permission_mode": "hoge"}}` | 400 Bad Request |
-| V12 | 異常: 不正なtools名 | `{"claude": {"tools": ["UnknownTool"]}}` | 400 Bad Request |
-| V13 | 正常: tools空配列 | `{"claude": {"tools": []}}` | 受理 |
-| V14 | 異常: custom_flag長すぎる | `{"custom_flags": ["--" + "a"*200]}` (101文字) | 400 Bad Request |
-| V15 | 正常: settings=null | `PUT /settings` with `null` body | settings列をNULLに更新 |
+| V7 | **異常: 予約オプション --model** | `{"claude": {"custom_flags": ["--model", "opus"]}}` | **400 Bad Request** |
+| V8 | **異常: 予約オプション -s** | `{"codex": {"custom_flags": ["-s", "danger-full-access"]}}` | **400 Bad Request** |
+| V9 | 境界値: custom_flags 10個 | `{"custom_flags": ["--a", ..., "--j"]}` (10個) | 受理 |
+| V10 | 境界値: custom_flags 11個 | `{"custom_flags": ["--a", ..., "--k"]}` (11個) | 400 Bad Request |
+| V11 | 境界値: JSON 10KB | 10240バイトのJSON | 受理 |
+| V12 | 境界値: JSON 10KB+1 | 10241バイトのJSON | **413 Payload Too Large** |
+| V13 | 異常: 不正なpermission_mode | `{"claude": {"permission_mode": "hoge"}}` | 400 Bad Request |
+| V14 | 異常: 不正なsandbox値 | `{"codex": {"sandbox": "isolated"}}` | **400 Bad Request**（正しくは`read-only/workspace-write/danger-full-access`） |
+| V15 | 異常: 不正なapproval_policy値 | `{"codex": {"approval_policy": "always"}}` | **400 Bad Request**（正しくは`untrusted/on-failure/on-request/never`） |
+| V16 | 異常: 不正なtools名 | `{"claude": {"tools": ["UnknownTool"]}}` | 400 Bad Request |
+| V17 | 正常: tools空配列 | `{"claude": {"tools": []}}` | 受理 |
+| V18 | 異常: custom_flag長すぎる | `{"custom_flags": ["--" + "a"*200]}` (101文字) | 400 Bad Request |
+| V19 | 正常: settings=null | `PUT /settings` with `null` body | settings列をNULLに更新 |
+| V20 | 正常: Codex sandbox=danger-full-access | `{"codex": {"sandbox": "danger-full-access"}}` | 受理 |
+| V21 | 正常: Codex reasoning_effort=high | `{"codex": {"reasoning_effort": "high"}}` | 受理 |
+| V22 | 正常: Codex reasoning_effort=extra-high | `{"codex": {"reasoning_effort": "extra-high"}}` | 受理 |
+| V23 | 異常: 不正なreasoning_effort値 | `{"codex": {"reasoning_effort": "ultra"}}` | 400 Bad Request（正しくは`low/medium/high/extra-high`） |
+| V24 | **異常: 予約オプション -r** | `{"codex": {"custom_flags": ["-r", "high"]}}` | **400 Bad Request** |
 
 #### API認証・認可テスト
 
@@ -747,10 +875,12 @@ if current_version != request_version:
 | C4 | Claude tools指定 | `{"claude": {"tools": ["Bash", "Edit"]}}` | `["claude", "--print", "--tools", "Bash,Edit"]` |
 | C5 | Claude custom_flags | `{"claude": {"custom_flags": ["--verbose"]}}` | `["claude", "--print", "--verbose"]` |
 | C6 | Codex デフォルト | `null` | `["codex"]` |
-| C7 | Codex model=gpt-4-turbo | `{"codex": {"model": "gpt-4-turbo"}}` | `["codex", "-m", "gpt-4-turbo"]` |
-| C8 | Codex sandbox=isolated | `{"codex": {"sandbox": "isolated"}}` | `["codex", "-s", "isolated"]` |
-| C9 | Codex enable_search=true | `{"codex": {"enable_search": true}}` | `["codex", "--search"]` |
-| C10 | Codex 複合 | model+sandbox+search | `["codex", "-m", "gpt-4", "-s", "isolated", "--search"]` |
+| C7 | Codex model=gpt-5.1-codex-max | `{"codex": {"model": "gpt-5.1-codex-max"}}` | `["codex", "-m", "gpt-5.1-codex-max"]` |
+| C8 | Codex sandbox=workspace-write | `{"codex": {"sandbox": "workspace-write"}}` | `["codex", "-s", "workspace-write"]` |
+| C9 | Codex approval_policy=untrusted | `{"codex": {"approval_policy": "untrusted"}}` | `["codex", "-a", "untrusted"]` |
+| C10 | Codex 複合 | model+sandbox+approval_policy | `["codex", "-m", "gpt-5.1-codex", "-s", "workspace-write", "-a", "on-failure"]` |
+| C11 | Codex reasoning_effort=high | `{"codex": {"reasoning_effort": "high"}}` | `["codex", "-r", "high"]` |
+| C12 | Codex 複合+reasoning | model+sandbox+approval_policy+reasoning_effort | `["codex", "-m", "gpt-5.1-codex-max", "-s", "workspace-write", "-a", "on-failure", "-r", "extra-high"]` |
 
 #### UI動作テスト
 
@@ -774,11 +904,11 @@ if current_version != request_version:
 ### 必須条件
 
 - [ ] 全実装フェーズ完了（Phase 1-6）
-- [ ] 全テストケース合格（バリデーション15件、API 4件、CLI 10件、UI 10件）
+- [ ] 全テストケース合格（**バリデーション24件、API 10件、CLI 12件、UI 10件**）
 - [ ] E2Eテスト成功（iOS/watchOS→サーバー→CLI実行→設定反映）
 - [ ] 既存機能の回帰テストパス（チャット、ファイルブラウザ等）
 - [ ] Master_Specification.md更新完了
-- [ ] コードレビュー承認
+- [ ] コードレビュー承認（**セキュリティレビュー含む：予約オプション迂回対策（-r含む）、10KBサイズ制限確認**）
 
 ### 推奨条件
 
@@ -829,11 +959,19 @@ claude --help
 
 ```
 codex --help
-  -m, --model [gpt-4|gpt-4-turbo|gpt-3.5-turbo|o1-preview|o1-mini]
-  -s, --sandbox [workspace-write|workspace-read|isolated|full-access]
-  -a, --ask-for-approval [on-failure|always|never]
-  --search (enable web search)
+  -m, --model [gpt-5.1|gpt-5.1-codex|gpt-5.1-codex-mini|gpt-5.1-codex-max]
+  -s, --sandbox [read-only|workspace-write|danger-full-access]
+  -a, --ask-for-approval [untrusted|on-failure|on-request|never]
+  -r, --reasoning-effort [low|medium|high|extra-high]
 ```
+
+**注意**:
+- v1.0で記載していた`--search`フラグは削除されました（Codex CLIに該当オプションが存在しない可能性があるため、必要な場合は`custom_flags`に追加）。
+- GPT-5.1モデルファミリー（2025年11月19日リリース）:
+  - `gpt-5.1`: 標準モデル
+  - `gpt-5.1-codex`: コーディング最適化モデル
+  - `gpt-5.1-codex-mini`: 軽量版
+  - `gpt-5.1-codex-max`: 最高品質（77.9% SWE-Bench Verified、30%トークン削減、compaction技術搭載）
 
 ### 関連ドキュメント
 
@@ -842,5 +980,19 @@ codex --help
 
 ---
 
-**実装計画 v1.0 完成**
+## 🔄 変更履歴
+
+| 日付 | バージョン | 変更内容 | 担当 |
+|------|---------|---------|------|
+| 2025-11-20 | 1.0 | 初版作成 | Claude |
+| 2025-11-20 | 1.1 | レビュー1反映（重大な仕様ギャップ修正）:<br>・**予約オプション迂回対策**: `RESERVED_FLAGS`リスト追加、`custom_flags`で`--model`/`-s`/`-a`等を禁止<br>・**10KBサイズ制限の強制**: FastAPI層で`request.body()`取得直後にサイズチェック、413返却<br>・**settings=null処理の明確化**: PUT時に`null`ボディ送信でDB列をNULL更新、デフォルト設定適用<br>・**Codex CLI仕様修正**: `sandbox`は`read-only/workspace-write/danger-full-access`、`approval_policy`は`untrusted/on-failure/on-request/never`<br>・**enable_search削除**: Codex設定から`enable_search`フィールドを削除（該当CLIオプション不在）<br>・バリデーションテスト数を20件に統一（V7-V8で予約オプションテスト追加、V14-V15でCodex許可値テスト追加）<br>・リスクR2追加（予約オプション迂回）、R3対策詳細追加（10KB制限実装例） | Claude |
+| 2025-11-20 | 1.2 | レビュー2反映（旧仕様残存の修正）:<br>・**FR-4からWeb Searchトグル削除**（enable_search削除に伴う整合性確保）<br>・**CLIテスト表C8-C10修正**: `sandbox=isolated`→`workspace-write`、`--search`削除、`approval_policy`追加<br>・**Phase 1.2テスト件数統一**: 「各15ケース以上」→「20ケース、V1-V20対応」に修正<br>・テスト観点の整合性確保（V14とC8の矛盾解消） | Claude |
+| 2025-11-20 | 1.3 | GPT-3.5削除（ユーザー要望）:<br>・FR-4、ALLOWED_VALUES、Phase 3.3 UI、参考情報から`gpt-3.5-turbo`を削除<br>・モデル選択肢: `gpt-4`, `gpt-4-turbo`, `o1-preview`, `o1-mini`に統一 | Claude |
+| 2025-11-20 | 1.4 | GPT-5.1モデルファミリー対応（ユーザー指摘）:<br>・Codexモデルリストを最新版に更新: `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5.1-codex-max`<br>・デフォルトモデルを`gpt-5.1-codex`に変更<br>・ALLOWED_VALUES、FR-4 UI、Phase 3.3 UI、参考情報、テストケース（V3, C7, C10）を更新<br>・GPT-5.1ファミリーの説明追加（2025年11月19日リリース、77.9% SWE-Bench Verified、compaction技術） | Claude |
+| 2025-11-20 | 1.5 | Reasoning Effort対応（ユーザー指摘）:<br>・Codex設定に`reasoning_effort`フィールド追加（`low`, `medium`, `high`, `extra-high`）<br>・デフォルト値を`medium`に設定<br>・FR-2、FR-4、ALLOWED_VALUES、CodexSettings構造体、Phase 3.3 UI、Codex CLI仕様を更新<br>・`build_codex_command()`に`-r`/`--reasoning-effort`オプション追加<br>・RESERVED_FLAGSに`-r`/`--reasoning-effort`を追加（custom_flags迂回防止） | Claude |
+| 2025-11-20 | 1.6 | 値表記ゆれ修正・テスト整備（ユーザー指摘）:<br>・**UI表記統一**: 「Extra high」→「extra-high」に修正（ALLOWED_VALUESと一致、400エラー防止）<br>・**バリデーションテスト追加**: V21-V24追加（reasoning_effort正常/異常/予約オプション -r 検証）、件数を24件に更新<br>・**CLIテスト追加**: C11-C12追加（-r単体・複合検証）、件数を12件に更新<br>・Phase 1.2、Phase 5.1、完了条件のテスト件数を更新<br>・FR-4に「そのまま送信」の注記追加 | Claude |
+
+---
+
+**実装計画 v1.6 完成**
 **次のステップ**: ユーザーレビュー → 修正 → Phase 1実装開始
