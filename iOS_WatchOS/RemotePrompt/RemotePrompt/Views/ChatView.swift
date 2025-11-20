@@ -37,6 +37,14 @@ struct ChatView: View {
                             scrollToBottom()
                         }
                     }
+                    .onChange(of: isInputFocused) { focused in
+                        if focused {
+                            // キーボードが開いたら最下部にスクロール
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                scrollToBottom()
+                            }
+                        }
+                    }
                 }
 
                 if viewModel.isHistoryLoading && viewModel.messages.isEmpty {

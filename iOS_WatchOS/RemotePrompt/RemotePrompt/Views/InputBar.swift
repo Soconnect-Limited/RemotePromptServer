@@ -6,6 +6,11 @@ struct InputBar: View {
     let isLoading: Bool
     @FocusState.Binding var isFocused: Bool
 
+    private func sendAndDismiss() {
+        onSend()
+        isFocused = false
+    }
+
     private var canSend: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
     }
@@ -37,12 +42,12 @@ struct InputBar: View {
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {
-                            onSend()
+                            sendAndDismiss()
                         }
                     }
                     .accessibilityIdentifier("chat.input")
 
-                Button(action: onSend) {
+                Button(action: sendAndDismiss) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundStyle(canSend ? Color.blue : Color.gray)
