@@ -1377,6 +1377,85 @@ DELETE /rooms/room-uuid-abc-123?device_id=iphone-nao-1
 
 ---
 
+#### Files API `/rooms/{room_id}/files`（v3.0追加）
+
+ルームの `workspace_path` 配下にあるディレクトリと `.md` ファイルへの安全なアクセスを提供する。
+
+**共通セキュリティ**  
+- 認証: `device_id` (query) 必須  
+- 認可: `room_id` に紐づく `rooms.device_id` と一致すること  
+- パストラバーサル防止: `unquote(unquote())` + `\\ -> /` 正規化 + `.resolve()` + `.relative_to(base)`  
+- 拡張子制限: `.md` のみ  
+- サイズ制限: 500KB 超は `413 Payload Too Large`  
+- パスエンコーディング: パスセグメント中の `/` は `%2F` にエンコード（FastAPI `{filepath:path}` ワイルドカードで受ける）
+
+##### GET /rooms/{room_id}/files
+ディレクトリ一覧を取得。
+
+Query:
+- `device_id` (必須)
+- `path` (任意, default=\"\") 相対パス
+
+Response 200:
+```json
+[
+  {
+    "name": "Docs",
+    "type": "directory",
+    "path": "Docs",
+    "size": null,
+    "modified_at": "2025-11-20T10:30:00Z"
+  },
+  {
+    "name": "README.md",
+    "type": "markdown_file",
+    "path": "README.md",
+    "size": 5234,
+    "modified_at": "2025-11-19T15:45:00Z"
+  }
+]
+```
+
+##### GET /rooms/{room_id}/files/{filepath:path}
+Markdownファイルを取得。`filepath` は URLエンコード済み相対パス（例: `Docs%2FREADME.md`）。
+
+Query:
+- `device_id` (必須)
+
+Response:
+- Content-Type: `text/plain; charset=utf-8`
+- Body: ファイル内容
+
+##### PUT /rooms/{room_id}/files/{filepath:path}
+Markdownファイルを保存（バックアップ1世代 `.bak` 作成）。
+
+Query:
+- `device_id` (必須)
+
+Request:
+- Content-Type: `text/plain; charset=utf-8`
+- Body: 新しい内容（UTF-8）
+
+Response 200:
+```json
+{
+  "message": "File saved",
+  "path": "Docs/README.md",
+  "size": 5432,
+  "backup_created": true
+}
+```
+
+##### エラーステータス
+- 400: 不正パス / 拡張子不正 / UTF-8でない
+- 401: x-api-key 不正
+- 403: room所有権なし / PermissionError
+- 404: ファイル/ディレクトリ不存在
+- 413: 500KB超過
+- 500: サーバー内部エラー
+
+---
+
 #### GET /messages（v3.0で追加）
 
 指定されたルーム内のジョブ履歴を時系列で取得（チャット画面用）。

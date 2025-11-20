@@ -63,6 +63,18 @@ def test_list_files_nested_structure() -> None:
         cleanup(workspace)
 
 
+def test_list_files_not_found_and_not_directory() -> None:
+    workspace = make_workspace()
+    try:
+        with pytest.raises(FileNotFoundError):
+            list_files(str(workspace), "doesnotexist")
+        (workspace / "file.md").write_text("x")
+        with pytest.raises(FileNotFoundError):
+            list_files(str(workspace), "file.md")  # not a directory
+    finally:
+        cleanup(workspace)
+
+
 def test_read_file_and_size_limit() -> None:
     workspace = make_workspace()
     file_path = workspace / "note.md"
@@ -80,6 +92,8 @@ def test_read_file_and_size_limit() -> None:
         file_path.write_bytes(b"\xff\xfe\xfa")
         with pytest.raises(InvalidExtension):
             read_file(str(workspace), "note.md")
+        with pytest.raises(FileNotFoundError):
+            read_file(str(workspace), "missing.md")
     finally:
         cleanup(workspace)
 
