@@ -2,13 +2,14 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: Message
+    let runner: String
 
     var body: some View {
         HStack(alignment: .top) {
             if message.type == .assistant || message.type == .system {
                 avatar
             } else {
-                Spacer(minLength: 0)
+                Spacer(minLength: 0) // ユーザーメッセージは左余白で右寄せ
             }
 
             VStack(alignment: message.type == .user ? .trailing : .leading, spacing: 4) {
@@ -16,9 +17,7 @@ struct MessageBubble: View {
                 statusRow
             }
 
-            if message.type == .user {
-                avatar
-            } else {
+            if message.type == .assistant || message.type == .system {
                 Spacer(minLength: 0)
             }
         }
@@ -86,14 +85,21 @@ struct MessageBubble: View {
     }
 
     private var avatar: some View {
-        Circle()
-            .fill(message.type == .user ? Color.blue : Color.gray.opacity(0.5))
+        Image(aiIconName)
+            .resizable()
+            .renderingMode(.original)
+            .aspectRatio(contentMode: .fit)
             .frame(width: 28, height: 28)
-            .overlay(
-                Text(message.type == .user ? "U" : "AI")
-                    .font(.caption2)
-                    .foregroundColor(.white)
-            )
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    private var aiIconName: String {
+        switch runner.lowercased() {
+        case "codex":
+            return "Codex"
+        default:
+            return "Claude-Code"
+        }
     }
 
     private var statusText: String {

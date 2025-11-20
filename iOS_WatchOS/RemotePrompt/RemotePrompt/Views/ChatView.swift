@@ -21,7 +21,7 @@ struct ChatView: View {
                             }
 
                             ForEach(viewModel.messages) { message in
-                                MessageBubble(message: message)
+                                MessageBubble(message: message, runner: viewModel.runnerName)
                                     .id(message.id)
                             }
                         }

@@ -36,14 +36,19 @@ def cleanup(path: str) -> None:
 def test_validate_file_path_rejects_traversal() -> None:
     workspace = make_workspace()
     try:
+        # Basic traversal
         with pytest.raises(InvalidPath):
             validate_file_path(workspace, "../etc/passwd")
+        # URL-encoded traversal (will be decoded to ../..)
         with pytest.raises(InvalidPath):
             validate_file_path(workspace, "%2e%2e/%2e%2e/secret")
+        # Double-encoded traversal (%252e = %, so %252e%252e -> %2e%2e -> ..)
         with pytest.raises(InvalidPath):
-            validate_file_path(workspace, "....//....//etc/passwd")
+            validate_file_path(workspace, "%252e%252e/%252e%252e/etc/passwd")
+        # Windows separator traversal
         with pytest.raises(InvalidPath):
             validate_file_path(workspace, "..\\\\..\\\\..\\\\Windows\\\\System32")
+        # Mixed separator traversal
         with pytest.raises(InvalidPath):
             validate_file_path(workspace, "../..\\\\etc/passwd")
     finally:

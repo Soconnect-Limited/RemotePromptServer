@@ -184,7 +184,7 @@ async def get_room_file(
         raise HTTPException(status_code=404, detail="File not found")
     except FileSizeExceeded as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except InvalidExtension as exc:
+    except (InvalidPath, InvalidExtension) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")

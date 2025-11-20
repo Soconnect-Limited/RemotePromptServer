@@ -26,6 +26,7 @@ final class ChatViewModel: ObservableObject {
     private var historyOffset = 0
 
     var historyOffsetSnapshot: Int { historyOffset }
+    var runnerName: String { runner }
 
     init(
         runner: String = "claude",
