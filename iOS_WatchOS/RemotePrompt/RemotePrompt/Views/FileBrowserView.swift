@@ -12,6 +12,17 @@ struct FileBrowserView: View {
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(room: room))
     }
 
+    private var displayTitle: String {
+        if initialPath.isEmpty {
+            return "Workspace"
+        }
+        let components = initialPath.split(separator: "/")
+        if let lastComponent = components.last {
+            return String(lastComponent)
+        }
+        return "Workspace"
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -61,7 +72,7 @@ struct FileBrowserView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle(initialPath.isEmpty ? "Workspace" : initialPath.split(separator: "/").last.map(String.init) ?? "Workspace")
+            .navigationTitle(displayTitle)
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: FileItem.self) { item in
                 if item.type == .directory {

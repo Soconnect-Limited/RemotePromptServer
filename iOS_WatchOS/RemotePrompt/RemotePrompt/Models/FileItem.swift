@@ -1,6 +1,6 @@
 import Foundation
 
-struct FileItem: Identifiable, Codable {
+struct FileItem: Identifiable, Codable, Hashable {
     let id: String  // = path
     let name: String
     let type: FileType
