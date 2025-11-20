@@ -100,3 +100,54 @@ def test_file_endpoints_basic_flow():
         assert res.status_code in (400, 404)
     finally:
         cleanup(workspace)
+
+
+def test_forbidden_other_room_returns_403():
+    client = TestClient(main.app)
+    workspace = make_workspace()
+    try:
+        room_id = create_room(client, workspace, device_id="owner")
+        res = client.get(
+            f"/rooms/{room_id}/files",
+            params={"device_id": "other"},
+            headers={"x-api-key": main.settings.api_key},
+        )
+        assert res.status_code == 403
+    finally:
+        cleanup(workspace)
+
+
+def test_nested_path_encoding():
+    client = TestClient(main.app)
+    workspace = make_workspace()
+    try:
+        room_id = create_room(client, workspace)
+        nested = workspace / "Docs" / "Specs"
+        nested.mkdir(parents=True)
+        (nested / "README.md").write_text("nested", encoding="utf-8")
+
+        encoded = "Docs%2FSpecs%2FREADME.md"
+        res = client.get(
+            f"/rooms/{room_id}/files/{encoded}",
+            params={"device_id": "dev-1"},
+            headers={"x-api-key": main.settings.api_key},
+        )
+        assert res.status_code == 200
+        assert res.text == "nested"
+    finally:
+        cleanup(workspace)
+
+
+def test_invalid_api_key_returns_401():
+    client = TestClient(main.app)
+    workspace = make_workspace()
+    try:
+        room_id = create_room(client, workspace)
+        res = client.get(
+            f"/rooms/{room_id}/files",
+            params={"device_id": "dev-1"},
+            headers={"x-api-key": "bad-key"},
+        )
+        assert res.status_code == 401
+    finally:
+        cleanup(workspace)

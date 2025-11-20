@@ -32,7 +32,7 @@ def list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]:
     if not target_dir.exists():
         raise FileNotFoundError("Directory not found")
     if not target_dir.is_dir():
-        raise InvalidPath("Path is not a directory")
+        raise FileNotFoundError("Path is not a directory")
 
     results: List[FileItemDict] = []
     base = Path(workspace_path).resolve()

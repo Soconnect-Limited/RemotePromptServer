@@ -18,6 +18,7 @@ final class FileService {
         var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/files")
         components?.queryItems = [
             URLQueryItem(name: "device_id", value: deviceId),
+            // クエリは URLComponents 側で自動エンコードされるため手動エンコード不要
             URLQueryItem(name: "path", value: path),
         ]
         guard let url = components?.url else { throw APIError.invalidURL }
@@ -88,6 +89,7 @@ final class FileService {
     private func encodePathSegment(_ path: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
+        // パスセグメント中の '/' を %2F に必ずエンコードする（{filepath:path} で正しく解釈させるため）
         return path
             .addingPercentEncoding(withAllowedCharacters: allowed)
             ?? path.replacingOccurrences(of: "/", with: "%2F")

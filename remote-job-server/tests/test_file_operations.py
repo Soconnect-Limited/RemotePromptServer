@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import pytest
 
 from file_operations import list_files, read_file, write_file
-from file_security import FileSizeExceeded
+from file_security import FileSizeExceeded, InvalidExtension
 
 ALLOWED_BASE = "/Users/macstudio/Projects"
 
@@ -40,6 +40,29 @@ def test_list_files_filters_bak_and_non_md() -> None:
         cleanup(workspace)
 
 
+def test_list_files_empty_directory() -> None:
+    workspace = make_workspace()
+    try:
+        (workspace / "Empty").mkdir()
+        items = list_files(str(workspace), "Empty")
+        assert items == []
+    finally:
+        cleanup(workspace)
+
+
+def test_list_files_nested_structure() -> None:
+    workspace = make_workspace()
+    try:
+        nested = workspace / "Docs" / "Specs"
+        nested.mkdir(parents=True)
+        (nested / "README.md").write_text("specs")
+        items = list_files(str(workspace), "Docs")
+        names = {item["name"] for item in items}
+        assert "Specs" in names
+    finally:
+        cleanup(workspace)
+
+
 def test_read_file_and_size_limit() -> None:
     workspace = make_workspace()
     file_path = workspace / "note.md"
@@ -51,6 +74,11 @@ def test_read_file_and_size_limit() -> None:
         # exceed limit
         file_path.write_bytes(b"a" * 500_001)
         with pytest.raises(FileSizeExceeded):
+            read_file(str(workspace), "note.md")
+
+        # invalid utf-8
+        file_path.write_bytes(b"\xff\xfe\xfa")
+        with pytest.raises(InvalidExtension):
             read_file(str(workspace), "note.md")
     finally:
         cleanup(workspace)
@@ -71,5 +99,10 @@ def test_write_file_creates_backup_and_respects_limit() -> None:
 
         with pytest.raises(FileSizeExceeded):
             write_file(str(workspace), "note.md", "a" * 600_000)
+
+        # permission inheritance
+        mode = (workspace / "note.md").stat().st_mode
+        result3 = write_file(str(workspace), "note.md", "third")
+        assert (workspace / "note.md").stat().st_mode == mode
     finally:
         cleanup(workspace)

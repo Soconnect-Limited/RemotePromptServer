@@ -40,6 +40,22 @@ def test_validate_file_path_rejects_traversal() -> None:
             validate_file_path(workspace, "../etc/passwd")
         with pytest.raises(InvalidPath):
             validate_file_path(workspace, "%2e%2e/%2e%2e/secret")
+        with pytest.raises(InvalidPath):
+            validate_file_path(workspace, "....//....//etc/passwd")
+        with pytest.raises(InvalidPath):
+            validate_file_path(workspace, "..\\\\..\\\\..\\\\Windows\\\\System32")
+        with pytest.raises(InvalidPath):
+            validate_file_path(workspace, "../..\\\\etc/passwd")
+    finally:
+        cleanup(workspace)
+
+
+def test_validate_file_path_allows_workspace() -> None:
+    workspace = make_workspace()
+    try:
+        target = validate_file_path(workspace, "docs/readme.md")
+        assert str(target).startswith(workspace)
+        assert target.name == "readme.md"
     finally:
         cleanup(workspace)
 

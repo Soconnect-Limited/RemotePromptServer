@@ -353,22 +353,22 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
 
 #### 1.4 サーバーテスト
 - [x] `tests/test_file_security.py` 作成
-  - [ ] パストラバーサル攻撃テスト:
-    - [ ] `../../../etc/passwd`
-    - [ ] `..\\..\\..\\Windows\\System32`
-    - [ ] `....//....//etc/passwd` (二重エンコード)
-    - [ ] URLエンコード済み攻撃（`%2e%2e%2f`）
-  - [ ] 正常系テスト（workspace配下の正当なパス）
+  - [x] パストラバーサル攻撃テスト:
+    - [x] `../../../etc/passwd`
+    - [x] `..\\..\\..\\Windows\\System32`
+    - [x] `....//....//etc/passwd` (二重エンコード)
+    - [x] URLエンコード済み攻撃（`%2e%2e%2f`）
+  - [x] 正常系テスト（workspace配下の正当なパス）
 
 - [x] `tests/test_file_operations.py` 作成
-  - [ ] ディレクトリ一覧取得（空/階層構造/.bak除外）
-  - [ ] ファイル読込（存在/不存在/500KB超過）
-  - [ ] ファイル保存（新規/上書き/.bak作成）
+  - [x] ディレクトリ一覧取得（空/階層構造/.bak除外）
+  - [x] ファイル読込（存在/不存在/500KB超過）
+  - [x] ファイル保存（新規/上書き/.bak作成）
 
 - [x] `tests/test_file_api.py` 作成
-  - [ ] 認証失敗テスト（不正device_id）
-  - [ ] 認可失敗テスト（他人のroom）
-  - [ ] E2E正常系テスト（一覧→読込→保存）
+  - [x] 認証失敗テスト（不正device_id / 不正APIキー）
+  - [x] 認可失敗テスト（他人のroom）
+  - [x] E2E正常系テスト（一覧→読込→保存）
 
 ---
 
@@ -401,7 +401,7 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
       case markdownFile = "markdown_file"
   }
   ```
-  - [ ] **重要**: `modifiedAt` ↔ `modified_at` のマッピングを`CodingKeys`で定義
+  - [x] **重要**: `modifiedAt` ↔ `modified_at` のマッピングを`CodingKeys`で定義
 
 - [x] `FileError.swift`
   ```swift
