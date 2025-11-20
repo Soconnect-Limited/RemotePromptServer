@@ -5,10 +5,12 @@ struct FileBrowserView: View {
     @StateObject private var viewModel: FileBrowserViewModel
     private let room: Room
     private let initialPath: String
+    private let isRoot: Bool
 
-    init(room: Room, path: String = "") {
+    init(room: Room, path: String = "", isRoot: Bool = true) {
         self.room = room
         self.initialPath = path
+        self.isRoot = isRoot
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(room: room))
     }
 
@@ -24,8 +26,19 @@ struct FileBrowserView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
+        Group {
+            if isRoot {
+                NavigationStack {
+                    contentView
+                }
+            } else {
+                contentView
+            }
+        }
+    }
+
+    private var contentView: some View {
+        Group {
                 if viewModel.isLoading {
                     ProgressView("読み込み中…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -76,13 +89,15 @@ struct FileBrowserView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: FileItem.self) { item in
                 if item.type == .directory {
-                    FileBrowserView(room: room, path: item.path)
+                    FileBrowserView(room: room, path: item.path, isRoot: false)
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
+                if isRoot {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                        }
                     }
                 }
             }
