@@ -277,82 +277,82 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
 ### Phase 1: サーバーAPI実装 (5-6h)
 
 #### 1.0 セキュリティ基盤実装
-- [ ] `file_security.py` 作成
-  - [ ] `validate_file_path(workspace_path: str, relative_path: str) -> Path`
-    - [ ] 二重URLデコード（`unquote(unquote())`）
-    - [ ] Windows区切り文字正規化（`\\` → `/`）
-    - [ ] シンボリックリンク解決（`.resolve()`）
-    - [ ] workspace配下チェック（`.relative_to()`）
-  - [ ] `validate_markdown_extension(file_path: Path) -> bool`
-  - [ ] `validate_file_size(file_path: Path, max_size: int = 500_000) -> bool`
+- [x] `file_security.py` 作成
+  - [x] `validate_file_path(workspace_path: str, relative_path: str) -> Path`
+    - [x] 二重URLデコード（`unquote(unquote())`）
+    - [x] Windows区切り文字正規化（`\\` → `/`）
+    - [x] シンボリックリンク解決（`.resolve()`）
+    - [x] workspace配下チェック（`.relative_to()`）
+  - [x] `validate_markdown_extension(file_path: Path) -> bool`
+  - [x] `validate_file_size(file_path: Path, max_size: int = 500_000) -> bool`
 
 #### 1.1 認証・認可ヘルパー
-- [ ] `auth_helpers.py` 作成
-  - [ ] `async def verify_room_ownership(room_id: str, device_id: str, db: Session) -> Room`
-    - [ ] roomsテーブルから`room_id`でRoom取得
-    - [ ] `room.device_id == device_id` チェック
-    - [ ] 不一致時は `HTTPException(403)` raise
+- [x] `auth_helpers.py` 作成
+  - [x] `async def verify_room_ownership(room_id: str, device_id: str, db: Session) -> Room`
+    - [x] roomsテーブルから`room_id`でRoom取得
+    - [x] `room.device_id == device_id` チェック
+    - [x] 不一致時は `HTTPException(403)` raise
 
 #### 1.2 ファイルシステム操作関数
-- [ ] `file_operations.py` 作成
-  - [ ] `list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]`
-    - [ ] `validate_file_path()` で検証
-    - [ ] ディレクトリ存在確認
-    - [ ] `.md` ファイルとディレクトリのみフィルタ
-    - [ ] `.bak` ファイルを除外
-    - [ ] FileItemDict作成（name, type, path, size, modified_at）
+- [x] `file_operations.py` 作成
+  - [x] `list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]`
+    - [x] `validate_file_path()` で検証
+    - [x] ディレクトリ存在確認
+    - [x] `.md` ファイルとディレクトリのみフィルタ
+    - [x] `.bak` ファイルを除外
+    - [x] FileItemDict作成（name, type, path, size, modified_at）
 
-  - [ ] `read_file(workspace_path: str, file_path: str) -> str`
-    - [ ] `validate_file_path()` で検証
-    - [ ] `validate_markdown_extension()` チェック
-    - [ ] `validate_file_size()` チェック（500KB）
-    - [ ] UTF-8デコード（`errors='strict'`）
-    - [ ] エラーハンドリング（FileNotFoundError, PermissionError, UnicodeDecodeError）
+  - [x] `read_file(workspace_path: str, file_path: str) -> str`
+    - [x] `validate_file_path()` で検証
+    - [x] `validate_markdown_extension()` チェック
+    - [x] `validate_file_size()` チェック（500KB）
+    - [x] UTF-8デコード（`errors='strict'`）
+    - [x] エラーハンドリング（FileNotFoundError, PermissionError, UnicodeDecodeError）
 
-  - [ ] `write_file(workspace_path: str, file_path: str, content: str) -> WriteResult`
-    - [ ] `validate_file_path()` で検証
-    - [ ] `validate_markdown_extension()` チェック
-    - [ ] サイズチェック（`len(content.encode('utf-8')) <= 500KB`）
-    - [ ] バックアップ作成:
-      - [ ] 既存 `.bak` 削除（存在する場合）
-      - [ ] 現行ファイルを `.bak` にリネーム（存在する場合）
-      - [ ] 元ファイルのパーミッション取得（`os.stat().st_mode`）
-    - [ ] UTF-8エンコードして書き込み
-    - [ ] `.bak` にパーミッション適用
-    - [ ] `WriteResult(success=True, size=..., backup_created=...)` を返却
+  - [x] `write_file(workspace_path: str, file_path: str, content: str) -> WriteResult`
+    - [x] `validate_file_path()` で検証
+    - [x] `validate_markdown_extension()` チェック
+    - [x] サイズチェック（`len(content.encode('utf-8')) <= 500KB`）
+    - [x] バックアップ作成:
+      - [x] 既存 `.bak` 削除（存在する場合）
+      - [x] 現行ファイルを `.bak` にリネーム（存在する場合）
+      - [x] 元ファイルのパーミッション取得（`os.stat().st_mode`）
+    - [x] UTF-8エンコードして書き込み
+    - [x] `.bak` にパーミッション適用
+    - [x] `WriteResult(success=True, size=..., backup_created=...)` を返却
 
 #### 1.3 REST APIエンドポイント
-- [ ] `main.py` に追加
-  - [ ] `GET /rooms/{room_id}/files`
-    - [ ] `device_id: str = Query(...)` でdevice_id必須化
-    - [ ] `path: str = Query("")` で相対パス（デフォルト: ルート）
-    - [ ] `verify_room_ownership()` で認可
-    - [ ] roomsテーブルから`workspace_path`取得
-    - [ ] `list_files(workspace_path, path)` 呼び出し
-    - [ ] JSON レスポンス
+- [x] `main.py` に追加
+  - [x] `GET /rooms/{room_id}/files`
+    - [x] `device_id: str = Query(...)` でdevice_id必須化
+    - [x] `path: str = Query("")` で相対パス（デフォルト: ルート）
+    - [x] `verify_room_ownership()` で認可
+    - [x] roomsテーブルから`workspace_path`取得
+    - [x] `list_files(workspace_path, path)` 呼び出し
+    - [x] JSON レスポンス
 
-  - [ ] `GET /rooms/{room_id}/files/{filepath:path}`
-    - [ ] `{filepath:path}` でワイルドカードキャプチャ
-    - [ ] `device_id: str = Query(...)` でdevice_id必須化
-    - [ ] `verify_room_ownership()` で認可
-    - [ ] `workspace_path` 取得
-    - [ ] `read_file(workspace_path, filepath)` 呼び出し
-    - [ ] `Response(content=file_content, media_type="text/plain; charset=utf-8")`
-    - [ ] エラー時: 404/403/413/500
+  - [x] `GET /rooms/{room_id}/files/{filepath:path}`
+    - [x] `{filepath:path}` でワイルドカードキャプチャ
+    - [x] `device_id: str = Query(...)` でdevice_id必須化
+    - [x] `verify_room_ownership()` で認可
+    - [x] `workspace_path` 取得
+    - [x] `read_file(workspace_path, filepath)` 呼び出し
+    - [x] `Response(content=file_content, media_type="text/plain; charset=utf-8")`
+    - [x] エラー時: 404/403/413/500
 
-  - [ ] `PUT /rooms/{room_id}/files/{filepath:path}`
-    - [ ] `{filepath:path}` でワイルドカードキャプチャ
-    - [ ] `device_id: str = Query(...)` でdevice_id必須化
-    - [ ] `Request.body()` でボディ取得
-    - [ ] UTF-8デコード
-    - [ ] `verify_room_ownership()` で認可
-    - [ ] `workspace_path` 取得
-    - [ ] `write_file(workspace_path, filepath, content)` 呼び出し
-    - [ ] JSON レスポンス: `{"message": "File saved", "path": ..., "size": ..., "backup_created": ...}`
-    - [ ] エラー時: 400/403/413/500
+  - [x] `PUT /rooms/{room_id}/files/{filepath:path}`
+    - [x] `{filepath:path}` でワイルドカードキャプチャ
+    - [x] `device_id: str = Query(...)` でdevice_id必須化
+    - [x] `Request.body()` でボディ取得
+    - [x] UTF-8デコード
+    - [x] `verify_room_ownership()` で認可
+    - [x] `workspace_path` 取得
+    - [x] `write_file(workspace_path, filepath, content)` 呼び出し
+    - [x] JSON レスポンス: `{"message": "File saved", "path": ..., "size": ..., "backup_created": ...}`
+    - [x] エラー時: 400/403/413/500
 
 #### 1.4 サーバーテスト
-- [ ] `tests/test_file_security.py` 作成
+- [x] `tests/test_file_security.py` 作成
   - [ ] パストラバーサル攻撃テスト:
     - [ ] `../../../etc/passwd`
     - [ ] `..\\..\\..\\Windows\\System32`
@@ -360,12 +360,12 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
     - [ ] URLエンコード済み攻撃（`%2e%2e%2f`）
   - [ ] 正常系テスト（workspace配下の正当なパス）
 
-- [ ] `tests/test_file_operations.py` 作成
+- [x] `tests/test_file_operations.py` 作成
   - [ ] ディレクトリ一覧取得（空/階層構造/.bak除外）
   - [ ] ファイル読込（存在/不存在/500KB超過）
   - [ ] ファイル保存（新規/上書き/.bak作成）
 
-- [ ] `tests/test_file_api.py` 作成
+- [x] `tests/test_file_api.py` 作成
   - [ ] 認証失敗テスト（不正device_id）
   - [ ] 認可失敗テスト（他人のroom）
   - [ ] E2E正常系テスト（一覧→読込→保存）
@@ -375,7 +375,7 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
 ### Phase 2: iOS Models & Services (3-4h)
 
 #### 2.1 Models
-- [ ] `FileItem.swift`
+- [x] `FileItem.swift`
   ```swift
   struct FileItem: Identifiable, Codable {
       let id: String  // = path
@@ -403,7 +403,7 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
   ```
   - [ ] **重要**: `modifiedAt` ↔ `modified_at` のマッピングを`CodingKeys`で定義
 
-- [ ] `FileError.swift`
+- [x] `FileError.swift`
   ```swift
   enum FileError: LocalizedError {
       case fileTooLarge(Int64)  // ファイルサイズ
@@ -433,7 +433,7 @@ let url = "\(baseURL)/rooms/\(roomId)/files/\(encoded)?device_id=\(deviceId)"
   ```
 
 #### 2.2 Services
-- [ ] `FileService.swift`
+- [x] `FileService.swift`
   ```swift
   class FileService {
       private let apiClient: APIClient

@@ -12,6 +12,7 @@ from fastapi import (
     Header,
     Query,
     Request,
+    Response,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,9 @@ from models import Device, DeviceSession, Job, Room, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
 from utils.path_validator import validate_workspace_path
+from auth_helpers import verify_room_ownership
+from file_operations import list_files, read_file, write_file, WriteResult
+from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
 
 app = FastAPI(title="Remote Job Server")
 app.add_middleware(
@@ -143,6 +147,87 @@ def delete_room(
     db.delete(room)
     db.commit()
     return {"status": "ok"}
+
+
+# ========== File Browser APIs ==========
+
+
+@app.get("/rooms/{room_id}/files")
+async def list_room_files(
+    room_id: str,
+    device_id: str = Query(...),
+    path: str = Query(""),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[dict]:
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+    try:
+        return list_files(workspace_path=room.workspace_path, relative_path=path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Directory not found")
+    except (InvalidPath, InvalidExtension) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/rooms/{room_id}/files/{filepath:path}")
+async def get_room_file(
+    room_id: str,
+    filepath: str,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> Response:
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+    try:
+        content = read_file(workspace_path=room.workspace_path, file_path=filepath)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except FileSizeExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except InvalidExtension as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return Response(content=content, media_type="text/plain; charset=utf-8")
+
+
+@app.put("/rooms/{room_id}/files/{filepath:path}")
+async def put_room_file(
+    room_id: str,
+    filepath: str,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+
+    try:
+        body_bytes = await request.body()
+        content = body_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be UTF-8") from exc
+
+    try:
+        result: WriteResult = write_file(
+            workspace_path=room.workspace_path, file_path=filepath, content=content
+        )
+    except FileSizeExceeded as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except (InvalidPath, InvalidExtension) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File or directory not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return {
+        "message": "File saved",
+        "path": filepath,
+        "size": result.size,
+        "backup_created": result.backup_created,
+    }
 
 
 @app.post("/register_device")
