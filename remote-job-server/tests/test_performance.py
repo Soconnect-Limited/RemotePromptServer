@@ -24,7 +24,7 @@ class FastStubSessionManager:
         self.count += 1
         return {"success": True, "output": prompt, "error": ""}
 
-    def get_session_status(self, runner: str, device_id: str):
+    def get_session_status(self, runner: str, device_id: str, room_id: str):
         return {"exists": False, "session_id": None}
 
 

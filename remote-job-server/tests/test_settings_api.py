@@ -81,3 +81,35 @@ class RoomSettingsAPITests(TestCase):
         )
         self.assertEqual(res.status_code, 413)
         self.assertIn("exceeds 10KB", res.json()["detail"])
+
+    def test_put_settings_null_reset(self) -> None:
+        """Test null body resets settings to default (implementation plan v1.6:217-226)."""
+        # First, set a custom setting
+        payload = {"codex": {"model": "gpt-5.1-codex-max"}}
+        res = self.client.put(
+            f"/rooms/{self.room_id}/settings",
+            params={"device_id": "dev-rooms"},
+            headers={**self.headers, "Content-Type": "application/json"},
+            json=payload,
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["settings"], payload)
+
+        # Now reset with null body
+        res_reset = self.client.put(
+            f"/rooms/{self.room_id}/settings",
+            params={"device_id": "dev-rooms"},
+            headers={**self.headers, "Content-Type": "application/json"},
+            data=b"null",
+        )
+        self.assertEqual(res_reset.status_code, 200)
+        self.assertIsNone(res_reset.json()["settings"])
+
+        # Verify GET also returns null
+        res_get = self.client.get(
+            f"/rooms/{self.room_id}/settings",
+            params={"device_id": "dev-rooms"},
+            headers=self.headers,
+        )
+        self.assertEqual(res_get.status_code, 200)
+        self.assertIsNone(res_get.json()["settings"])

@@ -191,8 +191,12 @@ async def update_room_settings(
     if len(body) > MAX_SETTINGS_BYTES:
         raise HTTPException(status_code=413, detail="Settings JSON exceeds 10KB limit")
 
-    if not body:
-        raise HTTPException(status_code=400, detail="Request body is empty")
+    # null または空ボディ: 設定リセット
+    if not body or body.strip() == b"null":
+        room.settings = None
+        room.updated_at = utcnow()
+        db.commit()
+        return {"room_id": room_id, "settings": None}
 
     try:
         payload = json.loads(body.decode("utf-8"))

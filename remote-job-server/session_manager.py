@@ -60,9 +60,9 @@ class ClaudeSessionManager:
         finally:
             db.close()
 
-    def get_session_id(self, device_id: str) -> Optional[str]:
+    def get_session_id(self, device_id: str, room_id: str) -> Optional[str]:
         """Return the persisted session ID, if any."""
-        return self._get_session_id_from_db(device_id)
+        return self._get_session_id_from_db(device_id, room_id)
 
     # --- Execution ------------------------------------------------------
     def execute_job(
@@ -160,8 +160,8 @@ class CodexSessionManager:
         finally:
             db.close()
 
-    def get_session_id(self, device_id: str) -> Optional[str]:
-        return self._get_session_id_from_db(device_id)
+    def get_session_id(self, device_id: str, room_id: str) -> Optional[str]:
+        return self._get_session_id_from_db(device_id, room_id)
 
     def execute_job(
         self,
@@ -241,11 +241,11 @@ class SessionManager:
             )
         raise ValueError(f"Unknown runner: {runner}")
 
-    def get_session_status(self, runner: str, device_id: str) -> Dict[str, Optional[str]]:
+    def get_session_status(self, runner: str, device_id: str, room_id: str) -> Dict[str, Optional[str]]:
         if runner == "claude":
-            session_id = self.claude_manager.get_session_id(device_id)
+            session_id = self.claude_manager.get_session_id(device_id, room_id)
         elif runner == "codex":
-            session_id = self.codex_manager.get_session_id(device_id)
+            session_id = self.codex_manager.get_session_id(device_id, room_id)
         else:
             raise ValueError(f"Unknown runner: {runner}")
 

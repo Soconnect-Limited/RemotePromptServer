@@ -38,7 +38,7 @@ class StubSessionManager:
             "session_id": session_id,
         }
 
-    def get_session_status(self, runner: str, device_id: str):
+    def get_session_status(self, runner: str, device_id: str, room_id: str):
         key = (runner, device_id)
         session_id = self.sessions.get(key)
         return {"exists": session_id is not None, "session_id": session_id}
