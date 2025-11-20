@@ -3,6 +3,7 @@ import SwiftUI
 struct RoomsListView: View {
     @StateObject private var viewModel: RoomsViewModel
     @State private var showingCreateRoom = false
+    @State private var hasLoadedOnce = false
     private let detailAPIClient: APIClientProtocol
 
     init(viewModel: RoomsViewModel? = nil) {
@@ -28,7 +29,7 @@ struct RoomsListView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if viewModel.rooms.isEmpty && viewModel.isLoading {
+                if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
                     ProgressView("ルームを読み込み中...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if viewModel.rooms.isEmpty {
@@ -73,6 +74,7 @@ struct RoomsListView: View {
             }
             .task {
                 await viewModel.loadRooms()
+                hasLoadedOnce = true
             }
             .refreshable {
                 await viewModel.loadRooms()
