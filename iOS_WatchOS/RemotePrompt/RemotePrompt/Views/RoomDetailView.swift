@@ -25,6 +25,7 @@ struct RoomDetailView: View {
     @StateObject private var claudeViewModel: ChatViewModel
     @StateObject private var codexViewModel: ChatViewModel
     @State private var selectedTab: RunnerTab = .claude
+    @State private var showFileBrowser = false
 
     init(room: Room, apiClient: APIClientProtocol = APIClient.shared, enableStreaming: Bool = !AppEnvironment.isUITesting) {
         self.room = room
@@ -77,17 +78,15 @@ struct RoomDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("Claude履歴をクリア", role: .destructive) {
-                        claudeViewModel.clearChat()
-                    }
-                    Button("Codex履歴をクリア", role: .destructive) {
-                        codexViewModel.clearChat()
-                    }
+                Button {
+                    showFileBrowser = true
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "doc.text.magnifyingglass")
                 }
             }
+        }
+        .sheet(isPresented: $showFileBrowser) {
+            FileBrowserView(room: room)
         }
     }
 
