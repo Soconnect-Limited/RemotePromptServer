@@ -4,9 +4,11 @@ struct FileBrowserView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: FileBrowserViewModel
     private let room: Room
+    private let initialPath: String
 
-    init(room: Room) {
+    init(room: Room, path: String = "") {
         self.room = room
+        self.initialPath = path
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(room: room))
     }
 
@@ -31,12 +33,15 @@ struct FileBrowserView: View {
                 } else {
                     List(viewModel.fileItems) { item in
                         if item.type == .directory {
-                            Button {
-                                Task {
-                                    await viewModel.navigateToDirectory(item)
-                                }
-                            } label: {
+                            NavigationLink(value: item) {
                                 FileRow(item: item)
+                            }
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = item.path
+                                } label: {
+                                    Label("パスをコピー", systemImage: "doc.on.doc")
+                                }
                             }
                         } else {
                             NavigationLink {
@@ -44,21 +49,26 @@ struct FileBrowserView: View {
                             } label: {
                                 FileRow(item: item)
                             }
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = item.path
+                                } label: {
+                                    Label("パスをコピー", systemImage: "doc.on.doc")
+                                }
+                            }
                         }
                     }
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle(viewModel.navigationTitle)
+            .navigationTitle(initialPath.isEmpty ? "Workspace" : initialPath.split(separator: "/").last.map(String.init) ?? "Workspace")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if !viewModel.pathComponents.isEmpty {
-                        Button(action: { Task { await viewModel.navigateBack() } }) {
-                            Image(systemName: "chevron.left")
-                        }
-                    }
+            .navigationDestination(for: FileItem.self) { item in
+                if item.type == .directory {
+                    FileBrowserView(room: room, path: item.path)
                 }
+            }
+            .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark")
@@ -72,7 +82,7 @@ struct FileBrowserView: View {
                 Alert(title: Text("エラー"), message: Text(viewModel.errorMessage ?? "不明なエラー"), dismissButton: .default(Text("OK")))
             }
             .task {
-                await viewModel.loadFiles()
+                await viewModel.loadFiles(path: initialPath)
             }
         }
     }
