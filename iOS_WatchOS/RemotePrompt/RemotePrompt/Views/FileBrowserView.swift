@@ -30,21 +30,19 @@ struct FileBrowserView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(viewModel.fileItems) { item in
-                        Button {
-                            Task {
-                                if item.type == .directory {
+                        if item.type == .directory {
+                            Button {
+                                Task {
                                     await viewModel.navigateToDirectory(item)
                                 }
-                            }
-                        } label: {
-                            if item.type == .directory {
+                            } label: {
                                 FileRow(item: item)
-                            } else {
-                                NavigationLink {
-                                    MarkdownEditorView(room: room, fileItem: item)
-                                } label: {
-                                    FileRow(item: item)
-                                }
+                            }
+                        } else {
+                            NavigationLink {
+                                MarkdownEditorView(room: room, fileItem: item)
+                            } label: {
+                                FileRow(item: item)
                             }
                         }
                     }
