@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 from typing import List
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,9 +18,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:35000",
     ]
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod

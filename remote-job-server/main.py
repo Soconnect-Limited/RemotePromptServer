@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
 
 from config import setup_logging, settings
 from database import SessionLocal, init_db
@@ -39,7 +40,14 @@ from auth_helpers import verify_room_ownership
 from file_operations import list_files, read_file, write_file, WriteResult
 from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
 
-app = FastAPI(title="Remote Job Server")
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
+    setup_logging()
+    init_db()
+    yield
+
+
+app = FastAPI(title="Remote Job Server", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -87,12 +95,6 @@ class JobSummary(BaseModel):
     id: str
     runner: str
     status: str
-
-
-@app.on_event("startup")
-def startup_event() -> None:
-    setup_logging()
-    init_db()
 
 
 def verify_api_key(x_api_key: str = Header(...)) -> None:
