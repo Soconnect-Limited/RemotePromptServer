@@ -110,7 +110,6 @@ struct FileBrowserView: View {
             .task {
                 await viewModel.loadFiles(path: initialPath)
             }
-        }
     }
 
     private var retryButton: some View {
