@@ -23,6 +23,7 @@ struct CreateJobRequest: Codable {
     let deviceId: String
     let roomId: String
     let notifyToken: String?
+    let threadId: String?
 
     enum CodingKeys: String, CodingKey {
         case runner
@@ -30,6 +31,7 @@ struct CreateJobRequest: Codable {
         case deviceId = "device_id"
         case roomId = "room_id"
         case notifyToken = "notify_token"
+        case threadId = "thread_id"
     }
 }
 
@@ -53,6 +55,8 @@ protocol APIClientProtocol {
         limit: Int,
         offset: Int
     ) async throws -> [Job]
+    func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings?
+    func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings?
 }
 
 final class APIClient: APIClientProtocol {
@@ -139,7 +143,8 @@ final class APIClient: APIClientProtocol {
             inputText: prompt,
             deviceId: deviceId,
             roomId: roomId,
-            notifyToken: nil
+            notifyToken: nil,
+            threadId: "default"
         )
         request.httpBody = try encoder.encode(payload)
 
@@ -150,6 +155,57 @@ final class APIClient: APIClientProtocol {
         }
 
         return try decoder.decode(CreateJobResponse.self, from: data)
+    }
+
+    func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings? {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/settings") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+        guard let url = components.url else { throw APIError.invalidURL }
+        guard let apiKey = Constants.apiKey else { throw APIError.missingAPIKey }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+        struct SettingsResponse: Codable { let roomId: String; let settings: RoomSettings? }
+        let decoded = try decoder.decode(SettingsResponse.self, from: data)
+        return decoded.settings
+    }
+
+    func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings? {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/settings") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+        guard let url = components.url else { throw APIError.invalidURL }
+        guard let apiKey = Constants.apiKey else { throw APIError.missingAPIKey }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let settings = settings {
+            request.httpBody = try encoder.encode(settings)
+        } else {
+            request.httpBody = Data("null".utf8)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+        struct SettingsResponse: Codable { let roomId: String; let settings: RoomSettings? }
+        let decoded = try decoder.decode(SettingsResponse.self, from: data)
+        return decoded.settings
     }
 
     // MARK: - Room Management
