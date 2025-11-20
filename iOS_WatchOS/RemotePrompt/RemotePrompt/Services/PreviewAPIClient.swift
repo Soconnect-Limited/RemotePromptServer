@@ -5,6 +5,7 @@ actor PreviewAPIClient: APIClientProtocol {
     private var roomsStorage: [Room]
     private var jobsStorage: [String: Job]
     private var roomRunnerIndex: [String: [Job]]
+    private var roomSettings: [String: RoomSettings?]
 
     init(date: Date = Date()) {
         let defaultRoom = Room(
@@ -17,6 +18,7 @@ actor PreviewAPIClient: APIClientProtocol {
             updatedAt: date
         )
         roomsStorage = [defaultRoom]
+        roomSettings = [defaultRoom.id: RoomSettings.default]
 
         let sampleJob = Job(
             id: UUID().uuidString,
@@ -78,6 +80,7 @@ actor PreviewAPIClient: APIClientProtocol {
             updatedAt: Date()
         )
         roomsStorage.append(room)
+        roomSettings[room.id] = RoomSettings.default
         return room
     }
 
@@ -96,6 +99,7 @@ actor PreviewAPIClient: APIClientProtocol {
     func deleteRoom(roomId: String, deviceId: String) async throws {
         roomsStorage.removeAll { $0.id == roomId }
         roomRunnerIndex = roomRunnerIndex.filter { !$0.key.hasPrefix(roomId) }
+        roomSettings.removeValue(forKey: roomId)
     }
 
     func fetchMessages(
@@ -108,6 +112,17 @@ actor PreviewAPIClient: APIClientProtocol {
         let jobs = roomRunnerIndex[key(for: roomId, runner: runner)] ?? []
         guard offset < jobs.count else { return [] }
         return Array(jobs.dropFirst(offset).prefix(limit))
+    }
+
+    // MARK: - Room Settings
+
+    func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings? {
+        roomSettings[roomId] ?? RoomSettings.default
+    }
+
+    func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings? {
+        roomSettings[roomId] = settings ?? RoomSettings.default
+        return roomSettings[roomId] ?? RoomSettings.default
     }
 
     private func key(for roomId: String, runner: String) -> String {
