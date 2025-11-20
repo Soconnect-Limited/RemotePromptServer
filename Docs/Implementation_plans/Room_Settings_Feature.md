@@ -552,74 +552,74 @@ subprocess.run(["claude", "--print", "--model", model, custom_flag], ...)
 ### Phase 1: サーバー側基盤 (8-10時間)
 
 #### 1.1 DBスキーマ変更
-- [ ] マイグレーションスクリプト作成（`ALTER TABLE rooms ADD COLUMN settings TEXT`）
-- [ ] 開発環境でマイグレーション実行・動作確認
-- [ ] ロールバックスクリプト作成
+- [x] マイグレーションスクリプト作成（`ALTER TABLE rooms ADD COLUMN settings TEXT`）
+- [x] 開発環境でマイグレーション実行・動作確認
+- [x] ロールバックスクリプト作成
 
 #### 1.2 バリデーションロジック
-- [ ] `ALLOWED_VALUES`定義
-- [ ] `RESERVED_FLAGS`定義（予約オプション）
-- [ ] `DANGEROUS_FLAGS`定義
-- [ ] `SHELL_META_CHARS`定義
-- [ ] `validate_settings(settings: dict | None) -> None`関数実装
-  - [ ] **settings=Noneの場合は即座にreturn（デフォルト設定を使用）**
-  - [ ] model名検証（ALLOWED_VALUESリスト照合）
-  - [ ] permission_mode/sandbox/approval_policy/reasoning_effort等の値検証
-  - [ ] tools配列検証（ALLOWED_VALUESリスト照合）
-  - [ ] custom_flags検証:
-    - [ ] 予約オプション拒否（`validate_custom_flags(flags, ai_type)`）
-    - [ ] 危険フラグ拒否
-    - [ ] シェルメタ文字拒否
-    - [ ] 長さ・個数制限
-- [ ] ユニットテスト作成（**24ケース、上記V1-V24に対応**）
+- [x] `ALLOWED_VALUES`定義
+- [x] `RESERVED_FLAGS`定義（予約オプション）
+- [x] `DANGEROUS_FLAGS`定義
+- [x] `SHELL_META_CHARS`定義
+- [x] `validate_settings(settings: dict | None) -> None`関数実装
+  - [x] **settings=Noneの場合は即座にreturn（デフォルト設定を使用）**
+  - [x] model名検証（ALLOWED_VALUESリスト照合）
+  - [x] permission_mode/sandbox/approval_policy/reasoning_effort等の値検証
+  - [x] tools配列検証（ALLOWED_VALUESリスト照合）
+  - [x] custom_flags検証:
+    - [x] 予約オプション拒否（`validate_custom_flags(flags, ai_type)`）
+    - [x] 危険フラグ拒否
+    - [x] シェルメタ文字拒否
+    - [x] 長さ・個数制限
+- [x] ユニットテスト作成（**24ケース、上記V1-V24に対応**）
 
 #### 1.3 REST API実装
-- [ ] `GET /rooms/{room_id}/settings`エンドポイント
-  - [ ] device_id認証
-  - [ ] room所有権チェック
-  - [ ] settings列読み取り（NULL時はnull返却）
-  - [ ] JSONレスポンス返却
-- [ ] `PUT /rooms/{room_id}/settings`エンドポイント
-  - [ ] device_id認証
-  - [ ] room所有権チェック
-  - [ ] **リクエストボディサイズチェック（10KB制限、413返却）**
-  - [ ] リクエストボディパース（`null`の場合も対応）
-  - [ ] バリデーション実行（`validate_settings()`）
-  - [ ] settings列更新（`null`の場合はDB列をNULLに更新）
-  - [ ] JSONレスポンス返却
-- [ ] エラーハンドリング（401/403/404/400/413/500）
-- [ ] API統合テスト作成
+- [x] `GET /rooms/{room_id}/settings`エンドポイント
+  - [x] device_id認証
+  - [x] room所有権チェック
+  - [x] settings列読み取り（NULL時はnull返却）
+  - [x] JSONレスポンス返却
+- [x] `PUT /rooms/{room_id}/settings`エンドポイント
+  - [x] device_id認証
+  - [x] room所有権チェック
+  - [x] **リクエストボディサイズチェック（10KB制限、413返却）**
+  - [x] リクエストボディパース（`null`の場合も対応）
+  - [x] バリデーション実行（`validate_settings()`）
+  - [x] settings列更新（`null`の場合はDB列をNULLに更新）
+  - [x] JSONレスポンス返却
+- [x] エラーハンドリング（401/403/404/400/413/500）
+- [x] API統合テスト作成
 
 #### 1.4 CLI実行ロジック変更
-- [ ] `build_claude_command(prompt, settings)`実装
-- [ ] `build_codex_command(prompt, settings)`実装
-- [ ] job作成処理でsettings読み込み・CLI構築
-- [ ] 既存機能（settings=NULL）の動作確認
+- [x] `build_claude_command(prompt, settings)`実装
+- [x] `build_codex_command(prompt, settings)`実装
+- [x] job作成処理でsettings読み込み・CLI構築
+- [x] 既存機能（settings=NULL）の動作確認
 
 ---
 
 ### Phase 2: iOS データ層 (4-6時間)
 
 #### 2.1 モデル定義
-- [ ] `RoomSettings`構造体
-- [ ] `ClaudeSettings`構造体（CodingKeys含む）
-- [ ] `CodexSettings`構造体（CodingKeys含む）
+- [x] `RoomSettings`構造体
+- [x] `ClaudeSettings`構造体（CodingKeys含む）
+- [x] `CodexSettings`構造体（CodingKeys含む）
 - [ ] `GetSettingsResponse`構造体
 - [ ] `UpdateSettingsRequest`構造体
-- [ ] デフォルト値定義（`.default`）
-- [ ] Equatable適合確認
+- [x] デフォルト値定義（`.default`）
+- [x] Equatable適合確認
 
 #### 2.2 API Service拡張
-- [ ] `APIService`に`getSettings(roomId:deviceId:)`メソッド追加
-- [ ] `APIService`に`updateSettings(roomId:deviceId:settings:)`メソッド追加
+- [x] `APIService`に`getSettings(roomId:deviceId:)`メソッド追加
+- [x] `APIService`に`updateSettings(roomId:deviceId:settings:)`メソッド追加
 - [ ] エラーハンドリング（`APIError.unauthorized`, `.forbidden`, `.validationError`等）
 - [ ] ユニットテスト（モックレスポンスで動作確認）
 
 #### 2.3 ViewModelロジック
 - [ ] `RoomDetailViewModel`に`@Published var settings: RoomSettings?`追加
-- [ ] `loadSettings()`メソッド実装
-- [ ] `updateSettings(_:)`メソッド実装
-- [ ] エラー状態管理（`@Published var settingsError: String?`）
+- [x] `loadSettings()`メソッド実装（`RoomSettingsViewModel`で対応）
+- [x] `updateSettings(_:)`メソッド実装（save/ reset メソッドで対応）
+- [x] エラー状態管理（`@Published var settingsError: String?`相当=errorMessage）
 
 ---
 
