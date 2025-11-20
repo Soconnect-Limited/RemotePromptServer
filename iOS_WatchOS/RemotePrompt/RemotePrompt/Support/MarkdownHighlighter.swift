@@ -1,38 +1,34 @@
 import Foundation
-import SwiftUI
+import UIKit
 
 struct MarkdownHighlighter {
     struct Style {
-        let color: Color
-        let font: Font?
+        let color: UIColor
+        let font: UIFont?
     }
 
     private let patterns: [(NSRegularExpression, Style)] = [
-        (try! NSRegularExpression(pattern: "^(#{1,3})\\s.+", options: [.anchorsMatchLines]), Style(color: .blue, font: .headline)),
-        (try! NSRegularExpression(pattern: "^(-|\\*|\\d+\\. )\\s.+", options: [.anchorsMatchLines]), Style(color: .green, font: .body)),
-        (try! NSRegularExpression(pattern: "```.*?```", options: [.dotMatchesLineSeparators]), Style(color: .orange, font: .body.monospaced())),
-        (try! NSRegularExpression(pattern: "`[^`]+`", options: []), Style(color: .orange, font: .body.monospaced())),
-        (try! NSRegularExpression(pattern: "\\*\\*[^*]+\\*\\*", options: []), Style(color: .purple, font: .body.bold())),
-        (try! NSRegularExpression(pattern: "\\*[^*]+\\*", options: []), Style(color: .purple, font: .body.italic())),
-        (try! NSRegularExpression(pattern: "\\[[^]]+\\]\\([^)]*\\)", options: []), Style(color: .cyan, font: .body))
+        (try! NSRegularExpression(pattern: "^(#{1,3})\\s.+", options: [.anchorsMatchLines]), Style(color: .systemBlue, font: .preferredFont(forTextStyle: .headline))),
+        (try! NSRegularExpression(pattern: "^(-|\\*|\\d+\\. )\\s.+", options: [.anchorsMatchLines]), Style(color: .systemGreen, font: .preferredFont(forTextStyle: .body))),
+        (try! NSRegularExpression(pattern: "```.*?```", options: [.dotMatchesLineSeparators]), Style(color: .systemOrange, font: UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular))),
+        (try! NSRegularExpression(pattern: "`[^`]+`", options: []), Style(color: .systemOrange, font: UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular))),
+        (try! NSRegularExpression(pattern: "\\*\\*[^*]+\\*\\*", options: []), Style(color: .systemPurple, font: .boldSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize))),
+        (try! NSRegularExpression(pattern: "\\*[^*]+\\*", options: []), Style(color: .systemPurple, font: .italicSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize))),
+        (try! NSRegularExpression(pattern: "\\[[^]]+\\]\\([^)]*\\)", options: []), Style(color: .systemTeal, font: .preferredFont(forTextStyle: .body)))
     ]
 
     func highlight(_ text: String) -> AttributedString {
-        var attributed = AttributedString(text)
+        let mutable = NSMutableAttributedString(string: text)
         let fullRange = NSRange(location: 0, length: (text as NSString).length)
         for (regex, style) in patterns {
             regex.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
                 guard let range = match?.range else { return }
-                if let swiftRange = Range(range, in: text) {
-                    var sub = AttributedString(text[swiftRange])
-                    sub.foregroundColor = style.color
-                    if let font = style.font {
-                        sub.font = font
-                    }
-                    attributed.replaceSubrange(swiftRange, with: sub)
+                mutable.addAttribute(.foregroundColor, value: style.color, range: range)
+                if let font = style.font {
+                    mutable.addAttribute(.font, value: font, range: range)
                 }
             }
         }
-        return attributed
+        return AttributedString(mutable)
     }
 }
