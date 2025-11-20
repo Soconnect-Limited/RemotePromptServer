@@ -21,6 +21,7 @@ class Room(Base):
     workspace_path = Column(String(500), nullable=False)
     icon = Column(String(50), nullable=False, default="folder")
     device_id = Column(String(100), nullable=False)
+    settings = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 

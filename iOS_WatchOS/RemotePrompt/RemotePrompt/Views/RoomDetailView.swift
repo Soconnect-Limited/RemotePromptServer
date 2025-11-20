@@ -26,6 +26,7 @@ struct RoomDetailView: View {
     @StateObject private var codexViewModel: ChatViewModel
     @State private var selectedTab: RunnerTab = .claude
     @State private var showFileBrowser = false
+    @State private var showRoomSettings = false
 
     init(room: Room, apiClient: APIClientProtocol = APIClient.shared, enableStreaming: Bool = !AppEnvironment.isUITesting) {
         self.room = room
@@ -88,10 +89,15 @@ struct RoomDetailView: View {
         .sheet(isPresented: $showFileBrowser) {
             FileBrowserView(room: room)
         }
+        .sheet(isPresented: $showRoomSettings) {
+            RoomSettingsView(room: room)
+        }
     }
 
     private func roomTab(viewModel: ChatViewModel) -> some View {
-        ChatView(viewModel: viewModel)
+        ChatView(viewModel: viewModel) {
+            showRoomSettings = true
+        }
             .background(Color(.systemBackground))
     }
 }

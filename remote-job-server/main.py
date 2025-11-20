@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+import json
 from typing import List, Optional
 
 from fastapi import (
@@ -26,6 +27,14 @@ from models import Device, DeviceSession, Job, Room, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
 from utils.path_validator import validate_workspace_path
+from utils.settings_validator import (
+    ALLOWED_VALUES,
+    RESERVED_FLAGS,
+    DANGEROUS_FLAGS,
+    SHELL_META_CHARS,
+    ValidationError,
+    validate_settings,
+)
 from auth_helpers import verify_room_ownership
 from file_operations import list_files, read_file, write_file, WriteResult
 from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
@@ -43,6 +52,7 @@ app.add_middleware(
 session_manager = SessionManager()
 job_manager = JobManager(session_manager=session_manager, sse_manager=sse_manager)
 ALLOWED_RUNNERS = {"claude", "codex"}
+MAX_SETTINGS_BYTES = 10_240  # 10KB
 
 
 def get_db() -> Session:
@@ -147,6 +157,60 @@ def delete_room(
     db.delete(room)
     db.commit()
     return {"status": "ok"}
+
+
+# ========== Room Settings APIs ==========
+
+
+@app.get("/rooms/{room_id}/settings")
+async def get_room_settings(
+    room_id: str,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+    try:
+        parsed = json.loads(room.settings) if room.settings else None
+    except json.JSONDecodeError:
+        parsed = None
+    return {"room_id": room_id, "settings": parsed}
+
+
+@app.put("/rooms/{room_id}/settings")
+async def update_room_settings(
+    room_id: str,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+
+    body = await request.body()
+    if len(body) > MAX_SETTINGS_BYTES:
+        raise HTTPException(status_code=413, detail="Settings JSON exceeds 10KB limit")
+
+    if not body:
+        raise HTTPException(status_code=400, detail="Request body is empty")
+
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Request body must be UTF-8") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {exc.msg}") from exc
+
+    settings_obj = payload if payload is not None else None
+    try:
+        sanitized = validate_settings(settings_obj)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    room.settings = json.dumps(sanitized) if sanitized is not None else None
+    room.updated_at = utcnow()
+    db.commit()
+    return {"room_id": room_id, "settings": sanitized}
 
 
 # ========== File Browser APIs ==========
@@ -265,12 +329,17 @@ def create_job(
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
     try:
+        room_settings = json.loads(room.settings) if room.settings else None
+    except json.JSONDecodeError:
+        room_settings = None
+    try:
         job = job_manager.create_job(
             runner=req.runner,
             input_text=req.input_text,
             device_id=req.device_id,
             room_id=req.room_id,
             workspace_path=room.workspace_path,
+            settings=room_settings,
             notify_token=req.notify_token,
             background_tasks=background_tasks,
         )

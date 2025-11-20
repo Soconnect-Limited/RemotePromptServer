@@ -39,6 +39,7 @@ class JobManager:
         device_id: str,
         room_id: str,
         workspace_path: str,
+        settings: Optional[dict] = None,
         notify_token: Optional[str] = None,
         background_tasks: Optional[object] = None,
     ) -> dict:
@@ -61,13 +62,13 @@ class JobManager:
             db.close()
 
         if background_tasks is not None:
-            background_tasks.add_task(self._execute_job, job.id, workspace_path)
+            background_tasks.add_task(self._execute_job, job.id, workspace_path, settings)
         else:
-            self._execute_job(job.id, workspace_path)
+            self._execute_job(job.id, workspace_path, settings)
 
         return job.to_dict()
 
-    def _execute_job(self, job_id: str, workspace_path: str) -> None:
+    def _execute_job(self, job_id: str, workspace_path: str, settings: Optional[dict]) -> None:
         db = SessionLocal()
         try:
             job = db.query(Job).filter_by(id=job_id).first()
@@ -94,6 +95,7 @@ class JobManager:
                 room_id=job.room_id,
                 workspace_path=workspace_path,
                 continue_session=True,
+                settings=settings,
             )
 
             if result.get("success"):

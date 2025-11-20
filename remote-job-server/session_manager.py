@@ -11,6 +11,7 @@ from typing import Dict, Optional
 
 from database import SessionLocal
 from models import DeviceSession
+from utils.cli_builder import build_claude_command, build_codex_command
 
 LOGGER = logging.getLogger(__name__)
 CODEx_SESSION_PATTERN = re.compile(r"session id:\s+([a-f0-9\-]{36})", re.IGNORECASE)
@@ -71,8 +72,9 @@ class ClaudeSessionManager:
         room_id: str,
         workspace_path: Optional[str] = None,
         continue_session: bool = True,
+        settings: Optional[dict] = None,
     ) -> Dict[str, Optional[str]]:
-        cmd = ["claude", "--print", "--output-format", "text"]
+        cmd = build_claude_command(settings)
         session_id = None
 
         if continue_session:
@@ -168,8 +170,9 @@ class CodexSessionManager:
         room_id: str,
         workspace_path: Optional[str] = None,
         continue_session: bool = True,
+        settings: Optional[dict] = None,
     ) -> Dict[str, Optional[str]]:
-        cmd = ["codex", "exec"]
+        cmd = build_codex_command(settings)
         session_id = None
 
         if continue_session:
@@ -226,14 +229,15 @@ class SessionManager:
         room_id: str,
         workspace_path: Optional[str] = None,
         continue_session: bool = True,
+        settings: Optional[dict] = None,
     ) -> Dict[str, Optional[str]]:
         if runner == "claude":
             return self.claude_manager.execute_job(
-                prompt, device_id, room_id, workspace_path, continue_session
+                prompt, device_id, room_id, workspace_path, continue_session, settings
             )
         if runner == "codex":
             return self.codex_manager.execute_job(
-                prompt, device_id, room_id, workspace_path, continue_session
+                prompt, device_id, room_id, workspace_path, continue_session, settings
             )
         raise ValueError(f"Unknown runner: {runner}")
 

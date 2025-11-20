@@ -28,7 +28,13 @@ class JobManagerTests(unittest.TestCase):
         }
         manager = JobManager(session_manager=fake_session)
 
-        job_dict = manager.create_job("claude", "say hi", "dev-1")
+        job_dict = manager.create_job(
+            "claude",
+            "say hi",
+            "dev-1",
+            room_id="room-1",
+            workspace_path="/tmp",
+        )
         self.assertEqual(job_dict["status"], "queued")
 
         db = SessionLocal()
@@ -49,7 +55,13 @@ class JobManagerTests(unittest.TestCase):
         }
         manager = JobManager(session_manager=fake_session)
 
-        job_dict = manager.create_job("codex", "fail", "dev-2")
+        job_dict = manager.create_job(
+            "codex",
+            "fail",
+            "dev-2",
+            room_id="room-2",
+            workspace_path="/tmp",
+        )
 
         db = SessionLocal()
         try:
@@ -64,8 +76,8 @@ class JobManagerTests(unittest.TestCase):
         fake_session = MagicMock()
         fake_session.execute_job.return_value = {"success": True, "output": "", "error": ""}
         manager = JobManager(session_manager=fake_session)
-        manager.create_job("claude", "one", "device-a")
-        manager.create_job("claude", "two", "device-b")
+        manager.create_job("claude", "one", "device-a", room_id="room-a", workspace_path="/tmp")
+        manager.create_job("claude", "two", "device-b", room_id="room-b", workspace_path="/tmp")
 
         jobs = manager.get_jobs(device_id="device-a")
         self.assertEqual(len(jobs), 1)
