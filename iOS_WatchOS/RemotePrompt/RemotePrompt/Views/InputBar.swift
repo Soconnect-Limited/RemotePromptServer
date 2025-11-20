@@ -15,6 +15,12 @@ struct InputBar: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .disabled(isLoading)
+                .submitLabel(.send)
+                .onSubmit {
+                    if canSend {
+                        onSend()
+                    }
+                }
                 .accessibilityIdentifier("chat.input")
 
             Button(action: onSend) {

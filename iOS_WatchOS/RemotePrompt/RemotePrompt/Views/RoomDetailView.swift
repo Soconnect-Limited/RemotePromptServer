@@ -47,16 +47,31 @@ struct RoomDetailView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            roomTab(viewModel: claudeViewModel)
-                .tag(RunnerTab.claude)
-                .tabItem { Label("Claude", systemImage: RunnerTab.claude.systemImage) }
+        VStack(spacing: 0) {
+            // Custom tab picker at the top
+            Picker("Runner", selection: $selectedTab) {
+                ForEach(RunnerTab.allCases) { tab in
+                    Label(tab.title, systemImage: tab.systemImage)
+                        .tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
 
-            roomTab(viewModel: codexViewModel)
-                .tag(RunnerTab.codex)
-                .tabItem { Label("Codex", systemImage: RunnerTab.codex.systemImage) }
+            // Content based on selection
+            Group {
+                switch selectedTab {
+                case .claude:
+                    roomTab(viewModel: claudeViewModel)
+                case .codex:
+                    roomTab(viewModel: codexViewModel)
+                }
+            }
         }
         .navigationTitle(room.name)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
