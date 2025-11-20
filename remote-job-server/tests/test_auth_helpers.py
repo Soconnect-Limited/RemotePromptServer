@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -22,11 +21,8 @@ def reset_db():
     Base.metadata.drop_all(bind=engine)
 
 
-def run_async(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
-
-
-def test_verify_room_ownership_success():
+@pytest.mark.anyio(backend="asyncio")
+async def test_verify_room_ownership_success():
     db = SessionLocal()
     try:
         room = Room(
@@ -40,23 +36,25 @@ def test_verify_room_ownership_success():
         )
         db.add(room)
         db.commit()
-        verified = run_async(verify_room_ownership("room-1", "dev-1", db))
+        verified = await verify_room_ownership("room-1", "dev-1", db)
         assert verified.id == "room-1"
     finally:
         db.close()
 
 
-def test_verify_room_ownership_not_found():
+@pytest.mark.anyio(backend="asyncio")
+async def test_verify_room_ownership_not_found():
     db = SessionLocal()
     try:
         with pytest.raises(HTTPException) as exc:
-            run_async(verify_room_ownership("missing", "dev-1", db))
+            await verify_room_ownership("missing", "dev-1", db)
         assert exc.value.status_code == 404
     finally:
         db.close()
 
 
-def test_verify_room_ownership_forbidden():
+@pytest.mark.anyio(backend="asyncio")
+async def test_verify_room_ownership_forbidden():
     db = SessionLocal()
     try:
         room = Room(
@@ -71,7 +69,7 @@ def test_verify_room_ownership_forbidden():
         db.add(room)
         db.commit()
         with pytest.raises(HTTPException) as exc:
-            run_async(verify_room_ownership("room-2", "other", db))
+            await verify_room_ownership("room-2", "other", db)
         assert exc.value.status_code == 403
     finally:
         db.close()
