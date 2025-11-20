@@ -19,6 +19,14 @@
 6. **明示的な互換モード管理**: 環境変数フラグ + ログ観測で移行状態を可視化
 7. **性能最適化**: インデックス設計とON DELETE CASCADE検証
 
+## 進捗チェック (v2.1 修正分)
+
+- [x] jobsスキーマを現行実装（models.py）と一致させた（exit_code / started_at / notify_token 追加、room_id NOT NULL）
+- [x] v4→v3ロールバック仕様に exit_code / started_at / notify_token を反映
+- [x] v4.0→v4.1マイグレーション仕様を現行スキーマ全列に揃えた
+- [ ] 実コードのマイグレーションスクリプト実装
+- [ ] 本番DB適用前バックアップとリハーサル
+
 ---
 
 ## データモデル設計
