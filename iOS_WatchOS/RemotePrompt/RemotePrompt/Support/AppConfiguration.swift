@@ -31,7 +31,7 @@ struct AppConfiguration {
     }
 
     var baseURL: String {
-        sanitizeBaseURL(value(for: .baseURL) ?? "http://100.100.30.35:35000")
+        sanitizeBaseURL(value(for: .baseURL) ?? "https://100.100.30.35:8443")
     }
 
     var apiKey: String? {
