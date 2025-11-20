@@ -6,9 +6,9 @@ struct InputBar: View {
     let isLoading: Bool
     @FocusState.Binding var isFocused: Bool
 
-    private func sendAndDismiss() {
+    private func send() {
         onSend()
-        isFocused = false
+        // キーボードは開いたままにする（連続送信のため）
     }
 
     private var canSend: Bool {
@@ -42,12 +42,12 @@ struct InputBar: View {
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {
-                            sendAndDismiss()
+                            send()
                         }
                     }
                     .accessibilityIdentifier("chat.input")
 
-                Button(action: sendAndDismiss) {
+                Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                         .foregroundStyle(canSend ? Color.blue : Color.gray)
