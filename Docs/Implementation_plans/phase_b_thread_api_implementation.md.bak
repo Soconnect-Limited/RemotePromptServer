@@ -70,74 +70,74 @@
 ### Phase B-1: バックエンド実装（推定: 4時間）
 
 #### B-1.1 データベースモデル確認
-- [x] `threads`テーブルのスキーマ確認（id, room_id, name, runner, device_id, created_at, updated_at）
-- [x] 既存のインデックス確認（room_id, runner, updated_at）
-- [x] 外部キー制約確認（room_id → rooms.id）
+- [ ] `threads`テーブルのスキーマ確認（id, room_id, name, runner, device_id, created_at, updated_at）
+- [ ] 既存のインデックス確認（room_id, runner, updated_at）
+- [ ] 外部キー制約確認（room_id → rooms.id）
 
 #### B-1.2 Thread作成API実装
-- [x] `POST /rooms/{room_id}/threads` エンドポイント作成
-- [x] リクエストボディのバリデーション実装
-  - [x] `name`: 必須、1-100文字
-  - [x] `runner`: 必須、"claude" or "codex"
-  - [x] `device_id`: 必須、Query parameter
-- [x] Thread UUID生成実装
-- [x] データベース挿入実装
-- [x] レスポンスモデル定義（Thread JSON）
-- [x] エラーハンドリング実装
-  - [x] 404: Room not found
-  - [x] 403: Room所有権エラー
-  - [x] 400: バリデーションエラー
+- [ ] `POST /rooms/{room_id}/threads` エンドポイント作成
+- [ ] リクエストボディのバリデーション実装
+  - [ ] `name`: 必須、1-100文字
+  - [ ] `runner`: 必須、"claude" or "codex"
+  - [ ] `device_id`: 必須、Query parameter
+- [ ] Thread UUID生成実装
+- [ ] データベース挿入実装
+- [ ] レスポンスモデル定義（Thread JSON）
+- [ ] エラーハンドリング実装
+  - [ ] 404: Room not found
+  - [ ] 403: Room所有権エラー
+  - [ ] 400: バリデーションエラー
 
 #### B-1.3 Thread一覧取得API実装（v4.1: サーバー側フィルタ + ページネーション）
-- [x] `GET /rooms/{room_id}/threads` エンドポイント作成
-- [x] Query parameters実装
-  - [x] `device_id`: 必須
-  - [x] `runner`: オプショナル（**[v4.1] サーバー側でWHERE runner = ? によるフィルタリング実装**）
-  - [x] `limit`: オプショナル（デフォルト50、最大200）**[v4.1で追加]**
-  - [x] `offset`: オプショナル（デフォルト0、ページネーション用）**[v4.1で追加]**
-- [x] データベースクエリ実装
-  - [x] `updated_at DESC` でソート
-  - [x] **[v4.1] runnerパラメータ指定時はWHERE runner = ? を追加（サーバー側フィルタ）**
-  - [x] **[v4.1] LIMIT ? OFFSET ? によるページネーション実装**
-  - [x] **[v4.1] limitの最大値検証（200超えたら400エラー）**
-- [x] レスポンス実装（Thread配列）
-- [x] エラーハンドリング実装
-  - [x] 404: Room not found
-  - [x] 403: Room所有権エラー
-  - [x] **[v4.1] 400: limit超過エラー（limit > 200）**
+- [ ] `GET /rooms/{room_id}/threads` エンドポイント作成
+- [ ] Query parameters実装
+  - [ ] `device_id`: 必須
+  - [ ] `runner`: オプショナル（**[v4.1] サーバー側でWHERE runner = ? によるフィルタリング実装**）
+  - [ ] `limit`: オプショナル（デフォルト50、最大200）**[v4.1で追加]**
+  - [ ] `offset`: オプショナル（デフォルト0、ページネーション用）**[v4.1で追加]**
+- [ ] データベースクエリ実装
+  - [ ] `updated_at DESC` でソート
+  - [ ] **[v4.1] runnerパラメータ指定時はWHERE runner = ? を追加（サーバー側フィルタ）**
+  - [ ] **[v4.1] LIMIT ? OFFSET ? によるページネーション実装**
+  - [ ] **[v4.1] limitの最大値検証（200超えたら400エラー）**
+- [ ] レスポンス実装（Thread配列）
+- [ ] エラーハンドリング実装
+  - [ ] 404: Room not found
+  - [ ] 403: Room所有権エラー
+  - [ ] **[v4.1] 400: limit超過エラー（limit > 200）**
 
 #### B-1.4 Thread更新API実装（v4.1: device_id Query Parameter必須化）
-- [x] `PATCH /threads/{thread_id}` エンドポイント作成
-- [x] **[v4.1] Query Parameters実装**
-  - [x] **`device_id`: 必須、認証用（MASTER_SPECIFICATION.md v4.1で明記）**
-- [x] リクエストボディのバリデーション実装
-  - [x] `name`: オプショナル、1-100文字
-- [x] Thread存在確認実装
-- [x] **[v4.1] Room所有権確認実装（thread.room_id → room.device_id が device_id と一致するか検証）**
-- [x] データベース更新実装（updated_at自動更新）
-- [x] レスポンス実装（更新後のThread JSON）
-- [x] エラーハンドリング実装
-  - [x] 404: Thread not found
-  - [x] 403: 所有権エラー（device_id不一致）
-  - [x] 400: バリデーションエラー（name長さ超過など）
+- [ ] `PATCH /threads/{thread_id}` エンドポイント作成
+- [ ] **[v4.1] Query Parameters実装**
+  - [ ] **`device_id`: 必須、認証用（MASTER_SPECIFICATION.md v4.1で明記）**
+- [ ] リクエストボディのバリデーション実装
+  - [ ] `name`: オプショナル、1-100文字
+- [ ] Thread存在確認実装
+- [ ] **[v4.1] Room所有権確認実装（thread.room_id → room.device_id が device_id と一致するか検証）**
+- [ ] データベース更新実装（updated_at自動更新）
+- [ ] レスポンス実装（更新後のThread JSON）
+- [ ] エラーハンドリング実装
+  - [ ] 404: Thread not found
+  - [ ] 403: 所有権エラー（device_id不一致）
+  - [ ] 400: バリデーションエラー（name長さ超過など）
 
 #### B-1.5 Thread削除API実装（v4.1: Jobs処理明確化 - CASCADE削除せず）
-- [x] `DELETE /threads/{thread_id}` エンドポイント作成
-- [x] Query parameters実装
-  - [x] `device_id`: 必須
-- [x] Thread存在確認実装
-- [x] Room所有権確認実装（thread.room_id → room.device_id が device_id と一致するか検証）
-- [x] **[v4.1] 削除時の動作確認（データベーススキーマのFOREIGN KEY制約に基づく）**
-  - [x] **Threadレコード削除（DELETE FROM threads WHERE id = ?）**
-  - [x] **関連Jobsのthread_idはNULLに設定（ON DELETE SET NULL）**
+- [ ] `DELETE /threads/{thread_id}` エンドポイント作成
+- [ ] Query parameters実装
+  - [ ] `device_id`: 必須
+- [ ] Thread存在確認実装
+- [ ] Room所有権確認実装（thread.room_id → room.device_id が device_id と一致するか検証）
+- [ ] **[v4.1] 削除時の動作確認（データベーススキーマのFOREIGN KEY制約に基づく）**
+  - [ ] **Threadレコード削除（DELETE FROM threads WHERE id = ?）**
+  - [ ] **関連Jobsのthread_idはNULLに設定（ON DELETE SET NULL）**
     - ❌ **JobsはCASCADE削除されない（v4.1で明確化）**
     - ✅ **Jobsは削除されず、thread_id=NULLとして保持される**
-  - [x] **関連DeviceSessionsはCASCADE削除（ON DELETE CASCADE）**
-- [x] データベース削除実装
-- [x] レスポンス実装（204 No Content）
-- [x] エラーハンドリング実装
-  - [x] 404: Thread not found
-  - [x] 403: 所有権エラー（device_id不一致）
+  - [ ] **関連DeviceSessionsはCASCADE削除（ON DELETE CASCADE）**
+- [ ] データベース削除実装
+- [ ] レスポンス実装（204 No Content）
+- [ ] エラーハンドリング実装
+  - [ ] 404: Thread not found
+  - [ ] 403: 所有権エラー（device_id不一致）
 
 #### B-1.6 APIテスト作成（v4.1準拠）
 - [ ] Thread作成テスト（正常系）
@@ -169,101 +169,97 @@
 - [ ] Thread削除テスト（異常系: Thread不存在、所有権エラー）
 
 #### B-1.7 デプロイ準備
-- [x] サーバー起動確認
+- [ ] サーバー起動確認
 - [ ] APIドキュメント更新（Swagger/OpenAPI）
-- [x] ログ出力確認
+- [ ] ログ出力確認
 
 ---
 
 ### Phase B-2: iOS実装（推定: 6時間）
 
 #### B-2.1 データモデル確認
-- [x] `Thread.swift` モデル確認
-  - [x] プロパティ確認（id, roomId, name, runner, createdAt, updatedAt）
-  - [x] CodingKeys確認（snake_case ↔ camelCase変換）
-  - [x] Hashable, Identifiable準拠確認
+- [ ] `Thread.swift` モデル確認
+  - [ ] プロパティ確認（id, roomId, name, runner, createdAt, updatedAt）
+  - [ ] CodingKeys確認（snake_case ↔ camelCase変換）
+  - [ ] Hashable, Identifiable準拠確認
 
 #### B-2.2 APIClient拡張
-- [x] `APIClientProtocol` にThread APIメソッド追加
+- [ ] `APIClientProtocol` にThread APIメソッド追加
   ```swift
   func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread
   func fetchThreads(roomId: String, deviceId: String, runner: String?) async throws -> [Thread]
   func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread
   func deleteThread(threadId: String, deviceId: String) async throws
   ```
-- [x] `APIClient` にThread API実装
-  - [x] `createThread` 実装（POST /rooms/{room_id}/threads）
-  - [x] `fetchThreads` 実装（GET /rooms/{room_id}/threads）
-  - [x] `updateThread` 実装（PATCH /threads/{thread_id}）
-  - [x] `deleteThread` 実装（DELETE /threads/{thread_id}）
-- [x] エラーハンドリング実装
-  - [x] 404エラー処理
-  - [x] 403エラー処理
-  - [x] 400エラー処理
-  - [x] ネットワークエラー処理
+- [ ] `APIClient` にThread API実装
+  - [ ] `createThread` 実装（POST /rooms/{room_id}/threads）
+  - [ ] `fetchThreads` 実装（GET /rooms/{room_id}/threads）
+  - [ ] `updateThread` 実装（PATCH /threads/{thread_id}）
+  - [ ] `deleteThread` 実装（DELETE /threads/{thread_id}）
+- [ ] エラーハンドリング実装
+  - [ ] 404エラー処理
+  - [ ] 403エラー処理
+  - [ ] 400エラー処理
+  - [ ] ネットワークエラー処理
 
 #### B-2.3 PreviewAPIClient対応
-- [x] `PreviewAPIClient` にThread APIモック実装
-  - [x] `createThread` モック（UUID生成、配列に追加）
-  - [x] `fetchThreads` モック（フィルタリング実装）
-  - [x] `updateThread` モック（配列内更新）
-  - [x] `deleteThread` モック（配列から削除）
-- [x] モックデータ準備（サンプルThread配列）
+- [ ] `PreviewAPIClient` にThread APIモック実装
+  - [ ] `createThread` モック（UUID生成、配列に追加）
+  - [ ] `fetchThreads` モック（フィルタリング実装）
+  - [ ] `updateThread` モック（配列内更新）
+  - [ ] `deleteThread` モック（配列から削除）
+- [ ] モックデータ準備（サンプルThread配列）
 
 #### B-2.4 ThreadListViewModel修正
-- [x] `fetchThreads()` メソッド修正
-  - [x] `apiClient.fetchThreads()` 呼び出し実装
-  - [x] エラーハンドリング実装
-  - [x] `isLoading` 状態管理実装
-- [x] `createThread()` メソッド修正
-  - [x] `apiClient.createThread()` 呼び出し実装
-  - [x] 作成後のThread配列更新実装
-  - [x] エラーハンドリング実装
-- [x] `updateThreadName()` メソッド修正
-  - [x] `apiClient.updateThread()` 呼び出し実装
-  - [x] 更新後のThread配列更新実装
-  - [x] エラーハンドリング実装
-- [x] `deleteThread()` メソッド修正
-  - [x] `apiClient.deleteThread()` 呼び出し実装
-  - [x] 削除後のThread配列更新実装
-  - [x] エラーハンドリング実装
+- [ ] `fetchThreads()` メソッド修正
+  - [ ] `apiClient.fetchThreads()` 呼び出し実装
+  - [ ] エラーハンドリング実装
+  - [ ] `isLoading` 状態管理実装
+- [ ] `createThread()` メソッド修正
+  - [ ] `apiClient.createThread()` 呼び出し実装
+  - [ ] 作成後のThread配列更新実装
+  - [ ] エラーハンドリング実装
+- [ ] `updateThreadName()` メソッド修正
+  - [ ] `apiClient.updateThread()` 呼び出し実装
+  - [ ] 更新後のThread配列更新実装
+  - [ ] エラーハンドリング実装
+- [ ] `deleteThread()` メソッド修正
+  - [ ] `apiClient.deleteThread()` 呼び出し実装
+  - [ ] 削除後のThread配列更新実装
+  - [ ] エラーハンドリング実装
 
 #### B-2.5 RoomDetailView修正（重要: View再生成問題の解決）
-- [x] `.id()` 修飾子削除
-  - [x] [RoomDetailView.swift:105](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L105) の `.id("\(thread.id)-\(selectedRunner.rawValue)")` を削除
-- [x] ChatViewの動的更新対応
-  - [x] runner変更時にChatViewModelを再生成せずに更新する仕組み実装
-  - [x] 方法1: ChatViewModelに `updateRunner(_ runner: String)` メソッド追加（採用）
-  - [x] `@State private var chatViewModel: ChatViewModel?` 追加 ([RoomDetailView.swift:32](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L32))
-  - [x] `chatViewContainer(for:)` でchatViewModel永続化 ([RoomDetailView.swift:91-123](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L91-L123))
-  - [x] `.onChange(of: selectedRunner)` でupdateRunner呼び出し ([RoomDetailView.swift:117-122](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L117-L122))
-- [x] Thread選択時の正しいthread_id渡し確認
-  - [x] `chatViewContainer(for thread: Thread)` でthread.idが正しく渡されているか確認
-  - [x] Thread切り替え時にchatViewModelをクリーンアップ ([RoomDetailView.swift:85](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L85))
+- [ ] `.id()` 修飾子削除
+  - [ ] [RoomDetailView.swift:105](../../iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomDetailView.swift#L105) の `.id("\(thread.id)-\(selectedRunner.rawValue)")` を削除
+- [ ] ChatViewの動的更新対応
+  - [ ] runner変更時にChatViewModelを再生成せずに更新する仕組み実装
+  - [ ] 方法1: ChatViewModelに `updateRunner(_ runner: String)` メソッド追加
+  - [ ] 方法2: ChatViewに `runner` をBindingで渡し、変更検知でreload
+- [ ] Thread選択時の正しいthread_id渡し確認
+  - [ ] `chatViewContainer(for thread: Thread)` でthread.idが正しく渡されているか確認
 
 #### B-2.6 ChatViewModel修正
-- [x] threadIdの使用確認
-  - [x] `init` でthreadIdを受け取っているか確認
-  - [x] `createJob` APIでthreadIdが正しく送信されているか確認
-  - [x] `fetchMessages` APIでthreadIdが正しく送信されているか確認
-- [x] runner動的更新対応（B-2.5の方法1の場合）
-  - [x] `updateRunner(_ runner: String) async` メソッド追加 ([ChatViewModel.swift:379-403](../../iOS_WatchOS/RemotePrompt/RemotePrompt/ViewModels/ChatViewModel.swift#L379-L403))
-  - [x] runner変更時にメッセージ再読み込み実装
-  - [x] SSE接続のクリーンアップ実装
-  - [x] `runner`を`private var`に変更 ([ChatViewModel.swift:22](../../iOS_WatchOS/RemotePrompt/RemotePrompt/ViewModels/ChatViewModel.swift#L22))
+- [ ] threadIdの使用確認
+  - [ ] `init` でthreadIdを受け取っているか確認
+  - [ ] `createJob` APIでthreadIdが正しく送信されているか確認
+  - [ ] `fetchMessages` APIでthreadIdが正しく送信されているか確認
+- [ ] runner動的更新対応（B-2.5の方法1の場合）
+  - [ ] `updateRunner(_ runner: String)` メソッド追加
+  - [ ] runner変更時にメッセージ再読み込み実装
+  - [ ] SSE接続のクリーンアップ実装
 
 #### B-2.7 ThreadListView確認
-- [x] Thread一覧表示確認
-- [x] Thread作成ダイアログ確認
-- [x] Thread編集ダイアログ確認
-- [x] Thread削除スワイプアクション確認
-- [x] Thread選択時のコールバック確認
+- [ ] Thread一覧表示確認
+- [ ] Thread作成ダイアログ確認
+- [ ] Thread編集ダイアログ確認
+- [ ] Thread削除スワイプアクション確認
+- [ ] Thread選択時のコールバック確認
 
 #### B-2.8 ビルド・コンパイル確認
-- [x] Xcodeビルド実行
-- [x] ビルドエラー解消
-- [x] 警告解消
-- [x] コード整形（SwiftLint）
+- [ ] Xcodeビルド実行
+- [ ] ビルドエラー解消
+- [ ] 警告解消
+- [ ] コード整形（SwiftLint）
 
 ---
 

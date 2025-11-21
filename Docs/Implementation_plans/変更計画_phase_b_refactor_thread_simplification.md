@@ -139,79 +139,68 @@ RemotePrompt/
 - [x] ビルド確認（import/参照エラーチェック）
 
 #### R-1.2 マイグレーションスクリプト作成
-- [ ] `migrations/v4_2_remove_thread_runner.py`作成
-- [ ] 既存threadsテーブルバックアップ
-- [ ] threadsテーブル再作成（runnerカラムなし）
-  - [ ] `id, room_id, name, device_id, created_at, updated_at`のみ
-  - [ ] FOREIGN KEY(room_id) ON DELETE CASCADE維持
-- [ ] インデックス再作成
-  - [ ] `idx_threads_room_id` (room_id単独)
-  - [ ] `idx_threads_updated_at` (updated_at)
-- [ ] データ復元（runner列を除外してコピー）
-- [ ] 検証
-  - [ ] 新スキーマにrunnerカラムがないことを確認
-  - [ ] データ件数が一致することを確認
-- [ ] ロールバック処理実装
+- [x] `migrations/v4_2_remove_thread_runner.py`作成
+- [x] 既存threadsテーブルバックアップ
+- [x] threadsテーブル再作成（runnerカラムなし）
+  - [x] `id, room_id, name, device_id, created_at, updated_at`のみ
+  - [x] FOREIGN KEY(room_id) ON DELETE CASCADE維持
+- [x] インデックス再作成
+  - [x] `idx_threads_room_id` (room_id単独)
+  - [x] `idx_threads_updated_at` (updated_at)
+- [x] データ復元（runner列を除外してコピー）
+- [x] 検証
+  - [x] 新スキーマにrunnerカラムがないことを確認
+  - [x] データ件数が一致することを確認
+- [x] ロールバック処理実装
 
 #### R-1.3 マイグレーション実行
-- [ ] データベースバックアップ作成
-  - [ ] `cp data/jobs.db data/jobs.db.backup_before_v4.2`
-- [ ] マイグレーション実行
-  - [ ] `python migrations/v4_2_remove_thread_runner.py --auto-approve`
-- [ ] 実行結果確認
-  - [ ] threadsテーブルのrunnerカラム削除確認
-  - [ ] 既存Thread件数確認
-  - [ ] インデックス確認
+- [x] データベースバックアップ作成
+  - [x] `cp data/jobs.db data/jobs.db.backup_before_v4.2`
+- [x] マイグレーション実行
+  - [x] `python3 migrations/v4_2_remove_thread_runner.py --auto-approve`
+- [x] 実行結果確認
+  - [x] threadsテーブルのrunnerカラム削除確認
+  - [x] 既存Thread件数確認（6件）
+  - [x] インデックス確認（2個: idx_threads_room_id, idx_threads_updated_at）
 
 ---
 
 ### Refactor-2: バックエンドAPI修正（推定: 1.5時間）
 
 #### R-2.1 Thread作成API修正（POST /rooms/{room_id}/threads）
-- [ ] `main.py` CreateThreadRequest修正
-  - [ ] `runner`フィールド削除
-  - [ ] Pydantic modelから`runner: str`削除
-- [ ] Thread作成処理修正
-  - [ ] `Thread(runner=body.runner, ...)`削除
-  - [ ] `Thread(name=body.name, room_id=...)`のみ
-- [ ] レスポンス確認
-  - [ ] `runner`フィールドが含まれないことを確認
-- [ ] エラーハンドリング確認
-  - [ ] 404: Room not found（維持）
-  - [ ] 403: 所有権エラー（維持）
-  - [ ] 400: nameバリデーション（維持）
+- [x] `main.py` CreateThreadRequest修正
+  - [x] `runner`フィールド削除
+  - [x] Pydantic modelから`runner: str`削除
+- [x] Thread作成処理修正
+  - [x] `Thread(runner=body.runner, ...)`削除
+  - [x] `Thread(name=body.name, room_id=...)`のみ
+- [x] レスポンス確認
+  - [x] `runner`フィールドが含まれないことを確認
+- [x] エラーハンドリング確認
+  - [x] 404: Room not found（維持）
+  - [x] 403: 所有権エラー（維持）
+  - [x] 400: nameバリデーション（維持）
 
 #### R-2.2 Thread一覧取得API修正（GET /rooms/{room_id}/threads）
-- [ ] Query parameter `runner`削除
-  - [ ] `runner: Optional[str] = Query(None)`削除
-  - [ ] サーバー側runnerフィルタリング削除
-- [ ] クエリ修正
-  - [ ] `if runner: query = query.filter_by(runner=runner)`削除
-  - [ ] `query.order_by(Thread.updated_at.desc())`のみ維持
-- [ ] レスポンス確認
-  - [ ] 全Thread返却（runner関係なく）
-  - [ ] `runner`フィールドが含まれないことを確認
+- [x] Query parameter `runner`削除
+  - [x] `runner: Optional[str] = Query(None)`削除
+  - [x] サーバー側runnerフィルタリング削除
+- [x] クエリ修正
+  - [x] `if runner: query = query.filter_by(runner=runner)`削除
+  - [x] `query.order_by(Thread.updated_at.desc())`のみ維持
+- [x] レスポンス確認
+  - [x] 全Thread返却（runner関係なく）
+  - [x] `runner`フィールドが含まれないことを確認
 
 #### R-2.3 Job作成API修正（POST /jobs）
-- [ ] Thread整合性チェック削除
-  - [ ] `if thread_id:`ブロックの以下を削除:
-    ```python
-    if thread.runner != runner:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Thread runner mismatch: expected {thread.runner}, got {runner}"
-        )
-    ```
-  - [ ] Thread存在確認のみ残す:
-    ```python
-    if thread_id:
-        thread = db.query(Thread).filter_by(id=thread_id).first()
-        if not thread:
-            raise HTTPException(status_code=404, detail="Thread not found")
-    ```
-- [ ] 動作確認
-  - [ ] 任意のrunnerでJob作成可能
-  - [ ] thread_id指定時もrunner不問
+- [x] Thread整合性チェック削除
+  - [x] POST /jobsのthread.runnerチェック削除（500-501行目）
+  - [x] GET /messagesのthread.runnerチェック削除（587-589行目）
+  - [x] _get_or_create_default_thread関数修正（runnerカラム除外）
+  - [x] Thread存在確認のみ残す
+- [x] 動作確認
+  - [x] 任意のrunnerでJob作成可能
+  - [x] thread_id指定時もrunner不問
 
 #### R-2.4 Master_Specification.md更新
 - [ ] Thread作成APIドキュメント修正

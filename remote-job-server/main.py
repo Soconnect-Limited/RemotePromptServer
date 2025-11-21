@@ -113,7 +113,6 @@ class ThreadResponse(BaseModel):
 
 class CreateThreadRequest(BaseModel):
     name: Optional[str] = None
-    runner: str
 
 
 class UpdateThreadRequest(BaseModel):
@@ -135,19 +134,20 @@ def ensure_room_owned(room_id: str, device_id: str, db: Session) -> Room:
 
 
 def _get_or_create_default_thread(db: Session, room: Room, runner: str) -> Thread:
+    # v4.2: runnerカラム削除により、最古のThreadを返す（runner不問）
     thread = (
         db.query(Thread)
-        .filter_by(room_id=room.id, runner=runner)
+        .filter_by(room_id=room.id)
         .order_by(Thread.created_at.asc())
         .first()
     )
     if thread:
-        LOGGER.info("[COMPAT] Using default thread %s for room=%s runner=%s", thread.id, room.id, runner)
+        LOGGER.info("[COMPAT] Using default thread %s for room=%s (runner=%s)", thread.id, room.id, runner)
         return thread
 
+    # デフォルトThread作成（runnerカラムなし）
     thread = Thread(
         room_id=room.id,
-        runner=runner,
         name=f"{runner.title()} 会話",
         device_id=room.device_id,
         created_at=utcnow(),
@@ -284,24 +284,17 @@ async def update_room_settings(
 def list_threads(
     room_id: str,
     device_id: str = Query(...),
-    runner: Optional[str] = Query(None, description="Filter by runner (claude or codex)"),  # v4.1: サーバー側フィルタリング
-    limit: int = Query(50, ge=1, description="Maximum number of threads to return (default: 50, max: 200)"),  # v4.1: ページネーション (le除去)
-    offset: int = Query(0, ge=0, description="Number of threads to skip (default: 0)"),  # v4.1: ページネーション
+    limit: int = Query(50, ge=1, description="Maximum number of threads to return (default: 50, max: 200)"),
+    offset: int = Query(0, ge=0, description="Number of threads to skip (default: 0)"),
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> List[ThreadResponse]:
-    # v4.1: limitの最大値検証（200超過時400エラー）
+    # v4.2: limitの最大値検証（200超過時400エラー）
     if limit > 200:
         raise HTTPException(status_code=400, detail="limit must not exceed 200")
 
     room = ensure_room_owned(room_id, device_id, db)
     query = db.query(Thread).filter_by(room_id=room.id)
-
-    # v4.1: サーバー側runnerフィルタリング
-    if runner:
-        if runner not in ALLOWED_RUNNERS:
-            raise HTTPException(status_code=400, detail=f"Invalid runner: {runner}")
-        query = query.filter_by(runner=runner)
 
     # v4.1: ページネーション適用
     threads = (
@@ -323,8 +316,6 @@ def create_thread(
     _: None = Depends(verify_api_key),
 ) -> ThreadResponse:
     room = ensure_room_owned(room_id, device_id, db)
-    if req.runner not in ALLOWED_RUNNERS:
-        raise HTTPException(status_code=400, detail="Unsupported runner")
 
     name = (req.name or "無題").strip()
     if not name or len(name) > 100:
@@ -333,7 +324,6 @@ def create_thread(
     thread = Thread(
         room_id=room.id,
         name=name,
-        runner=req.runner,
         device_id=room.device_id,
         created_at=utcnow(),
         updated_at=utcnow(),
@@ -341,7 +331,7 @@ def create_thread(
     db.add(thread)
     db.commit()
     db.refresh(thread)
-    LOGGER.info("[NEW] Created thread %s room=%s runner=%s", thread.id, room.id, req.runner)
+    LOGGER.info("[NEW] Created thread %s room=%s", thread.id, room.id)
     return ThreadResponse(**thread.to_dict())
 
 
@@ -508,8 +498,7 @@ def create_job(
             raise HTTPException(status_code=404, detail="Thread not found")
         if thread.room_id != room.id:
             raise HTTPException(status_code=400, detail="Thread does not belong to room")
-        if thread.runner != req.runner:
-            raise HTTPException(status_code=400, detail="Thread runner mismatch")
+        # v4.2: thread.runner チェック削除 - 同一Thread内でrunner自由切替可能
         thread_id = thread.id
         LOGGER.info("[NEW] /jobs using thread_id=%s room=%s runner=%s", thread_id, room.id, req.runner)
     else:
@@ -596,8 +585,7 @@ def get_messages(
             raise HTTPException(status_code=404, detail="Thread not found")
         if thread.room_id != room.id:
             raise HTTPException(status_code=400, detail="Thread does not belong to room")
-        if thread.runner != runner:
-            raise HTTPException(status_code=400, detail="Thread runner mismatch")
+        # v4.2: thread.runner チェック削除 - 同一Thread内でrunner自由切替可能
         query = query.filter(Job.thread_id == thread_id)
         LOGGER.info("[NEW] /messages thread_id=%s room=%s runner=%s", thread_id, room.id, runner)
     else:

@@ -57,7 +57,7 @@ class Thread(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(100), nullable=False, default="無題")
-    runner = Column(String(20), nullable=False, index=True)  # 'claude' or 'codex'
+    # v4.2: runnerカラム削除 - Thread内で任意のrunnerを使用可能
     device_id = Column(String(100), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True)
@@ -68,7 +68,7 @@ class Thread(Base):
     sessions = relationship("DeviceSession", back_populates="thread", cascade="all, delete-orphan")
 
     __table_args__ = (
-        Index("idx_threads_room_runner", "room_id", "runner"),
+        # v4.2: idx_threads_room_runner削除 - runnerカラムがなくなったため
         Index("idx_threads_updated_at", "updated_at"),
     )
 
@@ -77,7 +77,7 @@ class Thread(Base):
             "id": self.id,
             "room_id": self.room_id,
             "name": self.name,
-            "runner": self.runner,
+            # v4.2: runnerフィールド削除
             "device_id": self.device_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

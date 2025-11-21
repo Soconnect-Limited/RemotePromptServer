@@ -19,7 +19,7 @@ final class ChatViewModel: ObservableObject {
     private let shouldValidateAPIKey: Bool
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
-    private let runner: String
+    private var runner: String  // v4.1: Changed from `let` to `var` for dynamic runner switching
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
     private let deviceId: String
@@ -372,6 +372,34 @@ final class ChatViewModel: ObservableObject {
         guard let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
         messages[index] = message
         messageStore.updateMessage(message)
+    }
+
+    /// v4.1: Update runner dynamically without recreating the ViewModel
+    /// This prevents "Request interrupted by user" errors when switching runners
+    func updateRunner(_ newRunner: String) async {
+        // 1. Same runner - no action needed
+        guard newRunner != runner else { return }
+
+        // 2. Cleanup all SSE connections
+        for (jobId, manager) in sseConnections {
+            manager.disconnect()
+            sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
+        }
+        sseConnections.removeAll()
+
+        // 3. Update runner
+        runner = newRunner
+
+        // 4. Update MessageStore context
+        messageStore.setActiveContext(roomId: roomId, runner: newRunner)
+
+        // 5. Clear current messages and reset pagination
+        messages.removeAll()
+        historyOffset = 0
+        canLoadMoreHistory = true
+
+        // 6. Reload messages for the new runner
+        await loadLatestMessages()
     }
 
     func clearChat() {

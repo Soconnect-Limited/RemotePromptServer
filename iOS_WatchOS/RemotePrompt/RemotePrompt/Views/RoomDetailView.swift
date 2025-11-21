@@ -29,6 +29,7 @@ struct RoomDetailView: View {
     @State private var selectedRunner: RunnerTab = .claude
     @State private var showFileBrowser = false
     @State private var showRoomSettings = false
+    @State private var chatViewModel: ChatViewModel?  // v4.1: Persistent ViewModel for runner switching
 
     init(
         room: Room,
@@ -80,6 +81,8 @@ struct RoomDetailView: View {
                 withAnimation(.easeInOut) {
                     selectedThread = thread
                     selectedRunner = RunnerTab(rawValue: thread.runner) ?? .claude
+                    // v4.1: Clear chatViewModel when switching threads
+                    chatViewModel = nil
                 }
             },
             viewModel: threadListViewModel
@@ -91,20 +94,34 @@ struct RoomDetailView: View {
         VStack(spacing: 0) {
             runnerPicker
 
-            ChatView(
-                viewModel: ChatViewModel(
-                    runner: selectedRunner.rawValue,
-                    roomId: room.id,
-                    threadId: thread.id,
-                    apiClient: apiClient,
-                    enableStreaming: enableStreaming,
-                    validateAPIKey: !AppEnvironment.isUITesting
-                )
-            )
-            .background(Color(.systemBackground))
+            // v4.1: Use persistent ChatViewModel with dynamic runner switching
+            Group {
+                if let viewModel = chatViewModel {
+                    ChatView(viewModel: viewModel)
+                        .background(Color(.systemBackground))
+                } else {
+                    Color.clear
+                        .onAppear {
+                            chatViewModel = ChatViewModel(
+                                runner: selectedRunner.rawValue,
+                                roomId: room.id,
+                                threadId: thread.id,
+                                apiClient: apiClient,
+                                enableStreaming: enableStreaming,
+                                validateAPIKey: !AppEnvironment.isUITesting
+                            )
+                        }
+                }
+            }
         }
         .navigationTitle(thread.name)
         .transition(.move(edge: .trailing))
+        .onChange(of: selectedRunner) { _, newRunner in
+            // v4.1: Update runner dynamically without recreating ViewModel
+            Task { @MainActor in
+                await chatViewModel?.updateRunner(newRunner.rawValue)
+            }
+        }
     }
 
     private var runnerPicker: some View {
