@@ -1,8 +1,8 @@
 # 非対話モード方式 MacStudio ⇔ iPhone/Apple Watch ジョブ実行システム 詳細技術仕様書
 
 作成日: 2025-11-16
-最終更新: 2025-11-21
-バージョン: 4.0（非対話モード + Room-Based + Thread Management版）
+最終更新: 2025-01-21
+バージョン: 4.1（非対話モード + Room-Based + Thread Management + API拡張版）
 想定作成者: Nao
 
 **変更履歴**:
@@ -10,6 +10,7 @@
 - v2.0 (2025-11-17): 調査結果に基づき非対話モード + セッション管理方式に変更
 - v3.0 (2025-11-19): Room-Based Architecture実装に伴う仕様追加 - プロジェクト/ワークスペース別のセッション分離と作業ディレクトリ管理を実現
 - v4.0 (2025-11-21): Thread Management実装 - Room内でRunnerごとに独立したスレッドを作成・管理、4次元セッション管理（device_id + room_id + runner + thread_id）を実現
+- v4.1 (2025-01-21): Thread Management API拡張 - サーバー側runnerフィルタ実装、limit/offsetページネーション追加、PATCH API device_id必須化、互換モード（thread_id NULL）明記
 
 ---
 
@@ -947,7 +948,10 @@ CREATE INDEX idx_threads_updated_at ON threads(updated_at DESC);
 - **4次元セッション管理**: device_id + room_id + runner + thread_id でセッションを一意に識別
 - **Runner別フィルタリング**: UI上でClaude/Codexを切り替える際、各Runnerのスレッド一覧を独立表示
 - **会話コンテキスト分離**: 同じRoomでも複数の並行タスク（例: "バグ修正"/"新機能開発"）を独立管理
-- **後方互換性**: `thread_id`がnilの場合はデフォルトスレッドを使用（THREADS_COMPAT_MODE=true）
+- **後方互換性（v4.0互換モード）**: `thread_id`がnilの場合はデフォルトスレッドを使用**[v4.1で詳細明記]**
+  - 旧クライアント（v3.x）はthread_idパラメータを送信しない → thread_id=NULLで処理
+  - サーバー側ではthread_id=NULLの場合、自動的にデフォルトスレッド扱い
+  - v4.0以降のクライアントはthread_idを明示的に指定（またはnil送信で互換モード）
 
 #### jobs テーブル
 
@@ -1544,7 +1548,9 @@ Response 200:
 
 **Query Parameters:**
 - `device_id`: デバイスID（必須、認証用）
-- `runner`: "claude" または "codex"（Optional、指定時は該当runnerのみフィルタ）
+- `runner`: "claude" または "codex"（Optional、指定時は該当runnerのみフィルタ）**[v4.1: サーバー側フィルタ実装済み]**
+- `limit`: 最大取得件数（Optional、デフォルト: 50、最大: 200）**[v4.1で追加]**
+- `offset`: オフセット（Optional、デフォルト: 0、ページネーション用）**[v4.1で追加]**
 
 **Response:**
 ```json
@@ -1571,9 +1577,22 @@ Response 200:
 ```
 
 **Note:**
-- サーバー側ではrunnerパラメータによるフィルタリングは未実装
-- クライアント側で全件取得後に`runner`でフィルタリングする必要がある
-- スレッドは`updated_at`降順でソートされる
+- **[v4.1]** サーバー側でrunnerパラメータによるフィルタリング実装済み（WHERE runner = ?）
+- **[v4.1]** limit/offsetによるページネーション実装済み（LIMIT ? OFFSET ?）
+- スレッドは`updated_at`降順でソートされる（ORDER BY updated_at DESC）
+- limitを超えるスレッドがある場合、`offset + limit`で次のページを取得可能
+
+**Example:**
+```
+# 最新50件取得
+GET /rooms/room-uuid-abc-123/threads?device_id=iphone-nao-1&limit=50
+
+# Claudeのスレッドのみ取得
+GET /rooms/room-uuid-abc-123/threads?device_id=iphone-nao-1&runner=claude
+
+# 51件目〜100件目を取得（ページネーション）
+GET /rooms/room-uuid-abc-123/threads?device_id=iphone-nao-1&limit=50&offset=50
+```
 
 ---
 
@@ -1609,11 +1628,13 @@ Response 200:
 
 スレッド名を更新。
 
-**Request:**
+**Query Parameters:**
+- `device_id`: デバイスID（必須、認証用）**[v4.1で明記]**
+
+**Request Body:**
 ```json
 {
-  "name": "新しいスレッド名",
-  "device_id": "iphone-nao-1"
+  "name": "新しいスレッド名"
 }
 ```
 
@@ -1630,6 +1651,12 @@ Response 200:
 }
 ```
 
+**Example:**
+```
+PATCH /threads/thread-uuid-def-456?device_id=iphone-nao-1
+Body: {"name": "新しいスレッド名"}
+```
+
 ---
 
 ##### DELETE /threads/{thread_id}
@@ -1640,9 +1667,12 @@ Response 200:
 - `device_id`: デバイスID（必須、認証用）
 
 **Effect:**
-- Threadレコード削除（CASCADE）
-- 関連するJobレコードの`thread_id`はNULLに設定（ON DELETE SET NULL）
-- 関連するDeviceSessionレコードは削除（ON DELETE CASCADE）
+- **Threadレコード削除**（DELETE FROM threads WHERE id = ?）
+- **関連するJobレコードの`thread_id`はNULLに設定**（ON DELETE SET NULL）**[v4.1で明記]**
+  - Jobsは削除されず、thread_id = NULLとして保持される
+  - これによりThread削除後もJob履歴は保持される
+- **関連するDeviceSessionレコードは削除**（ON DELETE CASCADE）**[v4.1で明記]**
+  - Session情報はThreadと共に削除される
 
 **Example:**
 ```
@@ -1653,6 +1683,10 @@ DELETE /threads/thread-uuid-def-456?device_id=iphone-nao-1
 ```
 204 No Content
 ```
+
+**Note:**
+- **[v4.1]** JobsはCASCADE削除されない。thread_idがNULLになるだけでJob履歴は保持される。
+- **[v4.1]** DeviceSessionsはCASCADE削除される。Thread削除後はセッション再確立が必要。
 
 ---
 
