@@ -345,10 +345,10 @@ RemotePrompt/
 - [x] ThreadResponse回帰防止テスト追加完了
 
 ### Refactor-3完了基準
-- [ ] iOSビルド成功
-- [ ] Thread作成時にrunner指定不要
-- [ ] runner切替時にthreadId固定で動作
-- [ ] **MessageStore 3次元キー対応完了**（同一room・runner内の異なるthreadで履歴が混在しない）
+- [x] iOSビルド成功
+- [x] Thread作成時にrunner指定不要
+- [x] runner切替時にthreadId固定で動作
+- [x] **MessageStore 3次元キー対応完了**（同一room・runner内の異なるthreadで履歴が混在しない）
 
 ### Refactor-4完了基準
 - [ ] 同一Thread内でClaudeとCodex混在可能
@@ -470,4 +470,4 @@ RemotePrompt/
 
 **更新日**: 2025-01-21
 **作成者**: Claude Code
-**ステータス**: Refactor-2完了、Refactor-3実装中
+**ステータス**: Refactor-3完了（ビルド成功）、Refactor-4動作テスト待ち
