@@ -88,8 +88,6 @@ struct ThreadListView: View {
                 }
             }
         }
-        .navigationTitle(room.name)
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {

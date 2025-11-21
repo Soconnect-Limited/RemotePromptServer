@@ -1171,5 +1171,604 @@ if __name__ == "__main__":
 
 ---
 
+## Phase D: Thread別AI設定機能 (v4.2)
+
+### D.1 概要
+
+**現状の問題**:
+- AI設定（モデル、システムプロンプト等）がRoom単位で保存されている
+- クライアント側で`settings.claude`、`settings.codex`のようにrunner別に分けて保存
+- 同じRoomの複数スレッドで設定が共有されてしまう
+
+**目標**:
+- Thread単位でAI設定を管理可能にする
+- 各スレッドで異なるAIモデル・プロンプトを使用可能にする
+
+### D.2 データベース設計
+
+#### D.2.1 threads テーブル拡張
+
+**アプローチ1: 既存テーブル拡張**（推奨）
+
+```sql
+-- threads.settings カラム追加
+ALTER TABLE threads ADD COLUMN settings TEXT;
+-- JSON形式でAI設定を保存: {"model": "claude-opus-4", "systemPrompt": "..."}
+```
+
+**メリット**:
+- シンプルな実装
+- CASCADE削除が自動的に効く
+- 既存のAPIパターンと一貫性あり
+
+**デメリット**:
+- JSONスキーマの検証が必要
+
+**アプローチ2: 新テーブル作成**（冗長）
+
+```sql
+CREATE TABLE thread_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id TEXT NOT NULL UNIQUE,
+    settings TEXT NOT NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE
+);
+```
+
+**判断**: アプローチ1を採用（Room設定と同様のパターン）
+
+### D.3 マイグレーション
+
+#### D.3.1 マイグレーションスクリプト
+
+```python
+"""
+v4.1 → v4.2: threads.settings カラム追加
+"""
+import sqlite3
+import json
+
+def migrate_v4_1_to_v4_2(db_path: str):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # 1. threads.settings カラム追加
+    try:
+        cursor.execute("ALTER TABLE threads ADD COLUMN settings TEXT")
+        print("✅ Added settings column to threads table")
+    except sqlite3.OperationalError:
+        print("⚠️ settings column already exists")
+
+    # 2. 既存のRoom設定をThread設定に移行（オプショナル）
+    cursor.execute("""
+        SELECT t.id, t.room_id, t.runner, r.settings
+        FROM threads t
+        JOIN rooms r ON t.room_id = r.id
+        WHERE r.settings IS NOT NULL
+    """)
+
+    for thread_id, room_id, runner, room_settings_json in cursor.fetchall():
+        try:
+            room_settings = json.loads(room_settings_json)
+            # runner別設定を抽出（例: room_settings.claude → thread_settings）
+            runner_settings = room_settings.get(runner, {})
+            if runner_settings:
+                thread_settings_json = json.dumps(runner_settings)
+                cursor.execute(
+                    "UPDATE threads SET settings = ? WHERE id = ?",
+                    (thread_settings_json, thread_id)
+                )
+                print(f"✅ Migrated settings for thread {thread_id} (runner={runner})")
+        except json.JSONDecodeError:
+            print(f"⚠️ Invalid JSON in room {room_id} settings")
+
+    conn.commit()
+    conn.close()
+    print("✅ Migration v4.1→v4.2 completed")
+
+if __name__ == "__main__":
+    migrate_v4_1_to_v4_2("remote_jobs.db")
+```
+
+#### D.3.2 ロールバック
+
+```python
+"""
+v4.2 → v4.1: threads.settings カラム削除
+"""
+import sqlite3
+
+def rollback_v4_2_to_v4_1(db_path: str):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # threads.settings削除（カラム削除はテーブル再作成が必要）
+    cursor.execute("""
+        CREATE TABLE threads_temp AS
+        SELECT id, room_id, name, runner, device_id, created_at, updated_at
+        FROM threads
+    """)
+    cursor.execute("DROP TABLE threads")
+    cursor.execute("ALTER TABLE threads_temp RENAME TO threads")
+
+    # インデックス再作成
+    cursor.execute("CREATE INDEX idx_threads_room_runner ON threads(room_id, runner)")
+    cursor.execute("CREATE INDEX idx_threads_updated_at ON threads(updated_at DESC)")
+
+    conn.commit()
+    conn.close()
+    print("✅ Rollback v4.2→v4.1 completed")
+```
+
+### D.4 バックエンドAPI設計
+
+#### D.4.1 GET /threads/{thread_id}/settings
+
+**リクエスト**:
+```
+GET /threads/{thread_id}/settings?device_id=iphone-nao-1
+Headers:
+  x-api-key: your-api-key
+```
+
+**レスポンス**:
+```json
+{
+  "thread_id": "thread-uuid",
+  "settings": {
+    "model": "claude-opus-4",
+    "systemPrompt": "You are a helpful assistant",
+    "temperature": 0.7
+  }
+}
+```
+
+**実装**:
+```python
+@app.get("/threads/{thread_id}/settings")
+async def get_thread_settings(
+    thread_id: str,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    thread = db.query(Thread).filter(Thread.id == thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    # 権限チェック
+    room = await verify_room_ownership(room_id=thread.room_id, device_id=device_id, db=db)
+
+    try:
+        parsed = json.loads(thread.settings) if thread.settings else None
+    except json.JSONDecodeError:
+        parsed = None
+
+    return {"thread_id": thread_id, "settings": parsed}
+```
+
+#### D.4.2 PUT /threads/{thread_id}/settings
+
+**リクエスト**:
+```
+PUT /threads/{thread_id}/settings?device_id=iphone-nao-1
+Headers:
+  x-api-key: your-api-key
+Body:
+{
+  "model": "claude-sonnet-4",
+  "systemPrompt": "Updated prompt"
+}
+```
+
+**レスポンス**:
+```json
+{
+  "thread_id": "thread-uuid",
+  "settings": {
+    "model": "claude-sonnet-4",
+    "systemPrompt": "Updated prompt"
+  }
+}
+```
+
+**実装**:
+```python
+MAX_THREAD_SETTINGS_BYTES = 10 * 1024  # 10KB
+
+@app.put("/threads/{thread_id}/settings")
+async def update_thread_settings(
+    thread_id: str,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    thread = db.query(Thread).filter(Thread.id == thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    # 権限チェック
+    room = await verify_room_ownership(room_id=thread.room_id, device_id=device_id, db=db)
+
+    body = await request.body()
+    if len(body) > MAX_THREAD_SETTINGS_BYTES:
+        raise HTTPException(status_code=413, detail="Settings JSON exceeds 10KB limit")
+
+    # null または空ボディ: 設定リセット
+    if not body or body.strip() == b"null":
+        thread.settings = None
+        thread.updated_at = utcnow()
+        db.commit()
+        return {"thread_id": thread_id, "settings": None}
+
+    # JSON検証
+    try:
+        settings = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    thread.settings = json.dumps(settings)
+    thread.updated_at = utcnow()
+    db.commit()
+
+    return {"thread_id": thread_id, "settings": settings}
+```
+
+### D.5 iOSクライアント実装
+
+#### D.5.1 モデル更新
+
+```swift
+// Thread.swift
+struct Thread: Identifiable, Codable, Hashable {
+    let id: String
+    let roomId: String
+    let name: String
+    let runner: String
+    let settings: ThreadSettings?  // 追加
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, runner, settings
+        case roomId = "room_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// ThreadSettings.swift（新規）
+struct ThreadSettings: Codable, Hashable {
+    var model: String?
+    var systemPrompt: String?
+    var temperature: Double?
+    var maxTokens: Int?
+    var thinkingBudget: String?  // o3/o4用
+
+    static let `default` = ThreadSettings(
+        model: "claude-sonnet-4",
+        systemPrompt: nil,
+        temperature: 0.7,
+        maxTokens: 4096,
+        thinkingBudget: nil
+    )
+}
+```
+
+#### D.5.2 APIClient拡張
+
+```swift
+// APIClientProtocol
+protocol APIClientProtocol {
+    // 既存メソッド...
+
+    // Thread Settings
+    func getThreadSettings(threadId: String, deviceId: String) async throws -> ThreadSettings?
+    func updateThreadSettings(threadId: String, deviceId: String, settings: ThreadSettings?) async throws -> ThreadSettings?
+}
+
+// APIClient実装
+extension APIClient {
+    func getThreadSettings(threadId: String, deviceId: String) async throws -> ThreadSettings? {
+        let endpoint = "/threads/\(threadId)/settings?device_id=\(deviceId)"
+        let response: ThreadSettingsResponse = try await request(endpoint: endpoint, method: "GET")
+        return response.settings
+    }
+
+    func updateThreadSettings(threadId: String, deviceId: String, settings: ThreadSettings?) async throws -> ThreadSettings? {
+        let endpoint = "/threads/\(threadId)/settings?device_id=\(deviceId)"
+        let body = settings != nil ? try JSONEncoder().encode(settings) : Data()
+        let response: ThreadSettingsResponse = try await request(endpoint: endpoint, method: "PUT", body: body)
+        return response.settings
+    }
+}
+
+struct ThreadSettingsResponse: Codable {
+    let threadId: String
+    let settings: ThreadSettings?
+
+    enum CodingKeys: String, CodingKey {
+        case threadId = "thread_id"
+        case settings
+    }
+}
+```
+
+#### D.5.3 ThreadSettingsView（新規）
+
+```swift
+struct ThreadSettingsView: View {
+    let thread: Thread
+    @StateObject private var viewModel: ThreadSettingsViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    init(thread: Thread, apiClient: APIClientProtocol = APIClient.shared) {
+        self.thread = thread
+        _viewModel = StateObject(wrappedValue: ThreadSettingsViewModel(
+            threadId: thread.id,
+            runner: thread.runner,
+            apiClient: apiClient
+        ))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Model selection
+                Section("AIモデル") {
+                    Picker("モデル", selection: $viewModel.selectedModel) {
+                        ForEach(viewModel.availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                }
+
+                // System Prompt
+                Section("システムプロンプト") {
+                    TextEditor(text: $viewModel.systemPrompt)
+                        .frame(minHeight: 100)
+                }
+
+                // Advanced settings
+                Section("詳細設定") {
+                    HStack {
+                        Text("Temperature")
+                        Slider(value: $viewModel.temperature, in: 0...1, step: 0.1)
+                        Text(String(format: "%.1f", viewModel.temperature))
+                    }
+
+                    Stepper("Max Tokens: \(viewModel.maxTokens)", value: $viewModel.maxTokens, in: 1024...8192, step: 1024)
+                }
+
+                // Reset button
+                Section {
+                    Button("デフォルトに戻す", role: .destructive) {
+                        viewModel.resetToDefaults()
+                    }
+                }
+            }
+            .navigationTitle("AI設定")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        Task {
+                            await viewModel.save()
+                            dismiss()
+                        }
+                    }
+                    .disabled(viewModel.isSaving)
+                }
+            }
+            .task {
+                await viewModel.loadSettings()
+            }
+        }
+    }
+}
+```
+
+#### D.5.4 ThreadSettingsViewModel
+
+```swift
+@MainActor
+final class ThreadSettingsViewModel: ObservableObject {
+    @Published var selectedModel: String = "claude-sonnet-4"
+    @Published var systemPrompt: String = ""
+    @Published var temperature: Double = 0.7
+    @Published var maxTokens: Int = 4096
+    @Published var isSaving = false
+    @Published var errorMessage: String?
+
+    private let threadId: String
+    private let runner: String
+    private let apiClient: APIClientProtocol
+    private let deviceId: String
+
+    var availableModels: [String] {
+        switch runner {
+        case "claude":
+            return ["claude-opus-4", "claude-sonnet-4", "claude-haiku-4"]
+        case "codex":
+            return ["gpt-5-turbo", "gpt-5-codex", "o3-mini", "o4-mini"]
+        default:
+            return []
+        }
+    }
+
+    init(threadId: String, runner: String, apiClient: APIClientProtocol = APIClient.shared) {
+        self.threadId = threadId
+        self.runner = runner
+        self.apiClient = apiClient
+        self.deviceId = APIClient.getDeviceId()
+    }
+
+    func loadSettings() async {
+        do {
+            let settings = try await apiClient.getThreadSettings(threadId: threadId, deviceId: deviceId)
+
+            if let settings = settings {
+                selectedModel = settings.model ?? "claude-sonnet-4"
+                systemPrompt = settings.systemPrompt ?? ""
+                temperature = settings.temperature ?? 0.7
+                maxTokens = settings.maxTokens ?? 4096
+            }
+        } catch {
+            errorMessage = "設定の読み込みに失敗: \(error.localizedDescription)"
+        }
+    }
+
+    func save() async {
+        isSaving = true
+        defer { isSaving = false }
+
+        let settings = ThreadSettings(
+            model: selectedModel,
+            systemPrompt: systemPrompt.isEmpty ? nil : systemPrompt,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            thinkingBudget: nil
+        )
+
+        do {
+            _ = try await apiClient.updateThreadSettings(threadId: threadId, deviceId: deviceId, settings: settings)
+        } catch {
+            errorMessage = "設定の保存に失敗: \(error.localizedDescription)"
+        }
+    }
+
+    func resetToDefaults() {
+        selectedModel = "claude-sonnet-4"
+        systemPrompt = ""
+        temperature = 0.7
+        maxTokens = 4096
+    }
+}
+```
+
+#### D.5.5 RoomDetailView統合
+
+```swift
+// RoomDetailView.swift の toolbar に設定ボタン追加
+.toolbar {
+    if selectedThread != nil {
+        ToolbarItem(placement: .navigationBarLeading) {
+            Button {
+                withAnimation(.easeInOut) {
+                    selectedThread = nil
+                }
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+        }
+    }
+
+    // Thread設定ボタン追加
+    if let thread = selectedThread {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                showThreadSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+        }
+    }
+
+    ToolbarItem(placement: .primaryAction) {
+        Button {
+            showFileBrowser = true
+        } label: {
+            Image(systemName: "doc.text.magnifyingglass")
+        }
+    }
+}
+.sheet(isPresented: $showThreadSettings) {
+    if let thread = selectedThread {
+        ThreadSettingsView(thread: thread)
+    }
+}
+```
+
+### D.6 チェックリスト
+
+#### D.6.1 バックエンド
+- [ ] threads.settings カラム追加マイグレーション実装
+- [ ] マイグレーション実行（テスト環境）
+- [ ] GET /threads/{thread_id}/settings API実装
+- [ ] PUT /threads/{thread_id}/settings API実装
+- [ ] JSON検証とサイズ制限実装
+- [ ] 権限チェック実装（room所有確認）
+- [ ] APIテスト作成
+- [ ] マイグレーション実行（本番環境）
+
+#### D.6.2 iOSクライアント
+- [ ] ThreadSettings.swift モデル作成
+- [ ] APIClient拡張（getThreadSettings, updateThreadSettings）
+- [ ] ThreadSettingsViewModel 実装
+- [ ] ThreadSettingsView UI実装
+- [ ] RoomDetailViewに設定ボタン追加
+- [ ] PreviewAPIClient対応
+- [ ] ビルド・テスト
+
+#### D.6.3 データ移行
+- [ ] 既存Room設定からThread設定への移行ロジック実装
+- [ ] 移行スクリプト実行
+- [ ] データ整合性確認
+
+#### D.6.4 テスト
+- [ ] Thread設定の保存・読み込み動作確認
+- [ ] 複数スレッドで異なる設定が保持されるか確認
+- [ ] 設定削除（null送信）の動作確認
+- [ ] 権限チェックの動作確認
+
+#### D.6.5 ドキュメント
+- [ ] MASTER_SPECIFICATION.mdにv4.2セクション追加
+- [ ] API仕様書更新
+- [ ] マイグレーション手順ドキュメント更新
+
+### D.7 リスク管理
+
+**リスク1: Room設定との互換性**
+- **対策**: 既存Room設定APIは継続サポート、Thread設定を優先
+- **フォールバック**: Thread設定がnullの場合はRoom設定を使用
+
+**リスク2: 大量の設定データ**
+- **対策**: 10KB制限、JSON検証
+- **モニタリング**: settings カラムのサイズ監視
+
+**リスク3: マイグレーション時のデータロス**
+- **対策**: バックアップ必須、ロールバックスクリプト準備
+- **検証**: マイグレーション後のデータ整合性確認
+
+### D.8 工数見積もり
+
+| タスク | 工数 |
+|--------|------|
+| マイグレーション実装・実行 | 3h |
+| バックエンドAPI実装 | 4h |
+| iOSクライアント実装 | 8h |
+| テスト | 3h |
+| ドキュメント | 2h |
+
+**合計**: 約20時間
+
+### D.9 完了基準
+
+- [ ] threads.settings カラム追加完了
+- [ ] Thread設定API動作確認
+- [ ] iOSでThread別設定の保存・読み込み動作確認
+- [ ] 既存Room設定との互換性確認
+- [ ] ドキュメント更新完了
+
+---
+
 **更新日**: 2025-01-21
-**更新者**: Claude Code (Code Review対応)
+**更新者**: Claude Code (Phase D追加)

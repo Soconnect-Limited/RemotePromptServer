@@ -48,159 +48,108 @@ struct RoomDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            ThreadListView(
-                room: room,
-                runner: "claude", // ラベル用。全runnerを表示。
-                onThreadSelected: { thread in
-                    withAnimation(.easeInOut) {
-                        selectedThread = thread
-                        selectedRunner = RunnerTab(rawValue: thread.runner) ?? .claude
-                    }
-                },
-                viewModel: threadListViewModel
-            )
-            .opacity(selectedThread == nil ? 1 : 0)
-
+        Group {
             if let thread = selectedThread {
-                VStack(spacing: 0) {
-                    Picker("Runner", selection: $selectedRunner) {
-                        ForEach(RunnerTab.allCases) { tab in
-                            Label(tab.title, systemImage: tab.systemImage).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemBackground))
-                    .onChange(of: selectedRunner) { _, newValue in
-                        withAnimation(.easeInOut) {
-                            if let target = threadListViewModel.threads.first(where: { $0.runner == newValue.rawValue }) {
-                                selectedThread = target
-                            }
-                        }
-                    }
-
-                    ThreadChatView(
-                        room: room,
-                        thread: thread,
-                        apiClient: apiClient,
-                        enableStreaming: enableStreaming,
-                        onBack: {
-                            withAnimation(.easeInOut) {
-                                selectedThread = nil
-                            }
-                        },
-                        onSettings: {
-                            showRoomSettings = true
-                        }
-                    )
-                }
-                .transition(.move(edge: .trailing))
+                chatViewContainer(for: thread)
+            } else {
+                threadListLayer
             }
         }
-        .navigationTitle(room.name)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(selectedThread != nil)
         .toolbar {
-            if selectedThread != nil {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        withAnimation(.easeInOut) {
-                            selectedThread = nil
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("スレッド一覧")
-                        }
-                    }
-                }
-            }
-
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showFileBrowser = true
-                } label: {
-                    Image(systemName: "doc.text.magnifyingglass")
-                }
-            }
+            toolbarContent
         }
         .sheet(isPresented: $showFileBrowser) {
             FileBrowserView(room: room)
         }
         .sheet(isPresented: $showRoomSettings) {
-            RoomSettingsView(room: room, runner: selectedThread?.runner ?? "claude")
+            if selectedThread != nil {
+                RoomSettingsView(room: room, runner: selectedRunner.rawValue)
+            }
         }
     }
-}
 
-/// Thread専用のChat画面
-private struct ThreadChatView: View {
-    let room: Room
-    let thread: Thread
-    let apiClient: APIClientProtocol
-    let enableStreaming: Bool
-    let onBack: () -> Void
-    let onSettings: () -> Void
+    // MARK: - View Components
 
-    @StateObject private var viewModel: ChatViewModel
-
-    init(
-        room: Room,
-        thread: Thread,
-        apiClient: APIClientProtocol,
-        enableStreaming: Bool,
-        onBack: @escaping () -> Void,
-        onSettings: @escaping () -> Void
-    ) {
-        self.room = room
-        self.thread = thread
-        self.apiClient = apiClient
-        self.enableStreaming = enableStreaming
-        self.onBack = onBack
-        self.onSettings = onSettings
-
-        _viewModel = StateObject(
-            wrappedValue: ChatViewModel(
-                runner: thread.runner,
-                roomId: room.id,
-                threadId: thread.id,
-                apiClient: apiClient,
-                enableStreaming: enableStreaming,
-                validateAPIKey: !AppEnvironment.isUITesting
-            )
+    private var threadListLayer: some View {
+        ThreadListView(
+            room: room,
+            runner: "claude",
+            onThreadSelected: { thread in
+                withAnimation(.easeInOut) {
+                    selectedThread = thread
+                    selectedRunner = RunnerTab(rawValue: thread.runner) ?? .claude
+                }
+            },
+            viewModel: threadListViewModel
         )
+        .navigationTitle(room.name)
     }
 
-    var body: some View {
+    private func chatViewContainer(for thread: Thread) -> some View {
         VStack(spacing: 0) {
-            // Thread名表示バー
-            HStack {
-                Text(thread.name)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                Spacer()
-                Label {
-                    Text(thread.runner == "claude" ? "Claude" : "Codex")
-                        .font(.caption)
-                } icon: {
-                    Image(systemName: thread.runner == "claude" ? "bubble.left" : "chevron.left.forwardslash.chevron.right")
-                        .font(.caption2)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.tertiarySystemBackground))
-                .cornerRadius(8)
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color(.secondarySystemBackground))
+            runnerPicker
 
-            // Chat画面
-            ChatView(viewModel: viewModel, onSettingsTapped: onSettings)
-                .background(Color(.systemBackground))
+            ChatView(
+                viewModel: ChatViewModel(
+                    runner: thread.runner,
+                    roomId: room.id,
+                    threadId: thread.id,
+                    apiClient: apiClient,
+                    enableStreaming: enableStreaming,
+                    validateAPIKey: !AppEnvironment.isUITesting
+                ),
+                onSettingsTapped: {
+                    showRoomSettings = true
+                }
+            )
+            .background(Color(.systemBackground))
+            .id(thread.id)
+        }
+        .navigationTitle(thread.name)
+        .transition(.move(edge: .trailing))
+    }
+
+    private var runnerPicker: some View {
+        Picker("Runner", selection: $selectedRunner) {
+            ForEach(RunnerTab.allCases) { tab in
+                Label(tab.title, systemImage: tab.systemImage).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground))
+        .onChange(of: selectedRunner) { _, newValue in
+            if let target = threadListViewModel.threads.first(where: { $0.runner == newValue.rawValue }) {
+                withAnimation(.easeInOut) {
+                    selectedThread = target
+                }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if selectedThread != nil {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    withAnimation(.easeInOut) {
+                        selectedThread = nil
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                }
+            }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                showFileBrowser = true
+            } label: {
+                Image(systemName: "doc.text.magnifyingglass")
+            }
         }
     }
 }
