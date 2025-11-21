@@ -80,7 +80,7 @@ struct RoomDetailView: View {
             onThreadSelected: { thread in
                 withAnimation(.easeInOut) {
                     selectedThread = thread
-                    selectedRunner = RunnerTab(rawValue: thread.runner) ?? .claude
+                    // v4.2: Thread.runner削除により、selectedRunnerは変更しない（ユーザー選択を維持）
                     // v4.1: Clear chatViewModel when switching threads
                     chatViewModel = nil
                 }

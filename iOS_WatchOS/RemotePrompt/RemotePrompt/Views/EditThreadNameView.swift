@@ -53,7 +53,6 @@ struct EditThreadNameView: View {
             id: "test",
             roomId: "room1",
             name: "テストスレッド",
-            runner: "claude",
             deviceId: "device1",
             createdAt: Date(),
             updatedAt: Date()
