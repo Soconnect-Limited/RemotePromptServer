@@ -5,11 +5,9 @@ struct ChatView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var hasFinishedInitialFetch = false
     @FocusState private var isInputFocused: Bool
-    private let onSettingsTapped: (() -> Void)?
 
-    init(viewModel: ChatViewModel, onSettingsTapped: (() -> Void)? = nil) {
+    init(viewModel: ChatViewModel) {
         _viewModel = ObservedObject(wrappedValue: viewModel)
-        self.onSettingsTapped = onSettingsTapped
     }
 
     var body: some View {
@@ -74,7 +72,6 @@ struct ChatView: View {
             InputBar(
                 text: $viewModel.inputText,
                 onSend: viewModel.sendMessage,
-                onSettingsTapped: onSettingsTapped,
                 isLoading: viewModel.isLoading,
                 isFocused: $isInputFocused
             )

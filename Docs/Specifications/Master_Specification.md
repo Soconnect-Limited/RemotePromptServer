@@ -1596,16 +1596,18 @@ GET /rooms/room-uuid-abc-123/threads?device_id=iphone-nao-1&limit=50&offset=50
 
 ---
 
-##### POST /rooms/{room_id}/threads
+##### POST /rooms/{room_id}/threads?device_id={device_id}
 
 新しいスレッドを作成。
 
-**Request:**
+**Query Parameters:**
+- `device_id` (string, required): デバイスID（認証・権限チェック用）
+
+**Request Body:**
 ```json
 {
   "name": "新機能開発",
-  "runner": "claude",
-  "device_id": "iphone-nao-1"
+  "runner": "claude"
 }
 ```
 

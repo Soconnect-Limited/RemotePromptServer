@@ -93,19 +93,15 @@ struct RoomDetailView: View {
 
             ChatView(
                 viewModel: ChatViewModel(
-                    runner: thread.runner,
+                    runner: selectedRunner.rawValue,
                     roomId: room.id,
                     threadId: thread.id,
                     apiClient: apiClient,
                     enableStreaming: enableStreaming,
                     validateAPIKey: !AppEnvironment.isUITesting
-                ),
-                onSettingsTapped: {
-                    showRoomSettings = true
-                }
+                )
             )
             .background(Color(.systemBackground))
-            .id(thread.id)
         }
         .navigationTitle(thread.name)
         .transition(.move(edge: .trailing))
@@ -121,13 +117,6 @@ struct RoomDetailView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.systemBackground))
-        .onChange(of: selectedRunner) { _, newValue in
-            if let target = threadListViewModel.threads.first(where: { $0.runner == newValue.rawValue }) {
-                withAnimation(.easeInOut) {
-                    selectedThread = target
-                }
-            }
-        }
     }
 
     @ToolbarContentBuilder
@@ -149,6 +138,16 @@ struct RoomDetailView: View {
                 showFileBrowser = true
             } label: {
                 Image(systemName: "doc.text.magnifyingglass")
+            }
+        }
+
+        if selectedThread != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showRoomSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                }
             }
         }
     }

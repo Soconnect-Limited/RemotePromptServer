@@ -4,7 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 
@@ -18,6 +18,15 @@ engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
 )
+
+# v4.1: SQLite FOREIGN KEY制約を有効化（デフォルトOFFのため）
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    """Enable FOREIGN KEY constraints for SQLite connections."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

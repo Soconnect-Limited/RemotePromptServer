@@ -105,7 +105,10 @@ final class ChatViewModel: ObservableObject {
             messageStore.replaceAll(combinedMessages)
             messages = messageStore.messages
         } catch {
-            errorMessage = error.localizedDescription
+            // キャンセルエラーは無視（View再生成時に発生）
+            if (error as NSError).code != NSURLErrorCancelled {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

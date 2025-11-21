@@ -23,17 +23,16 @@ struct Thread: Codable, Identifiable, Hashable {
 }
 
 /// Thread作成リクエスト
+/// device_idはQuery Parameterで送信されるため、Bodyに含まない
 struct CreateThreadRequest: Codable {
     let roomId: String
     let name: String
     let runner: String
-    let deviceId: String
 
     enum CodingKeys: String, CodingKey {
         case roomId = "room_id"
         case name
         case runner
-        case deviceId = "device_id"
     }
 }
 

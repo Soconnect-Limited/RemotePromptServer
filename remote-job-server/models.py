@@ -64,7 +64,7 @@ class Thread(Base):
 
     # Relationships
     room = relationship("Room", back_populates="threads")
-    jobs = relationship("Job", back_populates="thread", cascade="all, delete-orphan")
+    jobs = relationship("Job", back_populates="thread")  # v4.1: Thread削除時にJobsはCASCADE削除せず、thread_id=NULLに設定
     sessions = relationship("DeviceSession", back_populates="thread", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -99,9 +99,9 @@ class DeviceSession(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(String(100), nullable=False)
-    room_id = Column(String(36), nullable=False)
+    room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)  # v4.1: Room削除でCASCADE削除
     runner = Column(String(20), nullable=False)
-    thread_id = Column(String(36), ForeignKey("threads.id", ondelete="CASCADE"), nullable=False)
+    thread_id = Column(String(36), ForeignKey("threads.id", ondelete="CASCADE"), nullable=True)  # v4.1: 互換モード対応でNULL許容
     session_id = Column(String(64), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
@@ -127,8 +127,8 @@ class Job(Base):
     runner = Column(String(20), nullable=False)
     input_text = Column(Text, nullable=False)
     device_id = Column(String(100), nullable=False)
-    room_id = Column(String(36), nullable=False)
-    thread_id = Column(String(36), ForeignKey("threads.id"), nullable=True)
+    room_id = Column(String(36), ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False)  # v4.1: Room削除でCASCADE削除
+    thread_id = Column(String(36), ForeignKey("threads.id", ondelete="SET NULL"), nullable=True)  # v4.1: Thread削除時にNULL設定
     status = Column(String(20), nullable=False)
     exit_code = Column(Integer)
     stdout = Column(Text)
@@ -144,6 +144,11 @@ class Job(Base):
     __table_args__ = (
         Index("idx_jobs_thread_id", "thread_id"),
         Index("idx_jobs_room_thread", "room_id", "thread_id"),
+        Index("idx_jobs_status", "status"),  # v4.1: ステータスフィルタ用
+        Index("idx_jobs_created_at", "created_at"),  # v4.1: 作成日時ソート用
+        Index("idx_jobs_device_id", "device_id"),  # v4.1: デバイス別フィルタ用
+        Index("idx_jobs_room_id", "room_id"),  # v4.1: Room別フィルタ用
+        Index("idx_jobs_device_room", "device_id", "room_id"),  # v4.1: デバイス+Room複合検索用
     )
 
     def to_dict(self) -> dict:

@@ -3,7 +3,6 @@ import SwiftUI
 struct InputBar: View {
     @Binding var text: String
     let onSend: () -> Void
-    let onSettingsTapped: (() -> Void)?
     let isLoading: Bool
     @FocusState.Binding var isFocused: Bool
 
@@ -21,19 +20,7 @@ struct InputBar: View {
             // Keyboard dismiss button (shown when keyboard is visible)
             if isFocused {
                 HStack {
-                    if let onSettingsTapped {
-                        Button {
-                            onSettingsTapped()
-                        } label: {
-                            Label("設定", systemImage: "gearshape")
-                                .font(.body)
-                        }
-                        .accessibilityIdentifier("room.settings")
-                        .accessibilityLabel("ルーム設定を開く")
-                        Spacer()
-                    } else {
-                        Spacer()
-                    }
+                    Spacer()
                     Button {
                         isFocused = false
                     } label: {

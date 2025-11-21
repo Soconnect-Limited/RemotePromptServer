@@ -451,7 +451,7 @@ final class APIClient: APIClientProtocol {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let payload = CreateThreadRequest(roomId: roomId, name: name, runner: runner, deviceId: deviceId)
+        let payload = CreateThreadRequest(roomId: roomId, name: name, runner: runner)
         request.httpBody = try encoder.encode(payload)
 
         let (data, response) = try await URLSession.shared.data(for: request)

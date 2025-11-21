@@ -284,14 +284,31 @@ async def update_room_settings(
 def list_threads(
     room_id: str,
     device_id: str = Query(...),
+    runner: Optional[str] = Query(None, description="Filter by runner (claude or codex)"),  # v4.1: サーバー側フィルタリング
+    limit: int = Query(50, ge=1, description="Maximum number of threads to return (default: 50, max: 200)"),  # v4.1: ページネーション (le除去)
+    offset: int = Query(0, ge=0, description="Number of threads to skip (default: 0)"),  # v4.1: ページネーション
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> List[ThreadResponse]:
+    # v4.1: limitの最大値検証（200超過時400エラー）
+    if limit > 200:
+        raise HTTPException(status_code=400, detail="limit must not exceed 200")
+
     room = ensure_room_owned(room_id, device_id, db)
+    query = db.query(Thread).filter_by(room_id=room.id)
+
+    # v4.1: サーバー側runnerフィルタリング
+    if runner:
+        if runner not in ALLOWED_RUNNERS:
+            raise HTTPException(status_code=400, detail=f"Invalid runner: {runner}")
+        query = query.filter_by(runner=runner)
+
+    # v4.1: ページネーション適用
     threads = (
-        db.query(Thread)
-        .filter_by(room_id=room.id)
+        query
         .order_by(Thread.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
         .all()
     )
     return [ThreadResponse(**t.to_dict()) for t in threads]
