@@ -226,53 +226,54 @@ RemotePrompt/
 ### Refactor-3: iOS修正（推定: 1時間）
 
 #### R-3.1 Thread.swift修正
-- [ ] `Thread`モデルから`runner`プロパティ削除
-  - [ ] `let runner: String`削除
-  - [ ] `CodingKeys`から`case runner`削除
-- [ ] `CreateThreadRequest`から`runner`削除
-  - [ ] `let runner: String`削除
-  - [ ] `CodingKeys`から`case runner`削除
-- [ ] コンパイル確認
+- [x] `Thread`モデルから`runner`プロパティ削除
+  - [x] `let runner: String`削除
+  - [x] `CodingKeys`から`case runner`削除
+- [x] `CreateThreadRequest`から`runner`削除
+  - [x] `let runner: String`削除
+  - [x] `CodingKeys`から`case runner`削除
+- [x] コンパイル確認
 
 #### R-3.2 APIClient.swift修正
-- [ ] `createThread`メソッドシグネチャ変更
-  - [ ] `runner: String`パラメータ削除
-  - [ ] リクエストボディから`runner`削除
-- [ ] `fetchThreads`メソッドシグネチャ変更
-  - [ ] `runner: String?`パラメータ削除
-  - [ ] URLから`runner`クエリパラメータ削除
-- [ ] コンパイル確認
+- [x] `createThread`メソッドシグネチャ変更
+  - [x] `runner: String`パラメータ削除
+  - [x] リクエストボディから`runner`削除
+- [x] `fetchThreads`メソッドシグネチャ変更
+  - [x] `runner: String?`パラメータ削除
+  - [x] URLから`runner`クエリパラメータ削除
+- [x] APIClientProtocol 修正
+  - [x] プロトコル定義から runner パラメータ削除
+- [x] コンパイル確認
 
 #### R-3.3 MessageStore.swift修正（重大）
-- [ ] `Context`構造体に`threadId`追加
-  - [ ] `let threadId: String`追加
-  - [ ] 2次元キー`(roomId, runner)` → 3次元キー`(roomId, runner, threadId)`
-- [ ] `setActiveContext`メソッド修正
-  - [ ] `threadId: String`パラメータ追加
-  - [ ] `Context(roomId: roomId, runner: runner, threadId: threadId)`
-- [ ] ChatViewModel.swift呼び出し修正
-  - [ ] `messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId)`
-  - [ ] `updateRunner()`内でも3次元キーを使用
+- [x] `Context`構造体に`threadId`追加
+  - [x] `let threadId: String`追加
+  - [x] 2次元キー`(roomId, runner)` → 3次元キー`(roomId, runner, threadId)`
+- [x] `setActiveContext`メソッド修正
+  - [x] `threadId: String`パラメータ追加
+  - [x] `Context(roomId: roomId, runner: runner, threadId: threadId)`
+- [x] `init`メソッド修正
+  - [x] `defaultThreadId: String`パラメータ追加
+- [x] ChatViewModel.swift呼び出し修正
+  - [x] `messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId)`（2箇所）
+  - [x] `updateRunner()`内でも3次元キーを使用
 - [ ] 動作確認
   - [ ] 同一room・runner内で異なるthreadの履歴が混在しないことを確認
   - [ ] Thread切替時に履歴が正しく切り替わることを確認
 
 #### R-3.4 ThreadListViewModel.swift修正
-- [ ] `createThread`呼び出し修正
-  - [ ] `runner: selectedRunner.rawValue`削除
-  - [ ] `roomId, name, deviceId`のみ渡す
-- [ ] `fetchThreads`呼び出し修正
-  - [ ] `runner: runnerFilter`削除
-  - [ ] 全Thread取得後、**クライアント側で表示フィルタ**
-- [ ] フィルタリングロジック追加
-  - [ ] `runnerFilter`が指定されている場合、表示時にフィルタ
-  - [ ] `.filter { runnerFilter == nil || $0.lastUsedRunner == runnerFilter }`
-  - [ ] ※lastUsedRunnerは不要、表示のみフィルタ
+- [x] `createThread`呼び出し修正
+  - [x] `runner: selectedRunner.rawValue`削除
+  - [x] `roomId, name, deviceId`のみ渡す
+- [x] `fetchThreads`呼び出し修正
+  - [x] `runner: runnerFilter`削除
+  - [x] 全Thread取得（クライアント側フィルタはコメントで記載）
 
 #### R-3.5 PreviewAPIClient.swift修正
-- [ ] モックThread配列から`runner`削除
-- [ ] `createThread`モックから`runner`削除
-- [ ] `fetchThreads`モックから`runner`フィルタ削除
+- [x] モックThread配列から`runner`削除
+- [x] `createThread`モックから`runner`削除
+- [x] `fetchThreads`モックから`runner`フィルタ削除
+- [x] `updateThread`モックから`runner`削除
 
 #### R-3.6 RoomDetailView.swift確認
 - [ ] 既存実装そのまま動作確認
@@ -338,9 +339,10 @@ RemotePrompt/
 - [x] データ件数不変
 
 ### Refactor-2完了基準
-- [ ] Thread作成APIがrunnerなしで動作
-- [ ] Thread一覧取得APIがrunner指定なしで全Thread返却
-- [ ] Job作成APIで任意のrunnerが使用可能（整合性チェックなし）
+- [x] Thread作成APIがrunnerなしで動作
+- [x] Thread一覧取得APIがrunner指定なしで全Thread返却
+- [x] Job作成APIで任意のrunnerが使用可能（整合性チェックなし）
+- [x] ThreadResponse回帰防止テスト追加完了
 
 ### Refactor-3完了基準
 - [ ] iOSビルド成功
@@ -468,4 +470,4 @@ RemotePrompt/
 
 **更新日**: 2025-01-21
 **作成者**: Claude Code
-**ステータス**: 実装待ち
+**ステータス**: Refactor-2完了、Refactor-3実装中
