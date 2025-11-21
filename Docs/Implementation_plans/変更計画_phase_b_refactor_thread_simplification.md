@@ -202,7 +202,16 @@ RemotePrompt/
   - [x] 任意のrunnerでJob作成可能
   - [x] thread_id指定時もrunner不問
 
-#### R-2.4 Master_Specification.md更新
+#### R-2.4 ThreadResponse回帰防止テスト追加
+- [x] test_thread_response_schema_v4_2 追加
+  - [x] POST /rooms/{room_id}/threads レスポンス検証
+  - [x] GET /rooms/{room_id}/threads レスポンス検証
+  - [x] PATCH /threads/{thread_id} レスポンス検証
+  - [x] runnerフィールドが含まれないことを確認
+- [x] test_session_endpoints 修正
+  - [x] Thread作成時にrunnerパラメータ削除
+
+#### R-2.5 Master_Specification.md更新
 - [ ] Thread作成APIドキュメント修正
   - [ ] POST /threads リクエストから`runner`削除
   - [ ] レスポンス例から`runner`削除
