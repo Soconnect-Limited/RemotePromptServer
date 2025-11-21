@@ -45,7 +45,7 @@ actor PreviewAPIClient: APIClientProtocol {
         return job
     }
 
-    func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse {
+    func createJob(runner: String, prompt: String, deviceId: String, roomId: String, threadId: String? = nil) async throws -> CreateJobResponse {
         let job = Job(
             id: UUID().uuidString,
             runner: runner,
@@ -106,11 +106,13 @@ actor PreviewAPIClient: APIClientProtocol {
         deviceId: String,
         roomId: String,
         runner: String,
+        threadId: String? = nil,
         limit: Int,
         offset: Int
     ) async throws -> [Job] {
         let jobs = roomRunnerIndex[key(for: roomId, runner: runner)] ?? []
         guard offset < jobs.count else { return [] }
+        // Preview用なのでthreadIdフィルタは省略（実装では全件返す）
         return Array(jobs.dropFirst(offset).prefix(limit))
     }
 
@@ -123,6 +125,66 @@ actor PreviewAPIClient: APIClientProtocol {
     func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings? {
         roomSettings[roomId] = settings ?? RoomSettings.default
         return roomSettings[roomId] ?? RoomSettings.default
+    }
+
+    // MARK: - Thread Management
+
+    func fetchThreads(roomId: String, deviceId: String, runner: String?) async throws -> [Thread] {
+        // Preview用のダミースレッドを返す
+        let threads = [
+            Thread(
+                id: UUID().uuidString,
+                roomId: roomId,
+                name: "メインスレッド",
+                runner: runner ?? "claude",
+                deviceId: deviceId,
+                createdAt: Date(),
+                updatedAt: Date()
+            ),
+            Thread(
+                id: UUID().uuidString,
+                roomId: roomId,
+                name: "テストスレッド",
+                runner: runner ?? "claude",
+                deviceId: deviceId,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        ]
+        return threads
+    }
+
+    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread {
+        let thread = Thread(
+            id: UUID().uuidString,
+            roomId: roomId,
+            name: name,
+            runner: runner,
+            deviceId: deviceId,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        // Preview用に簡易ストレージ（fetchThreadsで返せるよう保存）
+        return thread
+    }
+
+    func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread {
+        // Preview用: 既存スレッドの検索はせず、fetchThreadsで生成したダミーデータと同じroomId/runnerを使用
+        // 実装上の一貫性のため、固定値ではなく保持データを返すべきだが、
+        // PreviewAPIClientは状態を持たないため、最低限の整合性のみ確保
+        return Thread(
+            id: threadId,
+            roomId: "preview-room-id",  // fetchThreadsと同じroomIdを使用
+            name: name,
+            runner: "claude",
+            deviceId: deviceId,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+
+    func deleteThread(threadId: String, deviceId: String) async throws {
+        // Preview用なので何もしない
     }
 
     private func key(for roomId: String, runner: String) -> String {

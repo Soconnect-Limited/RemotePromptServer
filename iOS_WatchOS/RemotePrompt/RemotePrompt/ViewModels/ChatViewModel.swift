@@ -20,7 +20,8 @@ final class ChatViewModel: ObservableObject {
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
     private let runner: String
-    private let roomId: String  // v3.0: Room ID (暫定的にデフォルトルーム使用)
+    private let roomId: String  // v3.0: Room ID
+    private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
     private let deviceId: String
     private let historyPageSize = 20
     private var historyOffset = 0
@@ -31,6 +32,7 @@ final class ChatViewModel: ObservableObject {
     init(
         runner: String = "claude",
         roomId: String = "default-room",
+        threadId: String? = nil,  // v4.0: Thread ID (nil = use default thread in compatibility mode)
         apiClient: APIClientProtocol = APIClient.shared,
         messageStore: MessageStore = MessageStore(),
         deviceIdProvider: @escaping () -> String = APIClient.getDeviceId,
@@ -40,6 +42,7 @@ final class ChatViewModel: ObservableObject {
     ) {
         self.runner = runner
         self.roomId = roomId
+        self.threadId = threadId
         self.apiClient = apiClient
         self.messageStore = messageStore
         self.deviceIdProvider = deviceIdProvider
@@ -88,6 +91,7 @@ final class ChatViewModel: ObservableObject {
                 deviceId: deviceId,
                 roomId: roomId,
                 runner: runner,
+                threadId: threadId,  // v4.0: Thread ID for message filtering
                 limit: historyPageSize,
                 offset: offsetValue
             )
@@ -207,7 +211,8 @@ final class ChatViewModel: ObservableObject {
                     runner: runner,
                     prompt: prompt,
                     deviceId: deviceId,
-                    roomId: roomId  // v3.0: Room ID追加
+                    roomId: roomId,  // v3.0: Room ID
+                    threadId: threadId  // v4.0: Thread ID (nil = use default thread)
                 )
 
                 var updatedUser = userMessage

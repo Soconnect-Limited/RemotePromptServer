@@ -43,7 +43,7 @@ struct CreateJobResponse: Codable {
 
 protocol APIClientProtocol {
     func fetchJob(id: String) async throws -> Job
-    func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse
+    func createJob(runner: String, prompt: String, deviceId: String, roomId: String, threadId: String?) async throws -> CreateJobResponse
     func fetchRooms(deviceId: String) async throws -> [Room]
     func createRoom(name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
     func updateRoom(roomId: String, name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
@@ -52,11 +52,18 @@ protocol APIClientProtocol {
         deviceId: String,
         roomId: String,
         runner: String,
+        threadId: String?,
         limit: Int,
         offset: Int
     ) async throws -> [Job]
     func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings?
     func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings?
+
+    // Thread Management
+    func fetchThreads(roomId: String, deviceId: String, runner: String?) async throws -> [Thread]
+    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread
+    func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread
+    func deleteThread(threadId: String, deviceId: String) async throws
 }
 
 final class APIClient: APIClientProtocol {
@@ -124,7 +131,7 @@ final class APIClient: APIClientProtocol {
         return try decoder.decode(Job.self, from: data)
     }
 
-    func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse {
+    func createJob(runner: String, prompt: String, deviceId: String, roomId: String, threadId: String? = nil) async throws -> CreateJobResponse {
         guard let url = URL(string: "\(Constants.baseURL)/jobs") else {
             throw APIError.invalidURL
         }
@@ -144,7 +151,7 @@ final class APIClient: APIClientProtocol {
             deviceId: deviceId,
             roomId: roomId,
             notifyToken: nil,
-            threadId: "default"
+            threadId: threadId  // v4.0: nilの場合は互換モードでデフォルトスレッド使用
         )
         request.httpBody = try encoder.encode(payload)
 
@@ -342,19 +349,24 @@ final class APIClient: APIClientProtocol {
         deviceId: String,
         roomId: String,
         runner: String,
+        threadId: String? = nil,
         limit: Int = 20,
         offset: Int = 0
     ) async throws -> [Job] {
         guard var components = URLComponents(string: "\(Constants.baseURL)/messages") else {
             throw APIError.invalidURL
         }
-        components.queryItems = [
+        var queryItems = [
             URLQueryItem(name: "device_id", value: deviceId),
             URLQueryItem(name: "room_id", value: roomId),
             URLQueryItem(name: "runner", value: runner),
             URLQueryItem(name: "limit", value: String(limit)),
             URLQueryItem(name: "offset", value: String(offset))
         ]
+        if let threadId = threadId {
+            queryItems.append(URLQueryItem(name: "thread_id", value: threadId))
+        }
+        components.queryItems = queryItems
 
         guard let url = components.url else {
             throw APIError.invalidURL
@@ -384,5 +396,126 @@ final class APIClient: APIClientProtocol {
         let newId = UUID().uuidString
         UserDefaults.standard.set(newId, forKey: "remote_prompt_device_id")
         return newId
+    }
+
+    // MARK: - Thread Management
+
+    func fetchThreads(roomId: String, deviceId: String, runner: String? = nil) async throws -> [Thread] {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/threads") else {
+            throw APIError.invalidURL
+        }
+
+        var queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+        if let runner = runner {
+            queryItems.append(URLQueryItem(name: "runner", value: runner))
+        }
+        components.queryItems = queryItems
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode([Thread].self, from: data)
+    }
+
+    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/threads") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload = CreateThreadRequest(roomId: roomId, name: name, runner: runner, deviceId: deviceId)
+        request.httpBody = try encoder.encode(payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode(Thread.self, from: data)
+    }
+
+    func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/threads/\(threadId)") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload = UpdateThreadRequest(name: name)
+        request.httpBody = try encoder.encode(payload)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode(Thread.self, from: data)
+    }
+
+    func deleteThread(threadId: String, deviceId: String) async throws {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/threads/\(threadId)") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
     }
 }
