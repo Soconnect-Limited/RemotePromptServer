@@ -105,7 +105,6 @@ class ThreadResponse(BaseModel):
     id: str
     room_id: str
     name: str
-    runner: str
     device_id: str
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
