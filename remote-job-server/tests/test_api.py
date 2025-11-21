@@ -95,7 +95,6 @@ class APITests(TestCase):
                 id="thread-xyz",
                 room_id="room-xyz",
                 name="thread",
-                runner="claude",
                 device_id="dev-2",
                 created_at=utcnow(),
                 updated_at=utcnow(),
@@ -134,3 +133,52 @@ class APITests(TestCase):
         res = self.client.get("/health")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "ok")
+
+    def test_thread_response_schema_v4_2(self) -> None:
+        """v4.2: ThreadResponseにrunnerフィールドが含まれないことを検証（回帰防止）"""
+        # Thread作成
+        res = self.client.post(
+            f"/rooms/{self.room_id}/threads",
+            json={"name": "Test Thread"},
+            params={"device_id": "dev-1"},
+            headers=self.headers,
+        )
+        self.assertEqual(res.status_code, 200, f"Thread creation failed: {res.text}")
+        thread_data = res.json()
+
+        # レスポンススキーマ検証
+        self.assertIn("id", thread_data)
+        self.assertIn("room_id", thread_data)
+        self.assertIn("name", thread_data)
+        self.assertIn("device_id", thread_data)
+        self.assertIn("created_at", thread_data)
+        self.assertIn("updated_at", thread_data)
+
+        # v4.2: runnerフィールドが含まれないことを確認
+        self.assertNotIn("runner", thread_data, "v4.2: runner field must not exist in ThreadResponse")
+
+        thread_id = thread_data["id"]
+
+        # GET /threads でも同様に検証
+        res = self.client.get(
+            f"/rooms/{self.room_id}/threads",
+            params={"device_id": "dev-1"},
+            headers=self.headers,
+        )
+        self.assertEqual(res.status_code, 200)
+        threads = res.json()
+        self.assertGreater(len(threads), 0)
+
+        for thread in threads:
+            self.assertNotIn("runner", thread, "v4.2: runner field must not exist in list response")
+
+        # PATCH /threads でも同様に検証
+        res = self.client.patch(
+            f"/threads/{thread_id}",
+            json={"name": "Updated Thread"},
+            params={"device_id": "dev-1"},
+            headers=self.headers,
+        )
+        self.assertEqual(res.status_code, 200)
+        updated_thread = res.json()
+        self.assertNotIn("runner", updated_thread, "v4.2: runner field must not exist in update response")
