@@ -50,7 +50,8 @@ final class ChatViewModel: ObservableObject {
         self.shouldAutoLoadMessages = autoLoadMessages
         self.shouldValidateAPIKey = validateAPIKey
         self.deviceId = deviceIdProvider()
-        messageStore.setActiveContext(roomId: roomId, runner: runner)
+        // v4.2: 3次元キー対応（threadId必須）
+        messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId ?? "default-thread")
         messages = messageStore.messages
         if autoLoadMessages {
             Task {
@@ -390,8 +391,8 @@ final class ChatViewModel: ObservableObject {
         // 3. Update runner
         runner = newRunner
 
-        // 4. Update MessageStore context
-        messageStore.setActiveContext(roomId: roomId, runner: newRunner)
+        // 4. Update MessageStore context (v4.2: threadId必須)
+        messageStore.setActiveContext(roomId: roomId, runner: newRunner, threadId: threadId ?? "default-thread")
 
         // 5. Clear current messages and reset pagination
         messages.removeAll()

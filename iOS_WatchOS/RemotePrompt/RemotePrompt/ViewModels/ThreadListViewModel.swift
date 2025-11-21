@@ -29,17 +29,18 @@ final class ThreadListViewModel: ObservableObject {
     }
 
     /// スレッド一覧を取得
+    /// v4.2: サーバー側runnerフィルタ削除、全Thread取得
     func fetchThreads() async {
         isLoading = true
         errorMessage = nil
 
         do {
-            // v4.1: サーバー側runnerフィルタリングに対応
             threads = try await apiClient.fetchThreads(
                 roomId: roomId,
-                deviceId: deviceId,
-                runner: runnerFilter
+                deviceId: deviceId
             )
+            // v4.2: クライアント側でrunnerフィルタリング（将来的に実装可能）
+            // 現在はrunnerFilterなしで全Thread表示
         } catch {
             errorMessage = "スレッド取得失敗: \(error.localizedDescription)"
         }
@@ -48,6 +49,7 @@ final class ThreadListViewModel: ObservableObject {
     }
 
     /// 新しいスレッドを作成
+    /// v4.2: runner パラメータ削除（Thread作成時にrunner指定不要）
     func createThread(name: String, runner: String? = nil) async {
         isLoading = true
         errorMessage = nil
@@ -56,7 +58,6 @@ final class ThreadListViewModel: ObservableObject {
             let newThread = try await apiClient.createThread(
                 roomId: roomId,
                 name: name,
-                runner: runner ?? defaultRunner,
                 deviceId: deviceId
             )
             threads.insert(newThread, at: 0)

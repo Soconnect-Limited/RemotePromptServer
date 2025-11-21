@@ -2,11 +2,11 @@ import Foundation
 
 /// スレッド情報を表すモデル
 /// バックエンドのthreadsテーブルに対応
+/// v4.2: runnerフィールド削除（Thread = 純粋な会話コンテナ）
 struct Thread: Codable, Identifiable, Hashable {
     let id: String
     let roomId: String
     var name: String
-    let runner: String  // "claude" or "codex"
     let deviceId: String
     let createdAt: Date?
     let updatedAt: Date?
@@ -15,7 +15,6 @@ struct Thread: Codable, Identifiable, Hashable {
         case id
         case roomId = "room_id"
         case name
-        case runner
         case deviceId = "device_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -24,15 +23,12 @@ struct Thread: Codable, Identifiable, Hashable {
 
 /// Thread作成リクエスト
 /// device_idはQuery Parameterで送信されるため、Bodyに含まない
+/// v4.2: runnerフィールド削除（サーバー側でrunner不要）
 struct CreateThreadRequest: Codable {
-    let roomId: String
     let name: String
-    let runner: String
 
     enum CodingKeys: String, CodingKey {
-        case roomId = "room_id"
         case name
-        case runner
     }
 }
 

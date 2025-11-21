@@ -59,9 +59,9 @@ protocol APIClientProtocol {
     func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings?
     func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings?
 
-    // Thread Management
-    func fetchThreads(roomId: String, deviceId: String, runner: String?) async throws -> [Thread]
-    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread
+    // Thread Management v4.2: runner パラメータ削除
+    func fetchThreads(roomId: String, deviceId: String) async throws -> [Thread]
+    func createThread(roomId: String, name: String, deviceId: String) async throws -> Thread
     func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread
     func deleteThread(threadId: String, deviceId: String) async throws
 }
@@ -400,16 +400,13 @@ final class APIClient: APIClientProtocol {
 
     // MARK: - Thread Management
 
-    func fetchThreads(roomId: String, deviceId: String, runner: String? = nil) async throws -> [Thread] {
+    /// v4.2: runner パラメータ削除（全Thread取得、クライアント側でフィルタ）
+    func fetchThreads(roomId: String, deviceId: String) async throws -> [Thread] {
         guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/threads") else {
             throw APIError.invalidURL
         }
 
-        var queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
-        if let runner = runner {
-            queryItems.append(URLQueryItem(name: "runner", value: runner))
-        }
-        components.queryItems = queryItems
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
 
         guard let url = components.url else {
             throw APIError.invalidURL
@@ -432,7 +429,8 @@ final class APIClient: APIClientProtocol {
         return try decoder.decode([Thread].self, from: data)
     }
 
-    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread {
+    /// v4.2: runner パラメータ削除（Thread作成時にrunner指定不要）
+    func createThread(roomId: String, name: String, deviceId: String) async throws -> Thread {
         guard var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/threads") else {
             throw APIError.invalidURL
         }
@@ -451,7 +449,7 @@ final class APIClient: APIClientProtocol {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let payload = CreateThreadRequest(roomId: roomId, name: name, runner: runner)
+        let payload = CreateThreadRequest(name: name)
         request.httpBody = try encoder.encode(payload)
 
         let (data, response) = try await URLSession.shared.data(for: request)

@@ -1,12 +1,14 @@
 import Combine
 import Foundation
 
-/// `MessageStore` maintains an in-memory cache of messages keyed by (roomId, runner).
+/// `MessageStore` maintains an in-memory cache of messages keyed by (roomId, runner, threadId).
+/// v4.2: 3次元キー対応（threadId追加）で同一room・runner内の複数thread履歴分離
 /// サーバーが唯一の情報源となるため、永続化は行わず、UIの即時更新/キャッシュ用途に限定する。
 final class MessageStore: ObservableObject {
     struct Context: Hashable {
         let roomId: String
         let runner: String
+        let threadId: String  // v4.2: threadId追加で3次元キー化
     }
 
     @Published private(set) var messages: [Message] = []
@@ -16,16 +18,16 @@ final class MessageStore: ObservableObject {
     private let cacheLimit: Int
     private let legacyStorageKey = "chat_messages"
 
-    init(defaultRoomId: String = "default-room", defaultRunner: String = "claude", cacheLimit: Int = 100) {
+    init(defaultRoomId: String = "default-room", defaultRunner: String = "claude", defaultThreadId: String = "default-thread", cacheLimit: Int = 100) {
         self.cacheLimit = cacheLimit
-        let context = Context(roomId: defaultRoomId, runner: defaultRunner)
+        let context = Context(roomId: defaultRoomId, runner: defaultRunner, threadId: defaultThreadId)
         self.activeContext = context
         storage[context] = []
         migrateLegacyMessages(for: context)
     }
 
-    func setActiveContext(roomId: String, runner: String) {
-        let context = Context(roomId: roomId, runner: runner)
+    func setActiveContext(roomId: String, runner: String, threadId: String) {
+        let context = Context(roomId: roomId, runner: runner, threadId: threadId)
         activeContext = context
         if storage[context] == nil {
             storage[context] = []

@@ -129,14 +129,14 @@ actor PreviewAPIClient: APIClientProtocol {
 
     // MARK: - Thread Management
 
-    func fetchThreads(roomId: String, deviceId: String, runner: String?) async throws -> [Thread] {
+    /// v4.2: runner パラメータ削除
+    func fetchThreads(roomId: String, deviceId: String) async throws -> [Thread] {
         // Preview用のダミースレッドを返す
         let threads = [
             Thread(
                 id: UUID().uuidString,
                 roomId: roomId,
                 name: "メインスレッド",
-                runner: runner ?? "claude",
                 deviceId: deviceId,
                 createdAt: Date(),
                 updatedAt: Date()
@@ -145,7 +145,6 @@ actor PreviewAPIClient: APIClientProtocol {
                 id: UUID().uuidString,
                 roomId: roomId,
                 name: "テストスレッド",
-                runner: runner ?? "claude",
                 deviceId: deviceId,
                 createdAt: Date(),
                 updatedAt: Date()
@@ -154,12 +153,12 @@ actor PreviewAPIClient: APIClientProtocol {
         return threads
     }
 
-    func createThread(roomId: String, name: String, runner: String, deviceId: String) async throws -> Thread {
+    /// v4.2: runner パラメータ削除
+    func createThread(roomId: String, name: String, deviceId: String) async throws -> Thread {
         let thread = Thread(
             id: UUID().uuidString,
             roomId: roomId,
             name: name,
-            runner: runner,
             deviceId: deviceId,
             createdAt: Date(),
             updatedAt: Date()
@@ -168,15 +167,15 @@ actor PreviewAPIClient: APIClientProtocol {
         return thread
     }
 
+    /// v4.2: runner フィールド削除
     func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread {
-        // Preview用: 既存スレッドの検索はせず、fetchThreadsで生成したダミーデータと同じroomId/runnerを使用
+        // Preview用: 既存スレッドの検索はせず、fetchThreadsで生成したダミーデータと同じroomIdを使用
         // 実装上の一貫性のため、固定値ではなく保持データを返すべきだが、
         // PreviewAPIClientは状態を持たないため、最低限の整合性のみ確保
         return Thread(
             id: threadId,
             roomId: "preview-room-id",  // fetchThreadsと同じroomIdを使用
             name: name,
-            runner: "claude",
             deviceId: deviceId,
             createdAt: Date(),
             updatedAt: Date()
