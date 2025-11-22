@@ -257,9 +257,9 @@ RemotePrompt/
 - [x] ChatViewModel.swift呼び出し修正
   - [x] `messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId)`（2箇所）
   - [x] `updateRunner()`内でも3次元キーを使用
-- [ ] 動作確認
-  - [ ] 同一room・runner内で異なるthreadの履歴が混在しないことを確認
-  - [ ] Thread切替時に履歴が正しく切り替わることを確認
+- [x] 動作確認
+  - [x] 同一room・runner内で異なるthreadの履歴が混在しないことを確認
+  - [x] Thread切替時に履歴が正しく切り替わることを確認
 
 #### R-3.4 ThreadListViewModel.swift修正
 - [x] `createThread`呼び出し修正
@@ -468,6 +468,63 @@ RemotePrompt/
 
 ---
 
-**更新日**: 2025-01-21
+---
+
+### Refactor-6: iOS SSE・UI修正（追加実装: 2025-01-22）
+
+#### R-6.1 SSEManager.swift: メインスレッドブロッキング修正
+- [x] URLSession delegateQueue修正
+  - [x] `delegateQueue: nil` → `delegateQueue: .main`（line 22）
+  - [x] デリゲートコールバックをメインスレッドで実行
+- [x] 不要なDispatchQueue.main.async削除
+  - [x] 既にメインスレッドで実行されるため、ラッパー削除（line 88-94）
+- [x] ビルド確認
+  - [x] コンパイルエラー解消
+
+#### R-6.2 ChatViewModel.swift: 推論中入力有効化修正
+- [x] isLoading管理修正
+  - [x] Job作成成功後に`isLoading = false`（line 239）
+  - [x] 推論中でも入力フィールド有効化
+- [x] SSEクリーンアップ追加
+  - [x] Terminal status受信時に`fetchFinalResult()`呼び出し（line 348）
+  - [x] stdout取得後にSSE接続クリーンアップ（line 350）
+- [x] メモリリーク防止
+  - [x] Job完了時に確実にSSE接続を解放
+
+#### R-6.3 InputBar.swift: デバッグログ追加
+- [x] canSendデバッグログ追加（line 17）
+- [x] isLoading変更検知ログ追加（line 43）
+- [x] 入力状態のトラッキング強化
+
+#### R-6.4 動作確認
+- [x] 推論中画面フリーズ解消確認
+- [x] 推論中テキスト入力可能確認
+- [x] Claude/Codex応答正常表示確認
+- [x] メモリ警告・クラッシュなし確認
+
+---
+
+### Refactor-7: バックエンドCodex 0.63.0互換性対応（追加実装: 2025-01-22）
+
+#### R-7.1 cli_builder.py: reasoning_effort mapping追加
+- [x] Codex 0.63.0互換性対応
+  - [x] `extra-high` → `xhigh` 自動マッピング（line 40-42）
+  - [x] サポート値: none, minimal, low, medium, high, xhigh
+- [x] RoomSettingsView.swift修正
+  - [x] gpt-5.1-codex-maxのみextra-highオプション表示（line 15-22）
+
+#### R-7.2 job_manager.py: SSEログ強化
+- [x] SSEブロードキャストログ追加
+  - [x] INFO-levelで全SSEイベント記録（line 183）
+  - [x] デバッグ用詳細ログ実装
+
+#### R-7.3 session_manager.py: approval_policy尊重
+- [x] hardcoded --full-auto削除
+  - [x] settings.jsonのapproval_policyを使用
+  - [x] ユーザー設定を優先
+
+---
+
+**更新日**: 2025-01-22
 **作成者**: Claude Code
-**ステータス**: Refactor-3完了（ビルド成功）、Refactor-4動作テスト待ち
+**ステータス**: Refactor-7完了（SSE修正・Codex互換性対応完了）、Refactor-4残タスクあり
