@@ -107,7 +107,19 @@ final class ChatViewModel: ObservableObject {
             historyOffset = reset ? jobs.count : historyOffset + jobs.count
 
             let historicalMessages = convertJobsToMessages(jobs)
-            let combinedMessages = reset ? historicalMessages : (historicalMessages + messages)
+            let combinedMessages: [Message]
+            if reset {
+                combinedMessages = historicalMessages
+            } else {
+                // R-8.6.1: Message ID重複排除（ForEach警告・UI凍結の原因）
+                let existingIds = Set(messages.map { $0.id })
+                let newMessages = historicalMessages.filter { !existingIds.contains($0.id) }
+                let duplicateCount = historicalMessages.count - newMessages.count
+                if duplicateCount > 0 {
+                    print("DEBUG: fetchHistory() - Filtered \(duplicateCount) duplicate messages")
+                }
+                combinedMessages = newMessages + messages
+            }
 
             messageStore.replaceAll(combinedMessages)
             messages = messageStore.messages
@@ -299,7 +311,8 @@ final class ChatViewModel: ObservableObject {
         let manager = SSEManager()
         sseConnections[jobId] = manager
 
-        var connectionCancellables = Set<AnyCancellable>()
+        // IMPORTANT: sseCancellablesに直接格納するためのSet を先に作成
+        sseCancellables[jobId] = Set<AnyCancellable>()
 
         // IMPORTANT: 購読をconnect()の前に設定
         manager.$jobStatus
@@ -308,7 +321,7 @@ final class ChatViewModel: ObservableObject {
                 print("DEBUG: Received job status update: \(status)")
                 self?.updateMessageStatus(messageId: messageId, status: status)
             }
-            .store(in: &connectionCancellables)
+            .store(in: &sseCancellables[jobId]!)
 
         manager.$isConnected
             .dropFirst() // 初期値(false)をスキップ
@@ -317,14 +330,18 @@ final class ChatViewModel: ObservableObject {
                 print("DEBUG: SSE connection status changed: \(connected)")
                 guard let self else { return }
                 if !connected {
-                    print("DEBUG: SSE disconnected, fetching final result")
+                    print("DEBUG: SSE disconnected, scheduling final result fetch")
+                    // SSE切断後、最終結果を取得してからクリーンアップ
+                    // Terminal statusイベントが既に受信されている場合でも安全に実行
                     Task { @MainActor in
+                        // 0.5秒待機してTerminal statusイベントの処理完了を待つ
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
                     }
                 }
             }
-            .store(in: &connectionCancellables)
+            .store(in: &sseCancellables[jobId]!)
 
         manager.$errorMessage
             .compactMap { $0 }
@@ -333,18 +350,34 @@ final class ChatViewModel: ObservableObject {
                 print("DEBUG: SSE error: \(message)")
                 self?.errorMessage = message
             }
-            .store(in: &connectionCancellables)
-
-        sseCancellables[jobId] = connectionCancellables
+            .store(in: &sseCancellables[jobId]!)
 
         // 購読設定後にconnect()を呼び出す
         manager.connect(jobId: jobId)
     }
 
     private func cleanupConnection(for jobId: String) {
-        sseConnections[jobId]?.disconnect()
+        let hasConnection = sseConnections[jobId] != nil
+        let hasCancellables = sseCancellables[jobId] != nil
+
+        print("DEBUG: cleanupConnection() - jobId: \(jobId), hasConnection: \(hasConnection), hasCancellables: \(hasCancellables)")
+        print("DEBUG: cleanupConnection() - Before cleanup - sseConnections.count: \(sseConnections.count), sseCancellables.count: \(sseCancellables.count)")
+
+        guard hasConnection || hasCancellables else {
+            print("DEBUG: cleanupConnection() - Connection for \(jobId) already cleaned up")
+            return
+        }
+
+        // SSE接続とCombine購読を両方クリーンアップ
+        if let manager = sseConnections[jobId] {
+            manager.disconnect()
+            print("DEBUG: cleanupConnection() - SSEManager.disconnect() called")
+        }
+
         sseConnections.removeValue(forKey: jobId)
         sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
+
+        print("DEBUG: cleanupConnection() - After cleanup - sseConnections.count: \(sseConnections.count), sseCancellables.count: \(sseCancellables.count)")
     }
 
     private func updateMessageStatus(messageId: String, status: String) {
@@ -369,14 +402,10 @@ final class ChatViewModel: ObservableObject {
         messages[index] = message
         messageStore.updateMessage(message)
 
-        // 完了ステータス受信時、最終結果を取得してからSSE接続をクリーンアップ
+        // Terminal status受信時はメッセージステータス更新のみ
+        // fetchFinalResult()とクリーンアップはSSE切断イベントで実行される
         if isTerminalStatus, let jobId = message.jobId {
-            print("DEBUG: updateMessageStatus() - Terminal status received for job: \(jobId)")
-            Task { @MainActor in
-                await self.fetchFinalResult(jobId: jobId, messageId: messageId)
-                print("DEBUG: updateMessageStatus() - Cleaning up SSE for job: \(jobId)")
-                self.cleanupConnection(for: jobId)
-            }
+            print("DEBUG: updateMessageStatus() - Terminal status '\(status)' received for job: \(jobId), waiting for SSE disconnect")
         }
     }
 

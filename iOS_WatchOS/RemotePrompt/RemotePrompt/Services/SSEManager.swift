@@ -41,9 +41,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
 
         task = session.dataTask(with: request)
+        print("DEBUG: SSEManager.connect() - Starting data task for job: \(jobId)")
         task?.resume()
         DispatchQueue.main.async {
             self.isConnected = true
+            print("DEBUG: SSEManager.connect() - isConnected set to true")
         }
     }
 
@@ -51,14 +53,21 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         task?.cancel()
         task = nil
         buffer.removeAll()
+        // session.invalidateAndCancel()はdeinitで実行（disconnect時に呼ぶと進行中のSSE接続がブロックされる）
         DispatchQueue.main.async {
             self.isConnected = false
         }
     }
 
+    deinit {
+        print("DEBUG: SSEManager deinit - Cleaning up URLSession")
+        session.invalidateAndCancel()
+    }
+
     // MARK: URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        print("DEBUG: urlSession(didReceive:) called with \(data.count) bytes")
         buffer.append(data)
         guard let chunk = String(data: buffer, encoding: .utf8) else {
             print("SSE DEBUG: Failed to decode buffer as UTF-8")
@@ -105,6 +114,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        print("DEBUG: urlSession(didCompleteWithError:) called - error: \(error?.localizedDescription ?? "nil")")
         DispatchQueue.main.async {
             self.isConnected = false
             if let error = error {
