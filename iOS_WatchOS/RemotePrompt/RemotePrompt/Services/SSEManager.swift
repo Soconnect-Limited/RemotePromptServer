@@ -50,18 +50,24 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     }
 
     func disconnect() {
+        print("DEBUG: SSEManager.disconnect() - Starting cleanup")
         task?.cancel()
         task = nil
         buffer.removeAll()
-        // session.invalidateAndCancel()はdeinitで実行（disconnect時に呼ぶと進行中のSSE接続がブロックされる）
+
+        // R-8.1.1: URLSession invalidate追加（強参照サイクル解消）
+        // 各Job完了時にsessionをinvalidateし、delegateとの参照を切断
+        session.invalidateAndCancel()
+        print("DEBUG: SSEManager.disconnect() - URLSession invalidated")
+
         DispatchQueue.main.async {
             self.isConnected = false
+            print("DEBUG: SSEManager.disconnect() - isConnected set to false")
         }
     }
 
     deinit {
-        print("DEBUG: SSEManager deinit - Cleaning up URLSession")
-        session.invalidateAndCancel()
+        print("DEBUG: SSEManager deinit - Instance deallocated (URLSession already invalidated in disconnect())")
     }
 
     // MARK: URLSessionDataDelegate

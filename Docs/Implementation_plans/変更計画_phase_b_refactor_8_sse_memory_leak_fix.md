@@ -223,9 +223,9 @@ within the collection, this will give undefined results!
 ## 実装チェックリスト
 
 ### Phase 1: CRITICAL修正（問題2・問題1）
-- [x] R-8.1.1 URLSession invalidate追加（Refactor-6で完了）
-- [x] R-8.1.2 deinitでの確実な破棄（Refactor-6で完了）
-- [x] R-8.1.3 動作確認（実機ログで `DEBUG: SSEManager deinit` 未確認 → 要再テスト）
+- [x] R-8.1.1 URLSession invalidate追加（✅ disconnect()に移動完了）
+- [x] R-8.1.2 deinitログ強化（✅ 完了）
+- [ ] R-8.1.3 動作確認（実機テストで `DEBUG: SSEManager deinit` 確認待ち）
 - [ ] R-8.2.1 updateMessageStatus修正
 - [ ] R-8.2.2 SSE切断イベントのみで最終結果取得
 - [ ] R-8.2.3 動作確認
