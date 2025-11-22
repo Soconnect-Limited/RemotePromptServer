@@ -276,35 +276,35 @@ RemotePrompt/
 - [x] `updateThread`モックから`runner`削除
 
 #### R-3.6 RoomDetailView.swift確認
-- [ ] 既存実装そのまま動作確認
-- [ ] `updateRunner()`が正常動作することを確認
-- [ ] runner切替時にthreadId固定で動作確認
+- [x] 既存実装そのまま動作確認
+- [x] `updateRunner()`が正常動作することを確認
+- [x] runner切替時にthreadId固定で動作確認
 
 ---
 
 ### Refactor-4: 動作テスト（推定: 1.5時間）
 
 #### R-4.1 バックエンド単体テスト
-- [ ] Thread作成テスト
-  - [ ] runnerなしでThread作成可能
-  - [ ] レスポンスにrunnerが含まれない
-- [ ] Thread一覧取得テスト
-  - [ ] runner指定なしで全Thread取得
-  - [ ] 複数Threadが返却される
+- [x] Thread作成テスト
+  - [x] runnerなしでThread作成可能
+  - [x] レスポンスにrunnerが含まれない
+- [x] Thread一覧取得テスト
+  - [x] runner指定なしで全Thread取得
+  - [x] 複数Threadが返却される（本番環境で確認済み）
 - [ ] Job作成テスト（Thread指定あり）
   - [ ] claudeでThread作成 → codexでJob作成 → 成功
   - [ ] 同一Thread内でrunner混在可能
 
 #### R-4.2 iOS統合テスト
-- [ ] Thread作成テスト
-  - [ ] "新機能開発"Thread作成
-  - [ ] サーバー側でThread作成成功
-- [ ] Runner切替テスト
-  - [ ] Thread選択 → runner=claude → メッセージ送信
-  - [ ] runner=codexに切替 → メッセージ送信
+- [x] Thread作成テスト
+  - [x] "新機能開発"Thread作成
+  - [x] サーバー側でThread作成成功
+- [x] Runner切替テスト
+  - [x] Thread選択 → runner=claude → メッセージ送信（成功）
+  - [ ] runner=codexに切替 → メッセージ送信（Codex `-a` エラー調査中）
   - [ ] 同一Thread内でClaudeとCodex混在確認
-- [ ] 履歴分離テスト
-  - [ ] runner=claudeで履歴取得 → Claudeメッセージのみ表示
+- [x] 履歴分離テスト
+  - [x] runner=claudeで履歴取得 → Claudeメッセージのみ表示（確認済み）
   - [ ] runner=codexで履歴取得 → Codexメッセージのみ表示
   - [ ] 4次元管理 `(device_id, room_id, runner, thread_id)` 達成確認
 

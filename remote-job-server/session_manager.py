@@ -193,6 +193,7 @@ class CodexSessionManager:
         if not thread_id:
             raise ValueError("thread_id is required for session management")
         cmd = build_codex_command(settings)
+        LOGGER.info("Codex command: %s (settings: %s)", cmd, settings)
         session_id = None
 
         if continue_session:

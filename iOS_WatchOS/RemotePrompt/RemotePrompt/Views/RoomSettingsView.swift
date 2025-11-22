@@ -12,6 +12,15 @@ struct RoomSettingsView: View {
         _viewModel = StateObject(wrappedValue: RoomSettingsViewModel(room: room, runner: runner))
     }
 
+    private var reasoningEffortOptions: [String] {
+        // gpt-5.1-codex-max のみ extra-high をサポート
+        if viewModel.settings.codex.model == "gpt-5.1-codex-max" {
+            return ["low", "medium", "high", "extra-high"]
+        } else {
+            return ["low", "medium", "high"]
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -38,7 +47,7 @@ struct RoomSettingsView: View {
                             ForEach(["untrusted", "on-failure", "on-request", "never"], id: \.self) { Text($0) }
                         }
                         Picker("Reasoning", selection: $viewModel.settings.codex.reasoningEffort) {
-                            ForEach(["low", "medium", "high", "extra-high"], id: \.self) { Text($0) }
+                            ForEach(reasoningEffortOptions, id: \.self) { Text($0) }
                         }
                         CustomFlagsEditor(flags: $viewModel.settings.codex.customFlags)
                     }

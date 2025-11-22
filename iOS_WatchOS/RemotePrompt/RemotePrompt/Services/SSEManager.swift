@@ -18,7 +18,8 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         config.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
         ]
-        session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        // Use main queue for delegate callbacks to avoid threading issues
+        session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
     }
 
     func connect(jobId: String) {
@@ -87,9 +88,10 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             print("SSE DEBUG: Attempting to decode: \(dataPayload)")
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
                 print("SSE DEBUG: Decoded event - status: \(event.status)")
-                DispatchQueue.main.async {
-                    self.jobStatus = event.status
-                }
+                print("SSE DEBUG: Current jobStatus: '\(self.jobStatus)'")
+                print("SSE DEBUG: Setting jobStatus to '\(event.status)'")
+                self.jobStatus = event.status
+                print("SSE DEBUG: jobStatus updated to '\(self.jobStatus)'")
             } else {
                 print("SSE DEBUG: Failed to decode JSON")
             }

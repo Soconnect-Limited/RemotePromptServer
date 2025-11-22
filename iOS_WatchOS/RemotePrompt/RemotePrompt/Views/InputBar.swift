@@ -12,7 +12,10 @@ struct InputBar: View {
     }
 
     private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isLoading
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let result = hasText && !isLoading
+        print("DEBUG: InputBar canSend - hasText: \(hasText), isLoading: \(isLoading), result: \(result)")
+        return result
     }
 
     var body: some View {
@@ -39,6 +42,9 @@ struct InputBar: View {
                     .lineLimit(1...5)
                     .disabled(isLoading)
                     .focused($isFocused)
+                    .onChange(of: isLoading) { newValue in
+                        print("DEBUG: InputBar TextField - isLoading changed to: \(newValue)")
+                    }
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {

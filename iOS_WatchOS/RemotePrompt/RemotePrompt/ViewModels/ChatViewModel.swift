@@ -53,16 +53,22 @@ final class ChatViewModel: ObservableObject {
         // v4.2: 3次元キー対応（threadId必須）
         messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId ?? "default-thread")
         messages = messageStore.messages
+        print("DEBUG: ChatViewModel init - roomId: \(roomId), threadId: \(threadId ?? "nil"), runner: \(runner)")
+        print("DEBUG: ChatViewModel init - autoLoadMessages: \(autoLoadMessages), messages count: \(messages.count)")
         if autoLoadMessages {
             Task {
+                print("DEBUG: ChatViewModel init - Starting autoLoadMessages Task")
                 await loadLatestMessages()
                 await recoverIncompleteJobs()
+                print("DEBUG: ChatViewModel init - autoLoadMessages Task completed")
             }
         }
     }
 
     func loadLatestMessages() async {
+        print("DEBUG: loadLatestMessages() - START")
         await fetchHistory(reset: true)
+        print("DEBUG: loadLatestMessages() - COMPLETED")
     }
 
     func loadMoreMessages() async {
@@ -160,11 +166,14 @@ final class ChatViewModel: ObservableObject {
 
     private func recoverIncompleteJobs() async {
         let incomplete = messages.filter { $0.isRunning && $0.jobId != nil }
+        print("DEBUG: recoverIncompleteJobs() - Found \(incomplete.count) incomplete jobs")
 
         for message in incomplete {
             guard let jobId = message.jobId else { continue }
+            print("DEBUG: recoverIncompleteJobs() - Checking job: \(jobId)")
             do {
                 let job = try await apiClient.fetchJob(id: jobId)
+                print("DEBUG: recoverIncompleteJobs() - Job \(jobId) status: \(job.status)")
                 guard let index = messages.firstIndex(where: { $0.id == message.id }) else { continue }
 
                 var updated = messages[index]
@@ -178,9 +187,11 @@ final class ChatViewModel: ObservableObject {
                 messageStore.updateMessage(updated)
 
                 if updated.isRunning {
+                    print("DEBUG: recoverIncompleteJobs() - Starting SSE for running job: \(jobId)")
                     startSSEStreaming(jobId: jobId, messageId: updated.id)
                 }
             } catch {
+                print("DEBUG: recoverIncompleteJobs() - Error fetching job \(jobId): \(error.localizedDescription)")
                 guard let index = messages.firstIndex(where: { $0.id == message.id }) else { continue }
                 var failed = messages[index]
                 failed.status = .failed
@@ -189,6 +200,7 @@ final class ChatViewModel: ObservableObject {
                 messageStore.updateMessage(failed)
             }
         }
+        print("DEBUG: recoverIncompleteJobs() - Completed")
     }
 
     func sendMessage() {
@@ -196,8 +208,13 @@ final class ChatViewModel: ObservableObject {
         guard !prompt.isEmpty else { return }
         guard ensureAPIKeyConfigured() else { return }
 
+        print("DEBUG: sendMessage() - START")
+        print("DEBUG: sendMessage() - Active SSE connections: \(sseConnections.keys.joined(separator: ", "))")
+        print("DEBUG: sendMessage() - isLoading: \(isLoading)")
+
         inputText = ""
         isLoading = true
+        print("DEBUG: sendMessage() - isLoading set to true")
 
         let userMessage = Message(
             roomId: roomId,
@@ -209,7 +226,6 @@ final class ChatViewModel: ObservableObject {
         messageStore.addMessage(userMessage)
 
         Task {
-            defer { isLoading = false }
             do {
                 let response = try await apiClient.createJob(
                     runner: runner,
@@ -218,6 +234,7 @@ final class ChatViewModel: ObservableObject {
                     roomId: roomId,  // v3.0: Room ID
                     threadId: threadId  // v4.0: Thread ID (nil = use default thread)
                 )
+                print("DEBUG: Job created: \(response.id)")
 
                 var updatedUser = userMessage
                 updatedUser.status = .completed
@@ -235,13 +252,22 @@ final class ChatViewModel: ObservableObject {
                 messageStore.addMessage(assistantMessage)
                 historyOffset += 1
 
+                // Job作成成功後、すぐに入力フィールドを有効化（推論中でも入力可能にする）
+                isLoading = false
+                print("DEBUG: sendMessage() - isLoading set to false after job creation")
+
                 startSSEStreaming(jobId: response.id, messageId: assistantMessage.id)
             } catch {
+                print("DEBUG: sendMessage() - Error: \(error.localizedDescription)")
                 errorMessage = error.localizedDescription
                 var failed = userMessage
                 failed.status = .failed
                 failed.errorMessage = error.localizedDescription
                 updateMessage(failed)
+
+                // エラー時も入力フィールドを有効化
+                isLoading = false
+                print("DEBUG: sendMessage() - isLoading set to false after error")
             }
         }
     }
@@ -257,14 +283,16 @@ final class ChatViewModel: ObservableObject {
 
     private func startSSEStreaming(jobId: String, messageId: String) {
         guard enableStreaming else {
+            print("DEBUG: startSSEStreaming() - Streaming disabled, fetching final result for job: \(jobId)")
             Task { @MainActor in
                 await self.fetchFinalResult(jobId: jobId, messageId: messageId)
             }
             return
         }
-        print("DEBUG: Starting SSE streaming for job \(jobId)")
+        print("DEBUG: startSSEStreaming() - Starting SSE streaming for job \(jobId), messageId: \(messageId)")
+        print("DEBUG: startSSEStreaming() - Current SSE connections: \(sseConnections.keys.joined(separator: ", "))")
         if let existing = sseConnections[jobId] {
-            print("DEBUG: Disconnecting existing SSE connection")
+            print("DEBUG: startSSEStreaming() - Disconnecting existing SSE connection for job: \(jobId)")
             existing.disconnect()
         }
 
@@ -323,6 +351,8 @@ final class ChatViewModel: ObservableObject {
         guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
         var message = messages[index]
 
+        let isTerminalStatus = (status == "success" || status == "failed")
+
         switch status {
         case "running":
             message.status = .running
@@ -338,6 +368,16 @@ final class ChatViewModel: ObservableObject {
 
         messages[index] = message
         messageStore.updateMessage(message)
+
+        // 完了ステータス受信時、最終結果を取得してからSSE接続をクリーンアップ
+        if isTerminalStatus, let jobId = message.jobId {
+            print("DEBUG: updateMessageStatus() - Terminal status received for job: \(jobId)")
+            Task { @MainActor in
+                await self.fetchFinalResult(jobId: jobId, messageId: messageId)
+                print("DEBUG: updateMessageStatus() - Cleaning up SSE for job: \(jobId)")
+                self.cleanupConnection(for: jobId)
+            }
+        }
     }
 
     private func fetchFinalResult(jobId: String, messageId: String) async {

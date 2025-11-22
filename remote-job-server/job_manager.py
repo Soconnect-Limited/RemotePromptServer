@@ -177,7 +177,10 @@ class JobManager:
         close_stream: bool = False,
     ) -> None:
         if not self.sse_manager:
+            LOGGER.warning("SSE manager not configured, skipping broadcast for job %s", job_id)
             return
+
+        LOGGER.info("Broadcasting SSE event for job %s: %s (close_stream=%s)", job_id, payload, close_stream)
 
         async def _runner() -> None:
             await self.sse_manager.broadcast(job_id, payload)
@@ -188,9 +191,11 @@ class JobManager:
 
     def _run_async(self, coro) -> None:
         if not self.sse_manager:
+            LOGGER.warning("_run_async called but sse_manager is None")
             return
 
         loop = getattr(self.sse_manager, "loop", None)
+
         if loop and not loop.is_closed():
             try:
                 current_loop = asyncio.get_running_loop()
@@ -204,9 +209,9 @@ class JobManager:
                     asyncio.run_coroutine_threadsafe(coro, loop)
                 return
             except Exception as exc:  # pragma: no cover - scheduling errors
-                LOGGER.warning("Failed to schedule SSE coroutine threadsafe: %s", exc)
+                LOGGER.warning("Failed to schedule SSE coroutine threadsafe: %s", exc, exc_info=True)
 
         try:
             asyncio.run(coro)
         except RuntimeError as exc:  # pragma: no cover - nested loop
-            LOGGER.warning("Failed to run SSE coroutine: %s", exc)
+            LOGGER.warning("Failed to run SSE coroutine: %s", exc, exc_info=True)

@@ -31,10 +31,15 @@ def build_codex_command(settings: Optional[Dict] = None) -> List[str]:
             cmd.extend(["-m", cfg["model"]])
         if "sandbox" in cfg:
             cmd.extend(["-s", cfg["sandbox"]])
-        if "approval_policy" in cfg:
-            cmd.extend(["-a", cfg["approval_policy"]])
+        # Note: approval_policy is not supported by codex exec
+        # Use --full-auto for automatic execution instead
         if "reasoning_effort" in cfg:
-            cmd.extend(["-r", cfg["reasoning_effort"]])
+            effort = cfg["reasoning_effort"]
+            # Codex 0.63.0+ supports: none, minimal, low, medium, high, xhigh
+            # Map extra-high to xhigh for compatibility
+            if effort == "extra-high":
+                effort = "xhigh"
+            cmd.extend(["-c", f"model_reasoning_effort={effort}"])
         if "custom_flags" in cfg:
             cmd.extend(cfg["custom_flags"])
 
