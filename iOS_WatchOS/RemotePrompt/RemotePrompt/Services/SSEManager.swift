@@ -6,29 +6,28 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     @Published var isConnected = false
     @Published var errorMessage: String?
 
-    private var session: URLSession!
+    private var session: URLSession?
     private var buffer = Data()
     private var task: URLSessionDataTask?
     private var jobId: String?
 
-    override init() {
-        super.init()
+    func connect(jobId: String) {
+        self.jobId = jobId
+
+        // 既存のタスクがあればキャンセル
+        task?.cancel()
+        task = nil
+        buffer.removeAll()
+
+        // R-8.1.1修正: connect()ごとに新しいURLSessionを生成
+        // disconnect()で無効化されたsessionの再利用を回避
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 300
         config.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
         ]
-        // Use main queue for delegate callbacks to avoid threading issues
         session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
-    }
-
-    func connect(jobId: String) {
-        self.jobId = jobId
-
-        // 既存のタスクがあればキャンセル（isConnected状態は変更しない）
-        task?.cancel()
-        task = nil
-        buffer.removeAll()
+        print("DEBUG: SSEManager.connect() - Created new URLSession for job: \(jobId)")
 
         guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
             errorMessage = "無効なSSE URL"
@@ -40,7 +39,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
 
-        task = session.dataTask(with: request)
+        task = session?.dataTask(with: request)
         print("DEBUG: SSEManager.connect() - Starting data task for job: \(jobId)")
         task?.resume()
         DispatchQueue.main.async {
@@ -57,8 +56,9 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
         // R-8.1.1: URLSession invalidate追加（強参照サイクル解消）
         // 各Job完了時にsessionをinvalidateし、delegateとの参照を切断
-        session.invalidateAndCancel()
-        print("DEBUG: SSEManager.disconnect() - URLSession invalidated")
+        session?.invalidateAndCancel()
+        session = nil
+        print("DEBUG: SSEManager.disconnect() - URLSession invalidated and set to nil")
 
         DispatchQueue.main.async {
             self.isConnected = false

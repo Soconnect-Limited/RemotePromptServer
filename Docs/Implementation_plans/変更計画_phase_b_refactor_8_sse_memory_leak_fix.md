@@ -223,9 +223,15 @@ within the collection, this will give undefined results!
 ## 実装チェックリスト
 
 ### Phase 1: CRITICAL修正（問題2・問題1）
-- [x] R-8.1.1 URLSession invalidate追加（✅ disconnect()に移動完了）
+- [x] R-8.1.1 URLSession再利用問題修正（✅ 完了 - 方針A採用）
+  - [x] `session`をオプショナル型に変更
+  - [x] `connect()`で毎回新しいURLSessionを生成
+  - [x] `disconnect()`で`session = nil`設定
+  - **修正内容**: 無効化されたsessionの再利用を完全回避
 - [x] R-8.1.2 deinitログ強化（✅ 完了）
-- [ ] R-8.1.3 動作確認（実機テストで `DEBUG: SSEManager deinit` 確認待ち）
+- [ ] R-8.1.3 動作確認（実機テストで連続4回以上のメッセージ送信確認待ち）
+  - [ ] `DEBUG: SSEManager deinit`ログ確認
+  - [ ] 4回目以降のメッセージでSSE正常受信確認
 - [ ] R-8.2.1 updateMessageStatus修正
 - [ ] R-8.2.2 SSE切断イベントのみで最終結果取得
 - [ ] R-8.2.3 動作確認
