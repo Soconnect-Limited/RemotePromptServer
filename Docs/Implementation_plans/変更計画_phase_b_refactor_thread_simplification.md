@@ -212,14 +212,14 @@ RemotePrompt/
   - [x] Thread作成時にrunnerパラメータ削除
 
 #### R-2.5 Master_Specification.md更新
-- [ ] Thread作成APIドキュメント修正
-  - [ ] POST /threads リクエストから`runner`削除
-  - [ ] レスポンス例から`runner`削除
-- [ ] Thread一覧取得APIドキュメント修正
-  - [ ] GET /threads Query parameterから`runner`削除
-  - [ ] レスポンス例から`runner`削除
-- [ ] 仕様変更セクション追加
-  - [ ] v4.2変更点を明記
+- [x] Thread作成APIドキュメント修正
+  - [x] POST /threads リクエストから`runner`削除
+  - [x] レスポンス例から`runner`削除
+- [x] Thread一覧取得APIドキュメント修正
+  - [x] GET /threads Query parameterから`runner`削除
+  - [x] レスポンス例から`runner`削除
+- [x] 仕様変更セクション追加
+  - [x] v4.2変更点を明記（Section 15追加）
 
 ---
 
