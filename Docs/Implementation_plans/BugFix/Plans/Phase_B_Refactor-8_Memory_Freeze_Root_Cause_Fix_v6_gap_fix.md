@@ -17,14 +17,16 @@
 - テスト: `remote-job-server/tests/test_sse.py` は fast-completion レースや heartbeat を網羅していない。
 
 ## 修正ブレイクダウン（チェックリスト）
-- [ ] `/jobs/{id}/stream` 初期スナップショット: 早期 return 判定を `status in {"success", "failed"}` に修正。送信 payload も現行ステータス文字列をそのまま使用。
-- [ ] Heartbeat 実装完了後に iOS の `timeoutInterval` 短縮を適用（Phase 2→3 の順序を明記）。暫定的に 300 秒を維持する注記を追加。
+- [x] `/jobs/{id}/stream` 初期スナップショット: 早期 return 判定を `status in {"success", "failed"}` に修正。送信 payload も現行ステータス文字列をそのまま使用。
+- [x] 初期スナップショットpayloadのフィールドを `status/started_at/finished_at/exit_code` に揃える。
+- [x] Heartbeat 実装完了後に iOS の `timeoutInterval` 短縮を適用（Phase 2→3 の順序を明記）。暫定的に 300 秒を維持する注記を追加。（※サーバー側 heartbeat 実装済み。iOSはheartbeat展開後に60sへ短縮する旨を計画に明記済み。）
 - [ ] delegateQueue 方針決定: 
   - Option 1: Master_Spec v4.2 に合わせて `.main` へ統一。
   - Option 2: serial `OperationQueue` を採用する場合は Master_Spec v4.3 改訂タスクを計画に追加。
 - [ ] SSE回帰テスト拡充: `test_sse.py` に以下を追加
   - fast completion で購読開始前に完了した場合でも初期スナップショットが1件届く
   - heartbeat コメント (`:heartbeat`) が 30s 間隔で届き、接続が維持される
+  - 初期スナップショットのフィールドが `status/started_at/finished_at/exit_code` を含む
   - `close_stream=True` で必ず `close()` が呼ばれ、サブスクライバ数ログが出る
 - [ ] 計画ドキュメント更新: v6 本文に上記修正を追記し、Master_Spec の改訂有無を明記。
 

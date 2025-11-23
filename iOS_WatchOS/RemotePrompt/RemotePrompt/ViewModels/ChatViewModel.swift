@@ -19,6 +19,7 @@ final class ChatViewModel: ObservableObject {
     private let shouldValidateAPIKey: Bool
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
+    private var finalResultFetched: Set<String> = []  // ジョブごとの最終取得ガード
     private var runner: String  // v4.1: Changed from `let` to `var` for dynamic runner switching
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
@@ -221,10 +222,11 @@ final class ChatViewModel: ObservableObject {
         guard ensureAPIKeyConfigured() else { return }
 
 #if DEBUG && MEMORY_METRICS
-        MemoryMetrics.logRSS("before sendMessage", extra: "room=\(roomId) thread=\(threadId ?? "nil")")
+        MemoryMetrics.logRSS("before sendMessage", extra: "messages=\(messages.count) sseConns=\(sseConnections.count)")
 #endif
 
         print("DEBUG: sendMessage() - START")
+        print("DEBUG: sendMessage() - messages.count: \(messages.count)")
         print("DEBUG: sendMessage() - Active SSE connections: \(sseConnections.keys.joined(separator: ", "))")
         print("DEBUG: sendMessage() - isLoading: \(isLoading)")
 
@@ -328,6 +330,21 @@ final class ChatViewModel: ObservableObject {
             .sink { [weak self] status in
                 print("DEBUG: Received job status update: \(status)")
                 self?.updateMessageStatus(messageId: messageId, status: status)
+
+                // 終端ステータスで二重実行防止付きfetch
+                guard let self else { return }
+                if status == "success" || status == "failed" {
+                    guard !self.finalResultFetched.contains(jobId) else {
+                        print("DEBUG: Terminal status already fetched for job: \(jobId)")
+                        return
+                    }
+                    self.finalResultFetched.insert(jobId)
+                    Task { @MainActor in
+                        await self.fetchFinalResult(jobId: jobId, messageId: messageId)
+                        self.cleanupConnection(for: jobId)
+                        self.finalResultFetched.remove(jobId)
+                    }
+                }
             }
             .store(in: &sseCancellables[jobId]!)
 
@@ -344,8 +361,14 @@ final class ChatViewModel: ObservableObject {
                     Task { @MainActor in
                         // 0.5秒待機してTerminal statusイベントの処理完了を待つ
                         try? await Task.sleep(nanoseconds: 500_000_000)
+                        guard !self.finalResultFetched.contains(jobId) else {
+                            print("DEBUG: Final result already fetched for job: \(jobId) on disconnect")
+                            return
+                        }
+                        self.finalResultFetched.insert(jobId)
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
+                        self.finalResultFetched.remove(jobId)
                     }
                 }
             }
@@ -384,15 +407,20 @@ final class ChatViewModel: ObservableObject {
 
         sseConnections.removeValue(forKey: jobId)
         sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
+        finalResultFetched.remove(jobId)
 
         print("DEBUG: cleanupConnection() - After cleanup - sseConnections.count: \(sseConnections.count), sseCancellables.count: \(sseCancellables.count)")
+
+#if DEBUG && MEMORY_METRICS
+        MemoryMetrics.logRSS("after cleanup", extra: "messages=\(messages.count) sseConns=\(sseConnections.count)")
+#endif
     }
 
     private func updateMessageStatus(messageId: String, status: String) {
-        guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        guard let index = messages.firstIndex(where: { $0.id == messageId }) else {
+            return
+        }
         var message = messages[index]
-
-        let isTerminalStatus = (status == "success" || status == "failed")
 
         switch status {
         case "running":
@@ -409,12 +437,6 @@ final class ChatViewModel: ObservableObject {
 
         messages[index] = message
         messageStore.updateMessage(message)
-
-        // Terminal status受信時はメッセージステータス更新のみ
-        // fetchFinalResult()とクリーンアップはSSE切断イベントで実行される
-        if isTerminalStatus, let jobId = message.jobId {
-            print("DEBUG: updateMessageStatus() - Terminal status '\(status)' received for job: \(jobId), waiting for SSE disconnect")
-        }
     }
 
     private func fetchFinalResult(jobId: String, messageId: String) async {
@@ -434,6 +456,10 @@ final class ChatViewModel: ObservableObject {
 
             messages[index] = message
             messageStore.updateMessage(message)
+
+#if DEBUG && MEMORY_METRICS
+            MemoryMetrics.logRSS("after fetchFinalResult", extra: "job=\(jobId) contentLen=\(message.content.count)")
+#endif
         } catch let decodingError as DecodingError {
             print("DEBUG: Decoding error: \(decodingError)")
             errorMessage = "データ解析エラー: \(decodingError.localizedDescription)"

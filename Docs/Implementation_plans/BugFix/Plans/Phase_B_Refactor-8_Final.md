@@ -64,7 +64,7 @@ session = URLSession(configuration: config, delegate: self, delegateQueue: nil) 
 ```
 
 **決定が必要:**
-- [ ] **Option 1**: Master_Spec v4.2に従い `.main` に変更
+- [x] **Option 1**: Master_Spec v4.2に従い `.main` に変更
 - [ ] **Option 2**: `nil` (システムBG) を継続、Master_Spec v4.3で仕様を現実装に合わせる
 - [ ] **Option 3**: serial `OperationQueue` を採用、Master_Spec v4.3で仕様追加
 
@@ -111,13 +111,13 @@ private var sseState: SSEState = .idle {
 - `disconnect()`: * → disconnected → idle
 
 **チェックリスト:**
-- [ ] SSEState enum定義（success/failedに修正）
-- [ ] sseState プロパティ追加（didSetでログ出力）
-- [ ] connect()に状態遷移追加（idle → connecting）
-- [ ] didReceive response に状態遷移追加（connecting → responseReceived）
-- [ ] didReceive data に状態遷移追加（responseReceived → receiving）
-- [ ] didCompleteWithError に状態遷移追加（→ success/failed）
-- [ ] disconnect()に状態遷移追加（→ disconnected → idle）
+- [x] SSEState enum定義（success/failedに修正）
+- [x] sseState プロパティ追加（didSetでログ出力）
+- [x] connect()に状態遷移追加（idle → connecting）
+- [x] didReceive response に状態遷移追加（connecting → responseReceived）
+- [x] didReceive data に状態遷移追加（responseReceived → receiving）
+- [x] didCompleteWithError に状態遷移追加（→ success/failed）
+- [x] disconnect()に状態遷移追加（→ disconnected → idle）
 
 **完了条件:** フリーズ時のログに `responseReceived → success` パターンが記録される（receiving未到達を証明）
 
@@ -166,11 +166,11 @@ func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive 
 ```
 
 **チェックリスト:**
-- [ ] didReceive data に受信バイト数ログ追加
-- [ ] buffer.count ログ追加
-- [ ] UTF-8デコード失敗ログ追加
-- [ ] イベントパース数ログ追加
-- [ ] JSONデコード成功/失敗ログ追加
+- [x] didReceive data に受信バイト数ログ追加
+- [x] buffer.count ログ追加
+- [x] UTF-8デコード失敗ログ追加
+- [x] イベントパース数ログ追加
+- [x] JSONデコード成功/失敗ログ追加
 
 **完了条件:** buffer増加パターンとデコード失敗箇所を可視化
 
@@ -213,10 +213,10 @@ async def subscribe(self, job_id: str) -> AsyncGenerator[str, None]:
 ```
 
 **チェックリスト:**
-- [ ] subscribe開始時にsubscribers数ログ追加
-- [ ] イベント送信時にpayload keysログ追加（DEBUGレベル）
-- [ ] None受信時のcloseログ追加
-- [ ] cleanup時の残存subscribers数ログ追加
+- [x] subscribe開始時にsubscribers数ログ追加
+- [x] イベント送信時にpayload keysログ追加（DEBUGレベル）
+- [x] None受信時のcloseログ追加
+- [x] cleanup時の残存subscribers数ログ追加
 
 **完了条件:** クライアント未受信時のサーバー側タイムラインを復元可能
 
@@ -279,15 +279,15 @@ async def stream_job_status(job_id: str, request: Request) -> StreamingResponse:
 ```
 
 **チェックリスト:**
-- [ ] `job_manager.get_job(job_id)` で同期取得（await不使用）
-- [ ] job存在確認
-- [ ] **初期ペイロード生成（status, started_at, finished_at, exit_code）**
-- [ ] **初期ペイロードのフィールドが `job_manager.get_job()` の返却構造と一致することを確認**
-- [ ] **初期ペイロードのフィールドが `_broadcast_job_event()` と同一キーであることを確認**
-- [ ] `data: {json}\n\n` フォーマットで初期イベント送信
-- [ ] **終端判定を `status in ["success", "failed"]` に修正**
-- [ ] ログ追加（初期送信、終端即終了）
-- [ ] 既存ヘッダーは維持（重複追加しない）
+- [x] `job_manager.get_job(job_id)` で同期取得（await不使用）
+- [x] job存在確認
+- [x] **初期ペイロード生成（status, started_at, finished_at, exit_code）**
+- [x] **初期ペイロードのフィールドが `job_manager.get_job()` の返却構造と一致することを確認**
+- [x] **初期ペイロードのフィールドが `_broadcast_job_event()` と同一キーであることを確認**
+- [x] `data: {json}\n\n` フォーマットで初期イベント送信
+- [x] **終端判定を `status in ["success", "failed"]` に修正**
+- [x] ログ追加（初期送信、終端即終了）
+- [x] 既存ヘッダーは維持（重複追加しない）
 
 **完了条件:**
 - 高速完了ジョブ（status="success"）でもクライアントが必ず1件以上のイベント受信
@@ -342,11 +342,11 @@ async def subscribe(self, job_id: str) -> AsyncGenerator[str, None]:
 ```
 
 **チェックリスト:**
-- [ ] HEARTBEAT_INTERVAL定数定義（30.0秒）
-- [ ] `asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)` 実装
-- [ ] TimeoutError時に `:heartbeat\n\n` 送信（SSEコメント形式）
-- [ ] payloadはdictのまま受け取り、`data: {json}\n\n` に変換
-- [ ] ログ追加（heartbeat送信）
+- [x] HEARTBEAT_INTERVAL定数定義（30.0秒）
+- [x] `asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)` 実装
+- [x] TimeoutError時に `:heartbeat\n\n` 送信（SSEコメント形式）
+- [x] payloadはdictのまま受け取り、`data: {json}\n\n` に変換
+- [x] ログ追加（heartbeat送信）
 
 **完了条件:**
 - 30秒ごとに `:heartbeat\n\n` 送信確認（サーバーログ）
@@ -383,9 +383,9 @@ def _broadcast_job_event(
 ```
 
 **チェックリスト:**
-- [ ] broadcast前にsubscribers数取得
-- [ ] ログにsubscribers数追加
-- [ ] close_stream=True時の明示的ログ追加
+- [x] broadcast前にsubscribers数取得
+- [x] ログにsubscribers数追加
+- [x] close_stream=True時の明示的ログ追加
 
 **完了条件:** ログで購読者数と終了タイミングを追跡可能
 
@@ -423,11 +423,11 @@ func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive 
 ```
 
 **チェックリスト:**
-- [ ] MAX_BUFFER_SIZE定数定義（1_048_576 = 1MB）
-- [ ] `buffer.count + data.count > MAX_BUFFER_SIZE` チェック
-- [ ] 超過時に `buffer.removeAll()`
-- [ ] 超過時のログ出力（LIMIT EXCEEDED, Clearing buffer）
-- [ ] 超過時は早期return（データ破棄）
+- [x] MAX_BUFFER_SIZE定数定義（1_048_576 = 1MB）
+- [x] `buffer.count + data.count > MAX_BUFFER_SIZE` チェック
+- [x] 超過時に `buffer.removeAll()`
+- [x] 超過時のログ出力（LIMIT EXCEEDED, Clearing buffer）
+- [x] 超過時は早期return（データ破棄）
 
 **完了条件:**
 - 1MB超過でbuffer強制クリア確認
@@ -437,7 +437,7 @@ func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive 
 **対象ファイル:** `iOS_WatchOS/RemotePrompt/RemotePrompt/Views/ChatView.swift`
 
 **実装前に現状確認:**
-- [ ] ChatView.swiftを読み、現在のonChange実装を確認
+- [x] ChatView.swiftを読み、現在のonChange実装を確認
 
 **実装内容（想定）:**
 ```swift
@@ -464,11 +464,11 @@ ScrollViewReader { proxy in
 ```
 
 **チェックリスト:**
-- [ ] 現在のonChange実装を確認（ChatView.swiftを読む）
-- [ ] 既存の複数onChangeを削除
-- [ ] ID配列のonChangeに統合
-- [ ] ログ追加
-- [ ] スクロール処理をID配列onChange内に移動
+- [x] 現在のonChange実装を確認（ChatView.swiftを読む）
+- [x] 既存の複数onChangeを削除
+- [x] ID配列のonChangeに統合
+- [x] ログ追加
+- [x] スクロール処理をID配列onChange内に移動
 
 **完了条件:**
 - onChange発火回数が大幅減少（ログ確認）
@@ -549,13 +549,13 @@ func cleanupConnection(for jobId: String) {
 ```
 
 **チェックリスト:**
-- [ ] `finalResultFetched: Set<String>` プロパティ追加
-- [ ] `isConnected=false`トリガに二重実行チェック追加
-- [ ] 実行前に `finalResultFetched.insert(jobId)`
-- [ ] **`jobStatus` 終端判定を `"success"` または `"failed"` に修正**
-- [ ] 終端状態トリガに二重実行チェック追加
-- [ ] `cleanupConnection` 完了後に `finalResultFetched.remove(jobId)`
-- [ ] 各所にログ追加
+- [x] `finalResultFetched: Set<String>` プロパティ追加
+- [x] `isConnected=false`トリガに二重実行チェック追加
+- [x] 実行前に `finalResultFetched.insert(jobId)`
+- [x] **`jobStatus` 終端判定を `"success"` または `"failed"` に修正**
+- [x] 終端状態トリガに二重実行チェック追加
+- [x] `cleanupConnection` 完了後に `finalResultFetched.remove(jobId)`
+- [x] 各所にログ追加
 
 **完了条件:**
 - ログで二重実行スキップ確認
@@ -624,13 +624,13 @@ func connect(jobId: String) {
 ```
 
 **チェックリスト:**
-- [ ] **Phase 2.2（heartbeat）実装完了確認**
-- [ ] `config.timeoutIntervalForRequest = 60` に変更（300 → 60）
-- [ ] `httpAdditionalHeaders` に `Cache-Control: no-cache` 追加
-- [ ] `httpAdditionalHeaders` に `Accept-Encoding: identity` 追加
-- [ ] `request.timeoutInterval = 60.0` 設定
-- [ ] delegateQueueをPhase 0.1の決定に従って設定
-- [ ] コメント追加（heartbeat間隔との関係、実装順序注意）
+- [x] **Phase 2.2（heartbeat）実装完了確認**
+- [x] `config.timeoutIntervalForRequest = 60` に変更（300 → 60）
+- [x] `httpAdditionalHeaders` に `Cache-Control: no-cache` 追加
+- [x] `httpAdditionalHeaders` に `Accept-Encoding: identity` 追加
+- [x] `request.timeoutInterval = 60.0` 設定
+- [x] delegateQueueをPhase 0.1の決定に従って設定（.main）
+- [x] コメント追加（heartbeat間隔との関係、実装順序注意）
 
 **完了条件:**
 - サーバー側heartbeat実装完了後にデプロイ

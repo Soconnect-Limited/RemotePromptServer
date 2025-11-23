@@ -27,20 +27,32 @@ class SSEManager:
             self._loop = current_loop
         queue: asyncio.Queue = asyncio.Queue()
         self._connections.setdefault(job_id, set()).add(queue)
-        LOGGER.info("SSE connection opened for job %s", job_id)
+        LOGGER.info("SSE connection opened for job %s (subscribers=%d)", job_id, len(self._connections[job_id]))
+
+        HEARTBEAT_INTERVAL = 30.0
 
         try:
             while True:
-                payload = await queue.get()
-                if payload is None:
-                    break
-                yield f"data: {json.dumps(payload)}\n\n"
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_INTERVAL)
+                    if payload is None:
+                        LOGGER.info("[SSE-CLOSE] job_id=%s, received None, closing stream", job_id)
+                        break
+                    LOGGER.debug("[SSE-SEND] job_id=%s, payload_keys=%s", job_id, list(payload.keys()))
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    LOGGER.debug("[SSE-HEARTBEAT] job_id=%s", job_id)
+                    yield ":heartbeat\n\n"
         finally:
             if job_id in self._connections:
                 self._connections[job_id].discard(queue)
                 if not self._connections[job_id]:
                     del self._connections[job_id]
-            LOGGER.info("SSE connection closed for job %s", job_id)
+            LOGGER.info(
+                "SSE connection closed for job %s (remaining_subscribers=%d)",
+                job_id,
+                len(self._connections.get(job_id, [])),
+            )
 
     async def broadcast(self, job_id: str, payload: dict) -> None:
         """Send a payload to all subscribers of the specified job."""

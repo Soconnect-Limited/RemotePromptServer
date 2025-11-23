@@ -180,7 +180,14 @@ class JobManager:
             LOGGER.warning("SSE manager not configured, skipping broadcast for job %s", job_id)
             return
 
-        LOGGER.info("Broadcasting SSE event for job %s: %s (close_stream=%s)", job_id, payload, close_stream)
+        subscribers = len(getattr(self.sse_manager, "_connections", {}).get(job_id, []))
+        LOGGER.info(
+            "Broadcasting SSE event for job %s: %s (subscribers=%d, close_stream=%s)",
+            job_id,
+            payload,
+            subscribers,
+            close_stream,
+        )
 
         async def _runner() -> None:
             await self.sse_manager.broadcast(job_id, payload)

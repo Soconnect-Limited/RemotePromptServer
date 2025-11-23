@@ -6,10 +6,28 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     @Published var isConnected = false
     @Published var errorMessage: String?
 
+    enum SSEState: String {
+        case idle
+        case connecting
+        case responseReceived
+        case receiving
+        case success
+        case failed
+        case disconnected
+    }
+
     private var session: URLSession?
     private var buffer = Data()
     private var task: URLSessionDataTask?
     private var jobId: String?
+    private var sseState: SSEState = .idle {
+        didSet {
+            let thread = Thread.isMainThread ? "main" : "bg"
+            print("DEBUG: [SSE-STATE] \(oldValue.rawValue) → \(sseState.rawValue) [thread:\(thread)] job=\(jobId ?? "nil")")
+        }
+    }
+
+    private let MAX_BUFFER_SIZE = 1_048_576  // 1MB
 
     func connect(jobId: String) {
         self.jobId = jobId
@@ -22,13 +40,15 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         // R-8.1.1修正: connect()ごとに新しいURLSessionを生成
         // disconnect()で無効化されたsessionの再利用を回避
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForRequest = 60  // heartbeat 30s + 余裕30s
         config.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Accept-Encoding": "identity",
         ]
-        // delegateQueue: nilでバックグラウンドキュー使用（メインスレッドブロック回避）
-        session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        print("DEBUG: SSEManager.connect() - Created new URLSession for job: \(jobId)")
+        // Master_Spec v4.2準拠: delegateQueueは.main
+        session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
+        print("DEBUG: SSEManager.connect() - Created new URLSession for job: \(jobId) with delegateQueue .main")
 
         guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
             errorMessage = "無効なSSE URL"
@@ -39,10 +59,12 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         request.httpMethod = "GET"
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
+        request.timeoutInterval = 60.0
 
         task = session?.dataTask(with: request)
         print("DEBUG: SSEManager.connect() - Starting data task for job: \(jobId)")
         task?.resume()
+        sseState = .connecting
         DispatchQueue.main.async {
             self.isConnected = true
             print("DEBUG: SSEManager.connect() - isConnected set to true")
@@ -69,6 +91,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             self.isConnected = false
             print("DEBUG: SSEManager.disconnect() - isConnected set to false")
         }
+        sseState = .disconnected
 
 #if DEBUG && MEMORY_METRICS
         if let jobId {
@@ -86,11 +109,23 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     // MARK: URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let thread = Thread.isMainThread ? "main" : "bg"
+        print("DEBUG: [SSE-DATA] received: \(data.count) bytes, bufferSize: \(buffer.count) bytes [thread:\(thread)]")
+
+        if buffer.count + data.count > MAX_BUFFER_SIZE {
+            print("DEBUG: [SSE-BUFFER] LIMIT EXCEEDED! current=\(buffer.count) incoming=\(data.count) max=\(MAX_BUFFER_SIZE)")
+            print("DEBUG: [SSE-BUFFER] Clearing buffer and discarding incoming data")
+            buffer.removeAll()
+            return
+        }
+
         buffer.append(data)
         guard let chunk = String(data: buffer, encoding: .utf8) else {
+            print("DEBUG: [SSE-DATA] Failed to decode buffer as UTF-8")
             return
         }
         let events = chunk.components(separatedBy: "\n\n")
+        print("DEBUG: [SSE-EVENTS] parsed \(events.count) event blocks from buffer")
 
         for index in 0..<(events.count - 1) {
             let eventBlock = events[index]
@@ -110,9 +145,15 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 continue
             }
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
+                print("DEBUG: [SSE-DECODE] SUCCESS - status: \(event.status)")
                 DispatchQueue.main.async {
                     self.jobStatus = event.status
                 }
+                if sseState == .responseReceived {
+                    sseState = .receiving
+                }
+            } else {
+                print("DEBUG: [SSE-DECODE] FAILED - payload: \(dataPayload)")
             }
         }
 
@@ -131,6 +172,21 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 self.errorMessage = error.localizedDescription
             }
         }
+        if error == nil {
+            sseState = .success
+        } else {
+            sseState = .failed
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        sseState = .responseReceived
+        completionHandler(.allow)
     }
 }
 

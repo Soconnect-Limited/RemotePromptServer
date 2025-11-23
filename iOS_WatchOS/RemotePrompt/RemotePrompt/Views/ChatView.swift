@@ -36,15 +36,13 @@ struct ChatView: View {
                         }
                     }
                     .onChange(of: viewModel.messages.count) { _ in
+                        // 互換: 残すがスクロールはID onChangeに集約
                         if !viewModel.isHistoryLoading {
                             hasFinishedInitialFetch = true
                         }
-                        if !viewModel.isLoadingMoreHistory {
-                            scrollToBottom()
-                        }
                     }
-                    .onChange(of: viewModel.messages.map { $0.content + $0.status.rawValue }) { _ in
-                        // メッセージ内容やステータスが更新されたら最下部へスクロール
+                    .onChange(of: viewModel.messages.map { $0.id }) { ids in
+                        print("DEBUG: [VIEW-ONCHANGE] message IDs changed, count: \(ids.count)")
                         if !viewModel.isLoadingMoreHistory {
                             scrollToBottom()
                         }

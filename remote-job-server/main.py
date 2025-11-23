@@ -549,10 +549,38 @@ async def stream_job_status(job_id: str, request: Request) -> StreamingResponse:
     """Stream job status updates via Server-Sent Events."""
 
     async def event_generator():
-        async for message in sse_manager.subscribe(job_id):
-            if await request.is_disconnected():
-                break
-            yield message
+        # 初期スナップショット送信（高速完了レース対策）
+        job_dict = job_manager.get_job(job_id)
+        if job_dict:
+            initial_payload = {
+                "status": job_dict.get("status"),
+                "started_at": job_dict.get("started_at"),
+                "finished_at": job_dict.get("finished_at"),
+                "exit_code": job_dict.get("exit_code"),
+            }
+            yield f"data: {json.dumps(initial_payload)}\n\n"
+            LOGGER.info(
+                "[SSE-INITIAL] job_id=%s, sent snapshot status=%s",
+                job_id,
+                job_dict.get("status"),
+            )
+
+            if job_dict.get("status") in {"success", "failed"}:
+                LOGGER.info(
+                    "[SSE-INITIAL] job_id=%s, terminal state (%s), closing stream",
+                    job_id,
+                    job_dict.get("status"),
+                )
+                return
+
+        try:
+            async for message in sse_manager.subscribe(job_id):
+                if await request.is_disconnected():
+                    LOGGER.info("Client disconnected during SSE stream for job %s", job_id)
+                    break
+                yield message
+        finally:
+            LOGGER.info("SSE event_generator completed for job %s", job_id)
 
     return StreamingResponse(
         event_generator(),
