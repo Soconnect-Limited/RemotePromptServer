@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct FileBrowserView: View {
     @Environment(\.dismiss) private var dismiss
