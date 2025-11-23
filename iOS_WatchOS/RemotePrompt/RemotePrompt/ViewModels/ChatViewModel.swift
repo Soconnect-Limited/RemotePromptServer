@@ -313,11 +313,9 @@ final class ChatViewModel: ObservableObject {
         }
         print("DEBUG: startSSEStreaming() - Starting SSE streaming for job \(jobId), messageId: \(messageId)")
         print("DEBUG: startSSEStreaming() - Current SSE connections: \(sseConnections.keys.joined(separator: ", "))")
-
-        // 既存接続がある場合は完全にクリーンアップしてから新規作成
-        if sseConnections[jobId] != nil || sseCancellables[jobId] != nil {
-            print("DEBUG: startSSEStreaming() - Cleaning up existing SSE connection for job: \(jobId)")
-            cleanupConnection(for: jobId)
+        if let existing = sseConnections[jobId] {
+            print("DEBUG: startSSEStreaming() - Disconnecting existing SSE connection for job: \(jobId)")
+            existing.disconnect()
         }
 
         let manager = SSEManager()
@@ -327,7 +325,7 @@ final class ChatViewModel: ObservableObject {
         sseCancellables[jobId] = Set<AnyCancellable>()
 
         // IMPORTANT: 購読をconnect()の前に設定
-        // SSEManagerは既にdelegateQueue: .mainで動作するため、receive(on:)は不要
+        // SSEManagerは既にdelegateQueue: backgroundで動作し、@Published更新は内部でmain.asyncされるため、receive(on:)不要
         manager.$jobStatus
             .sink { [weak self] status in
                 print("DEBUG: Received job status update: \(status)")
@@ -342,9 +340,13 @@ final class ChatViewModel: ObservableObject {
                     }
                     self.finalResultFetched.insert(jobId)
                     Task { @MainActor in
+                        defer {
+                            // 例外やエラーでも確実にフラグをクリア
+                            self.finalResultFetched.remove(jobId)
+                            print("DEBUG: finalResultFetched cleared in defer for job: \(jobId)")
+                        }
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
-                        self.finalResultFetched.remove(jobId)
                     }
                 }
             }
@@ -356,20 +358,21 @@ final class ChatViewModel: ObservableObject {
                 print("DEBUG: SSE connection status changed: \(connected)")
                 guard let self else { return }
                 if !connected {
-                    print("DEBUG: SSE disconnected, scheduling final result fetch")
-                    // SSE切断後、最終結果を取得してからクリーンアップ
-                    // Terminal statusイベントが既に受信されている場合でも安全に実行
+                    print("DEBUG: SSE disconnected")
+                    // Terminal statusを受信せずに切断された場合のみfetch
+                    guard !self.finalResultFetched.contains(jobId) else {
+                        print("DEBUG: Final result already fetched/scheduled for job: \(jobId)")
+                        return
+                    }
+                    self.finalResultFetched.insert(jobId)
                     Task { @MainActor in
-                        // 0.5秒待機してTerminal statusイベントの処理完了を待つ
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                        guard !self.finalResultFetched.contains(jobId) else {
-                            print("DEBUG: Final result already fetched for job: \(jobId) on disconnect")
-                            return
+                        defer {
+                            // 例外やエラーでも確実にフラグをクリア
+                            self.finalResultFetched.remove(jobId)
+                            print("DEBUG: finalResultFetched cleared in defer (disconnect) for job: \(jobId)")
                         }
-                        self.finalResultFetched.insert(jobId)
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
-                        self.finalResultFetched.remove(jobId)
                     }
                 }
             }
@@ -407,7 +410,10 @@ final class ChatViewModel: ObservableObject {
 
         sseConnections.removeValue(forKey: jobId)
         sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
-        finalResultFetched.remove(jobId)
+
+        // finalResultFetchedはTask内のdeferで管理するため、ここでは削除しない
+        // （Step 1.1/1.2のdeferが責務を持つ）
+        print("DEBUG: cleanupConnection() - finalResultFetched managed by caller's defer")
 
         print("DEBUG: cleanupConnection() - After cleanup - sseConnections.count: \(sseConnections.count), sseCancellables.count: \(sseCancellables.count)")
 

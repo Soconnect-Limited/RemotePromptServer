@@ -20,7 +20,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         case disconnected
     }
 
-    private var session: URLSession!
+    private var session: URLSession?
     private var buffer = Data()
     private var task: URLSessionDataTask?
     private var jobId: String?
@@ -42,7 +42,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             "Cache-Control": "no-cache",
             "Accept-Encoding": "identity",
         ]
-        // delegateQueueをバックグラウンドスレッドに変更（メインスレッドブロック回避）
+        // バックグラウンドキュー使用（メインスレッドブロック回避）
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         queue.qualityOfService = .userInitiated
@@ -52,6 +52,22 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
     func connect(jobId: String) {
         self.jobId = jobId
+
+        // セッションが無効な場合は再生成（長時間接続後のフォールバック）
+        if session == nil {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 60
+            config.httpAdditionalHeaders = [
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Accept-Encoding": "identity",
+            ]
+            let queue = OperationQueue()
+            queue.maxConcurrentOperationCount = 1
+            queue.qualityOfService = .userInitiated
+            session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
+            print("DEBUG: SSEManager.connect() - Recreated URLSession")
+        }
 
         // 既存のタスクがあればキャンセル
         task?.cancel()
@@ -94,7 +110,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         task = nil
         buffer.removeAll()
 
-        // sessionは再利用するためinvalidateしない
+        // sessionは再利用するためinvalidateしない（deinitで実施）
         print("DEBUG: SSEManager.disconnect() - Task cancelled, session kept for reuse")
 
         // バックグラウンドスレッドから実行されるため、メインスレッドで更新
@@ -114,7 +130,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     }
 
     deinit {
-        session.invalidateAndCancel()
+        session?.invalidateAndCancel()
         print("DEBUG: SSEManager deinit - Instance deallocated, URLSession invalidated")
     }
 
@@ -158,7 +174,6 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             }
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
                 print("DEBUG: [SSE-DECODE] SUCCESS - status: \(event.status)")
-                // バックグラウンドスレッドから実行されるため、メインスレッドで更新
                 DispatchQueue.main.async {
                     self.jobStatus = event.status
                 }
@@ -179,6 +194,16 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         print("DEBUG: urlSession(didCompleteWithError:) called - error: \(error?.localizedDescription ?? "nil")")
+
+        // セッションが無効化された場合は再生成フラグ
+        if let error = error as NSError?,
+           error.domain == NSURLErrorDomain,
+           error.code == NSURLErrorNetworkConnectionLost {
+            print("DEBUG: URLSession invalidated, will recreate in next connect()")
+            self.session?.invalidateAndCancel()
+            self.session = nil  // 次回connect()で再生成
+        }
+
         // バックグラウンドスレッドから実行されるため、メインスレッドで更新
         DispatchQueue.main.async {
             self.isConnected = false
