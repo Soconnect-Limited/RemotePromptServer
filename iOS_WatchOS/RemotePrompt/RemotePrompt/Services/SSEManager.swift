@@ -47,6 +47,10 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             self.isConnected = true
             print("DEBUG: SSEManager.connect() - isConnected set to true")
         }
+
+#if DEBUG && MEMORY_METRICS
+        MemoryMetrics.logRSS("SSE connect", extra: "job=\(jobId)")
+#endif
     }
 
     func disconnect() {
@@ -65,6 +69,14 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             self.isConnected = false
             print("DEBUG: SSEManager.disconnect() - isConnected set to false")
         }
+
+#if DEBUG && MEMORY_METRICS
+        if let jobId {
+            MemoryMetrics.logRSS("SSE disconnect", extra: "job=\(jobId)")
+        } else {
+            MemoryMetrics.logRSS("SSE disconnect", extra: "job=nil")
+        }
+#endif
     }
 
     deinit {
@@ -74,14 +86,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     // MARK: URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        print("DEBUG: urlSession(didReceive:) called with \(data.count) bytes")
         buffer.append(data)
         guard let chunk = String(data: buffer, encoding: .utf8) else {
-            print("SSE DEBUG: Failed to decode buffer as UTF-8")
             return
         }
         let events = chunk.components(separatedBy: "\n\n")
-        print("SSE DEBUG: Received \(events.count) events")
 
         for index in 0..<(events.count - 1) {
             let eventBlock = events[index]
@@ -98,20 +107,12 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 .joined()
 
             guard !dataPayload.isEmpty, let jsonData = dataPayload.data(using: .utf8) else {
-                print("SSE DEBUG: Empty payload or failed to convert to data")
                 continue
             }
-            print("SSE DEBUG: Attempting to decode: \(dataPayload)")
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
-                print("SSE DEBUG: Decoded event - status: \(event.status)")
-                print("SSE DEBUG: Current jobStatus: '\(self.jobStatus)'")
-                print("SSE DEBUG: Setting jobStatus to '\(event.status)'")
                 DispatchQueue.main.async {
                     self.jobStatus = event.status
                 }
-                print("SSE DEBUG: jobStatus update dispatched to main thread")
-            } else {
-                print("SSE DEBUG: Failed to decode JSON")
             }
         }
 

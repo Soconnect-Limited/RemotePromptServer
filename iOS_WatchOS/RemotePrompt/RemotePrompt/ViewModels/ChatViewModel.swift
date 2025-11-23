@@ -220,6 +220,10 @@ final class ChatViewModel: ObservableObject {
         guard !prompt.isEmpty else { return }
         guard ensureAPIKeyConfigured() else { return }
 
+#if DEBUG && MEMORY_METRICS
+        MemoryMetrics.logRSS("before sendMessage", extra: "room=\(roomId) thread=\(threadId ?? "nil")")
+#endif
+
         print("DEBUG: sendMessage() - START")
         print("DEBUG: sendMessage() - Active SSE connections: \(sseConnections.keys.joined(separator: ", "))")
         print("DEBUG: sendMessage() - isLoading: \(isLoading)")
@@ -247,6 +251,10 @@ final class ChatViewModel: ObservableObject {
                     threadId: threadId  // v4.0: Thread ID (nil = use default thread)
                 )
                 print("DEBUG: Job created: \(response.id)")
+
+#if DEBUG && MEMORY_METRICS
+                MemoryMetrics.logRSS("after createJob", extra: "job=\(response.id)")
+#endif
 
                 var updatedUser = userMessage
                 updatedUser.status = .completed
