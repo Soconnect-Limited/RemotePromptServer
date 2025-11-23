@@ -760,9 +760,9 @@ async def test_sse_close_guarantee(async_client: AsyncClient):
 
 **チェックリスト:**
 - [ ] `test_sse_fast_completion_initial_snapshot` 実装
-- [ ] **終端判定を `["success", "failed"]` に修正**
-- [ ] **初期スナップショットのフィールド一致確認を追加**（status/started_at/finished_at/exit_code）
-- [ ] **フィールドが `_broadcast_job_event()` と同一キーであることを検証**
+- [x] **終端判定を `["success", "failed"]` に修正**
+- [x] **初期スナップショットのフィールド一致確認を追加**（status/started_at/finished_at/exit_code）
+- [x] **フィールドが `_broadcast_job_event()` と同一キーであることを検証**
 - [ ] `test_sse_heartbeat` 実装
 - [ ] `test_sse_close_guarantee` 実装
 - [ ] **終端判定を `["success", "failed"]` に修正**
