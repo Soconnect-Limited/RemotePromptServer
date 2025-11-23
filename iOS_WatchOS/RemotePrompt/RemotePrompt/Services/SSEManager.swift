@@ -26,7 +26,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     private var jobId: String?
     private var sseState: SSEState = .idle {
         didSet {
-            let thread = Thread.current.isMainThread ? "main" : "bg"
+            let thread = Thread.isMain ? "main" : "bg"
             print("DEBUG: [SSE-STATE] \(oldValue.rawValue) → \(sseState.rawValue) [thread:\(thread)] job=\(jobId ?? "nil")")
         }
     }
@@ -113,7 +113,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     // MARK: URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let thread = Thread.current.isMainThread ? "main" : "bg"
+        let thread = Thread.isMain ? "main" : "bg"
         print("DEBUG: [SSE-DATA] received: \(data.count) bytes, bufferSize: \(buffer.count) bytes [thread:\(thread)]")
 
         if buffer.count + data.count > MAX_BUFFER_SIZE {
