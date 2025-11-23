@@ -759,20 +759,20 @@ async def test_sse_close_guarantee(async_client: AsyncClient):
 ```
 
 **チェックリスト:**
-- [ ] `test_sse_fast_completion_initial_snapshot` 実装
+- [x] `test_sse_fast_completion_initial_snapshot` 実装
 - [x] **終端判定を `["success", "failed"]` に修正**
 - [x] **初期スナップショットのフィールド一致確認を追加**（status/started_at/finished_at/exit_code）
 - [x] **フィールドが `_broadcast_job_event()` と同一キーであることを検証**
-- [ ] `test_sse_heartbeat` 実装
-- [ ] `test_sse_close_guarantee` 実装
-- [ ] **終端判定を `["success", "failed"]` に修正**
-- [ ] pytest実行確認（`pytest remote-job-server/tests/test_sse.py -v`）
+- [x] `test_sse_heartbeat` 実装
+- [x] `test_sse_close_guarantee` 実装（test_close_stream_after_terminal_event）
+- [x] **終端判定を `["success", "failed"]` に修正**
+- [x] pytest実行確認（`pytest remote-job-server/tests/test_sse.py -v`）- **7 passed, 1 warning**
 - [ ] CI統合（GitHub Actions等）
 
 **完了条件:**
-- 全テストがgreen
-- 初期スナップショットのフィールドが `_broadcast_job_event()` と一致
-- CI自動実行設定完了
+- ✅ 全テストがgreen（7 passed）
+- ✅ 初期スナップショットのフィールドが `_broadcast_job_event()` と一致
+- [ ] CI自動実行設定完了
 
 ---
 
@@ -975,7 +975,7 @@ stop
 - [ ] 購読者数ログ確認（`subscribers=...`）
 
 ### P2完了条件（検証基盤）
-- [ ] pytest SSEテストがgreen（3ケースすべて、success/failed判定）
+- [x] pytest SSEテストがgreen（3ケースすべて、success/failed判定）- **7 passed, 1 warning**
 - [ ] Master_Spec v4.3更新完了
 - [ ] ログ取得手順文書化完了
 

@@ -62,7 +62,9 @@ struct RoomDetailView: View {
             toolbarContent
         }
         .sheet(isPresented: $showFileBrowser) {
-            FileBrowserView(room: room)
+            NavigationStack {
+                FileBrowserView(room: room, path: "", isRoot: false)
+            }
         }
         .sheet(isPresented: $showRoomSettings) {
             if selectedThread != nil {

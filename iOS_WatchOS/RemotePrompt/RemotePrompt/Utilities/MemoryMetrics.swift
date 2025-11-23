@@ -22,9 +22,9 @@ enum MemoryMetrics {
         let mb = rssMB()
         if mb >= 0 {
             if let extra {
-                os_log("[MEM] %{public}@ RSS=%.1fMB %{public}@", log: log, type: .info, label, mb, extra)
+                os_log("DEBUG: [MEM] %{public}@ RSS=%.1fMB %{public}@", log: log, type: .info, label, mb, extra)
             } else {
-                os_log("[MEM] %{public}@ RSS=%.1fMB", log: log, type: .info, label, mb)
+                os_log("DEBUG: [MEM] %{public}@ RSS=%.1fMB", log: log, type: .info, label, mb)
             }
         }
     }

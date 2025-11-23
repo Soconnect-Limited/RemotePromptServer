@@ -18,7 +18,7 @@ struct FileBrowserView: View {
         if !isRoot {
             // 前提: 親階層のNavigationStackにぶら下がっていること。
             // NavigationStack外で使われた場合は遷移できないため開発時に検知。
-            assert(Thread.isMainThread, "FileBrowserView must be created on main thread")
+            assert(Foundation.Thread.isMainThread, "FileBrowserView must be created on main thread")
         }
 #endif
     }
@@ -35,20 +35,12 @@ struct FileBrowserView: View {
     }
 
     var body: some View {
-        Group {
-            if isRoot {
-                NavigationStack {
-                    contentView
-                        .navigationDestination(for: FileItem.self) { item in
-                            if item.type == .directory {
-                                FileBrowserView(room: room, path: item.path, isRoot: false)
-                            }
-                        }
+        contentView
+            .navigationDestination(for: FileItem.self) { item in
+                if item.type == .directory {
+                    FileBrowserView(room: room, path: item.path, isRoot: false)
                 }
-            } else {
-                contentView
             }
-        }
     }
 
     private var contentView: some View {

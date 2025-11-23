@@ -90,3 +90,90 @@ class SSEManagerBehaviourTests(TestCase):
         async for message in sse_manager.subscribe(job_id):
             bucket.append(message.strip())
             break
+
+
+class SSEEndpointSnapshotTests(TestCase):
+    """Validate SSE endpoint initial snapshot and heartbeat behaviour."""
+
+    def setUp(self) -> None:
+        self.client = TestClient(main.app)
+
+    def test_initial_snapshot_isoformat(self) -> None:
+        """Finished job should send initial snapshot with ISO8601 timestamps."""
+        from datetime import datetime, timezone
+
+        def fake_get_job(job_id: str) -> dict:
+            return {
+                "id": job_id,
+                "status": "success",
+                "started_at": datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
+                "finished_at": datetime(2025, 1, 1, 12, 1, tzinfo=timezone.utc),
+                "exit_code": 0,
+            }
+
+        original_get_job = main.job_manager.get_job
+        main.job_manager.get_job = fake_get_job
+        try:
+            with self.client.stream(
+                "GET",
+                "/jobs/test-job/stream",
+                headers={"x-api-key": main.settings.api_key},
+            ) as resp:
+                first_line = next(resp.iter_lines())
+                # iter_lines() returns str, not bytes
+                self.assertIn("data:", first_line)
+                body = first_line.split("data: ")[-1]
+                payload = json.loads(body)
+                # ISO8601 文字列であること（"T" を含む）
+                self.assertIn("T", payload["started_at"])
+                self.assertIn("T", payload["finished_at"])
+        finally:
+            main.job_manager.get_job = original_get_job
+
+    def test_heartbeat_comment_emitted(self) -> None:
+        """Heartbeat should emit SSE comment when no payload arrives."""
+
+        async def fake_wait_for(awaitable, timeout):  # type: ignore
+            raise asyncio.TimeoutError
+
+        original_wait_for = asyncio.wait_for
+        asyncio.wait_for = fake_wait_for  # force immediate timeout
+
+        messages: list[str] = []
+
+        async def runner() -> None:
+            gen = sse_manager.subscribe("hb-job")
+            message = await gen.__anext__()  # Python 3.9 compatibility
+            messages.append(message.strip())
+
+        try:
+            asyncio.run(runner())
+            self.assertEqual(messages[0], ":heartbeat")
+        finally:
+            asyncio.wait_for = original_wait_for
+
+
+class SSECloseGuaranteeTests(TestCase):
+    """Ensure SSE stream closes after terminal event broadcast."""
+
+    def test_close_stream_after_terminal_event(self) -> None:
+        job_id = "close-test"
+        messages: list[str] = []
+
+        async def runner() -> None:
+            async def producer() -> None:
+                await asyncio.sleep(0)  # let subscriber start
+                await sse_manager.broadcast(job_id, {"status": "success"})
+                await sse_manager.close(job_id)
+
+            async def consumer() -> None:
+                async for msg in sse_manager.subscribe(job_id):
+                    messages.append(msg.strip())
+
+            await asyncio.gather(producer(), consumer())
+
+        asyncio.run(runner())
+        # 受信メッセージは1件のみで、close後にストリーム終了
+        self.assertEqual(len(messages), 1)
+        payload = json.loads(messages[0].split("data: ")[-1])
+        self.assertEqual(payload.get("status"), "success")

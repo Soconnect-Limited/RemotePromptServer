@@ -60,17 +60,6 @@ struct InputBar: View {
                     .lineLimit(1...5)
                     .disabled(isLoading)
                     .focused($isFocused)
-                    #if DEBUG
-                    .onChange(of: text) { newValue in
-                        print("DEBUG: InputBar TextField - text changed to: '\(newValue)'")
-                    }
-                    .onChange(of: isFocused) { newValue in
-                        print("DEBUG: InputBar TextField - focus changed to: \(newValue)")
-                    }
-                    .onChange(of: isLoading) { newValue in
-                        print("DEBUG: InputBar TextField - isLoading changed to: \(newValue)")
-                    }
-                    #endif
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {
