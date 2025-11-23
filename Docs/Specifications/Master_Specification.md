@@ -2251,6 +2251,12 @@ enum APIError: Error {
 }
 ```
 
+### 8.4 ナビゲーションの注意点（v4.2 hotfix）
+- `FileBrowserView` の `.navigationDestination(for: FileItem)` はルートの `NavigationStack` にのみ宣言する。
+- 子階層の `FileBrowserView` は destination を再宣言せず、ルートで定義したものを共有してディレクトリ遷移を行う。
+- 目的: 重複登録によるビュー階層の肥大化とメモリ急増（iOS強制終了）の防止。
+- `isRoot == false` の `FileBrowserView` は必ず NavigationStack 配下で使用する（単独表示では遷移不可）。
+
 ### 8.4 主要画面
 
 #### JobsListView.swift

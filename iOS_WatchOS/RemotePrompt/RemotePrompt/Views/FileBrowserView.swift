@@ -12,6 +12,14 @@ struct FileBrowserView: View {
         self.initialPath = path
         self.isRoot = isRoot
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(room: room))
+
+#if DEBUG
+        if !isRoot {
+            // 前提: 親階層のNavigationStackにぶら下がっていること。
+            // NavigationStack外で使われた場合は遷移できないため開発時に検知。
+            assert(Thread.isMainThread, "FileBrowserView must be created on main thread")
+        }
+#endif
     }
 
     private var displayTitle: String {
@@ -30,6 +38,11 @@ struct FileBrowserView: View {
             if isRoot {
                 NavigationStack {
                     contentView
+                        .navigationDestination(for: FileItem.self) { item in
+                            if item.type == .directory {
+                                FileBrowserView(room: room, path: item.path, isRoot: false)
+                            }
+                        }
                 }
             } else {
                 contentView
@@ -87,11 +100,6 @@ struct FileBrowserView: View {
             }
             .navigationTitle(displayTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: FileItem.self) { item in
-                if item.type == .directory {
-                    FileBrowserView(room: room, path: item.path, isRoot: false)
-                }
-            }
             .toolbar {
                 if isRoot {
                     ToolbarItem(placement: .primaryAction) {
