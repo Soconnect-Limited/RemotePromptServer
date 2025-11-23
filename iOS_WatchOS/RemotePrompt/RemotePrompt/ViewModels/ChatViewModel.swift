@@ -484,6 +484,44 @@ final class ChatViewModel: ObservableObject {
         canLoadMoreHistory = true
     }
 
+    func cancelInference() {
+        print("DEBUG: cancelInference() - Cancelling all running jobs")
+        print("DEBUG: cancelInference() - Active SSE connections: \(sseConnections.keys.joined(separator: ", "))")
+
+        guard !sseConnections.isEmpty else {
+            print("DEBUG: cancelInference() - No active jobs to cancel")
+            return
+        }
+
+        // 実行中のJobを全てキャンセル（SSE接続を切断し、ローカルでキャンセル状態にする）
+        for (jobId, manager) in sseConnections {
+            print("DEBUG: cancelInference() - Cancelling job: \(jobId)")
+
+            // SSE接続を切断
+            manager.disconnect()
+
+            // メッセージをキャンセル状態に更新
+            if let index = messages.firstIndex(where: { $0.jobId == jobId }) {
+                var cancelledMessage = messages[index]
+                cancelledMessage.status = .failed
+                cancelledMessage.errorMessage = "ユーザーによりキャンセルされました"
+                cancelledMessage.finishedAt = Date()
+                messages[index] = cancelledMessage
+                messageStore.updateMessage(cancelledMessage)
+                print("DEBUG: cancelInference() - Message \(cancelledMessage.id) marked as cancelled")
+            }
+        }
+
+        // 接続をクリーンアップ
+        cleanupAllConnections()
+        print("DEBUG: cancelInference() - All jobs cancelled")
+    }
+
+    private func cleanupAllConnections() {
+        sseConnections.removeAll()
+        sseCancellables.removeAll()
+    }
+
     deinit {
         for manager in sseConnections.values {
             manager.disconnect()

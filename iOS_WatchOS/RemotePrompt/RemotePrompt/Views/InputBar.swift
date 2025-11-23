@@ -3,6 +3,7 @@ import SwiftUI
 struct InputBar: View {
     @Binding var text: String
     let onSend: () -> Void
+    let onCancel: () -> Void
     let isLoading: Bool
     @FocusState.Binding var isFocused: Bool
 
@@ -13,17 +14,34 @@ struct InputBar: View {
 
     private var canSend: Bool {
         let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let result = hasText && !isLoading
-        print("DEBUG: InputBar canSend - hasText: \(hasText), isLoading: \(isLoading), result: \(result)")
-        return result
+        return hasText && !isLoading
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Keyboard dismiss button (shown when keyboard is visible)
+            // Keyboard toolbar (shown when keyboard is visible)
             if isFocused {
                 HStack {
+                    // Cancel button (shown when inference is running)
+                    if isLoading {
+                        Button {
+                            onCancel()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "stop.circle.fill")
+                                    .font(.body)
+                                Text("推論キャンセル")
+                                    .font(.callout)
+                            }
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                        }
+                    }
+
                     Spacer()
+
+                    // Keyboard dismiss button
                     Button {
                         isFocused = false
                     } label: {
@@ -42,6 +60,7 @@ struct InputBar: View {
                     .lineLimit(1...5)
                     .disabled(isLoading)
                     .focused($isFocused)
+                    #if DEBUG
                     .onChange(of: text) { newValue in
                         print("DEBUG: InputBar TextField - text changed to: '\(newValue)'")
                     }
@@ -51,6 +70,7 @@ struct InputBar: View {
                     .onChange(of: isLoading) { newValue in
                         print("DEBUG: InputBar TextField - isLoading changed to: \(newValue)")
                     }
+                    #endif
                     .submitLabel(.send)
                     .onSubmit {
                         if canSend {

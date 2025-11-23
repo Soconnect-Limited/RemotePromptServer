@@ -26,7 +26,8 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         config.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
         ]
-        session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
+        // delegateQueue: nilでバックグラウンドキュー使用（メインスレッドブロック回避）
+        session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         print("DEBUG: SSEManager.connect() - Created new URLSession for job: \(jobId)")
 
         guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
@@ -105,8 +106,10 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 print("SSE DEBUG: Decoded event - status: \(event.status)")
                 print("SSE DEBUG: Current jobStatus: '\(self.jobStatus)'")
                 print("SSE DEBUG: Setting jobStatus to '\(event.status)'")
-                self.jobStatus = event.status
-                print("SSE DEBUG: jobStatus updated to '\(self.jobStatus)'")
+                DispatchQueue.main.async {
+                    self.jobStatus = event.status
+                }
+                print("SSE DEBUG: jobStatus update dispatched to main thread")
             } else {
                 print("SSE DEBUG: Failed to decode JSON")
             }

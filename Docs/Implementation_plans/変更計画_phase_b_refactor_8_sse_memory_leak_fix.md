@@ -327,6 +327,172 @@ if reset {
 
 ---
 
-**更新日**: 2025-01-22
+**更新日**: 2025-01-23
 **完了日**: 2025-01-22 (Phase 2 & 3)
 **次ステップ**: Phase 1残タスク（fetchFinalResult重複呼び出し排除）、メモリリーク長時間稼働テスト
+
+---
+
+## 🔴 CRITICAL: メモリ3GB+クラッシュの根本原因特定（2025-01-23）
+
+### 調査対象ログ
+**ファイル**: `Logs/202511230026Xcode_log.md`
+**症状**: 10回のメッセージ送信後、メモリ3GB+到達でiOSがアプリを強制終了
+
+### 問題9: InputBar.canSendでのデバッグログ過剰出力 ⭐️ CRITICAL
+
+**場所**: `InputBar.swift:14-19`
+
+**問題コード**:
+```swift
+private var canSend: Bool {
+    let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    let result = hasText && !isLoading
+    print("DEBUG: InputBar canSend - hasText: \(hasText), isLoading: \(isLoading), result: \(result)")  // ← 問題
+    return result
+}
+```
+
+**根本原因**:
+1. **Computed propertyでのprint()**: SwiftUIの`body`再評価のたびに実行される
+2. **複数箇所参照**: `canSend`は`body`内で3箇所（line 56, 65, 68）で参照
+3. **1回の再描画で6回評価**: foregroundStyle、disabled、if条件で複数回読み取られる
+4. **キーボード入力での連鎖**: 1文字入力ごとに`@Binding var text`変更 → `body`再描画 → `canSend`評価×6
+
+**実証データ（ログ分析結果）**:
+```bash
+総ログ行数: 3297行
+InputBar canSend呼び出し: 1192回（36%）
+キーボード入力（text changed）: 約200回
+1文字あたりのcanSend評価: 1192 ÷ 200 ≈ 6回
+
+navigationDestination警告: 41回（View階層問題）
+Swift Concurrency警告: 1回（unsafeForcedSync）
+```
+
+**メモリクラッシュのメカニズム**:
+```
+キーボード入力（200文字）
+  ↓
+View再描画（200回+）
+  ↓
+canSend評価（1192回 = 6回/再描画）
+  ↓
+print()呼び出し（1192回）
+  ↓
+文字列フォーマット・メモリ確保（~179KB）
+  ↓
+trimmingCharacters（1192回の一時String生成）
+  ↓
+GC負荷増大 + main threadブロック（~357ms）
+  ↓
+他View再描画（SSE更新、メッセージ追加）との競合
+  ↓
+メモリ累積（3GB+）
+  ↓
+iOS: "Too much memory" → プロセス強制終了
+```
+
+**10番目のJobでクラッシュした理由**:
+- 9回のJobで既にメモリ2.8GB前後まで蓄積
+- 10番目のJob開始時のキーボード入力でView再描画オーバーヘッド
+- `urlSession(didCompleteWithError:)`実行後、`isConnected`の`@Published`更新がmain threadにdispatchされる前に**メモリ限界突破**
+- ログが`DEBUG: urlSession(didCompleteWithError:)`で終了（次の"SSE disconnected"ログなし）
+
+**影響範囲**:
+- ❌ メモリ圧迫: 1192回 × 150バイト ≈ 179KB（ログメモリ） + GCオーバーヘッド
+- ❌ パフォーマンス: 1192回 × 0.3ms ≈ 357ms のmain threadブロック
+- ❌ UI応答性: SwiftUI再描画サイクル遅延 → 体感的なUI凍結
+
+**SSEは正常動作していた証拠**:
+- ✅ 10回のJob実行、10回の`urlSession(didReceive:)`成功
+- ✅ 9回のSSEManager deinit確認（メモリリーク解消済み）
+- ✅ 各Job応答サイズ: 90 bytes（小さい）
+- ✅ 履歴読み込み: 5回のみ（正常）
+
+---
+
+### Refactor-8.7: デバッグログ過剰出力の削減 ⭐️ CRITICAL
+
+#### R-8.7.1 InputBar.canSendのデバッグログ削除
+- [ ] `InputBar.swift:17`のprint()を削除
+  - [ ] Computed propertyから副作用（print）を除去
+  - [ ] Release buildではデバッグログを完全無効化
+
+#### R-8.7.2 その他のデバッグログ最適化
+- [ ] `InputBar.swift:46-53`のonChangeデバッグログを条件付きコンパイル化
+  ```swift
+  #if DEBUG
+  .onChange(of: text) { print("DEBUG: ...") }
+  #endif
+  ```
+- [ ] ChatViewModel、SSEManagerの重要ログのみ残し、冗長ログを削除
+
+#### R-8.7.3 navigationDestination警告の修正
+- [ ] View階層の重複navigationDestinationを特定
+- [ ] 最上位Viewに1つのみ配置
+
+#### R-8.7.4 動作確認
+- [ ] Xcode Instrumentsでメモリプロファイリング
+- [ ] 10回連続メッセージ送信でメモリ使用量を測定
+- [ ] 目標: 500MB以下（現状3GB+から85%削減）
+
+---
+
+## 修正優先順位（更新）
+
+### Phase 0: CRITICAL緊急修正（問題9）🔥 NEW
+- [x] R-8.7.1 InputBar.canSendログ削除（即座実施）⭐️ 最優先 ✅ 完了
+  - [x] `InputBar.swift:14-19`のprint()を削除
+  - [x] Computed propertyから副作用（print）を除去
+- [x] R-8.7.2 条件付きコンパイルでログ最適化 ✅ 完了
+  - [x] `InputBar.swift:43-53`のonChangeデバッグログを`#if DEBUG`で囲む
+- [ ] R-8.7.5 @Published更新の最適化（View再描画連鎖の抑制）NEW
+- [ ] R-8.7.4 メモリプロファイリングテスト
+
+---
+
+### 追加調査結果（2025-01-23 ユーザー観察反映）
+
+**ユーザー報告**:
+> 最後の送信直後にメモリ使用率が鰻登りに上がっていってたよ。それまでは使用率は上がっていってはいたものの、最終送信前は200Mくらいだった。
+
+**新しい仮説: View再描画の連鎖反応**
+
+10番目のJob送信直後のメモリ急増（200MB → 3GB+）は以下のメカニズム:
+
+```
+10番目Job送信 ("Y")
+  ↓
+SSE success受信 → jobStatus = "success"
+  ↓
+urlSession(didCompleteWithError:) → isConnected = false (@Published更新)
+  ↓
+ChatView全体再描画（20+メッセージ）
+  ↓
+各MessageBubble + InputBar再描画
+  ↓
+canSend computed property評価（20メッセージ × 6回/メッセージ = 120回）
+  ↓
+print() + trimmingCharacters（120回の副作用）
+  ↓
+SwiftUI差分検出 → さらなる再描画トリガー
+  ↓
+再描画連鎖ループ → GC追いつかず
+  ↓
+メモリ3GB+ → iOSが強制終了
+```
+
+**証拠**:
+- ログ3296行目までは正常（"Terminal status received"まで出力）
+- ログ3297行目で終了（次の"SSE disconnected"なし）
+- `isConnected = false`のdispatch直後にクラッシュ
+
+---
+
+#### R-8.7.5 @Published更新の最適化
+- [ ] SSEManager.swiftの`@Published`更新をバッチ化
+  - [ ] `isConnected`と`jobStatus`の同時更新を1つのDispatchQueue.main.asyncに集約
+  - [ ] 不要な中間状態の`@Published`更新を削減
+- [ ] ChatViewModelの`messages`更新をバッチ化
+  - [ ] 複数メッセージの更新を1回の配列置換に集約

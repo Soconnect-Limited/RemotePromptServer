@@ -113,7 +113,7 @@ class ClaudeSessionManager:
                 input=prompt,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=1800,  # 30 minutes (extended from 5 min for long Codex jobs)
                 cwd=work_dir,
             )
         except subprocess.TimeoutExpired:
@@ -216,7 +216,7 @@ class CodexSessionManager:
                 input=prompt,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=1800,  # 30 minutes (extended from 5 min for long Codex jobs)
                 cwd=Path(workspace_path) if workspace_path else None,
             )
         except subprocess.TimeoutExpired:
