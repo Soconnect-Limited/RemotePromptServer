@@ -3646,25 +3646,45 @@ SELECT id, device_id, room_id, status FROM jobs LIMIT 5;
 
 ### 13.1 サーバー起動
 
-#### 手動起動
+#### 手動起動（開発環境 - HTTP）
 ```bash
-cd ~/remote-job-server
-python3 main.py
+cd ~/Projects/RemotePrompt/remote-job-server
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### systemd（自動起動）
+#### 手動起動（本番環境 - HTTPS/SSL）
+```bash
+cd ~/Projects/RemotePrompt/remote-job-server
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile=certs/config/live/remoteprompt.soconnect.co.jp/privkey.pem \
+  --ssl-certfile=certs/config/live/remoteprompt.soconnect.co.jp/fullchain.pem
+```
+
+#### バックグラウンド起動（SSL）
+```bash
+cd ~/Projects/RemotePrompt/remote-job-server
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile=certs/config/live/remoteprompt.soconnect.co.jp/privkey.pem \
+  --ssl-certfile=certs/config/live/remoteprompt.soconnect.co.jp/fullchain.pem \
+  > logs/server_ssl.log 2>&1 &
+```
+
+#### systemd（自動起動 - macOS非対応、Linux用）
 
 ```ini
 # /etc/systemd/system/remote-job-server.service
 [Unit]
-Description=Remote Job Server
+Description=Remote Job Server (HTTPS)
 After=network.target
 
 [Service]
 Type=simple
-User=nao
-WorkingDirectory=/Users/nao/remote-job-server
-ExecStart=/usr/local/bin/python3 main.py
+User=macstudio
+WorkingDirectory=/Users/macstudio/Projects/RemotePrompt/remote-job-server
+ExecStart=/Users/macstudio/Projects/RemotePrompt/remote-job-server/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --ssl-keyfile=certs/config/live/remoteprompt.soconnect.co.jp/privkey.pem --ssl-certfile=certs/config/live/remoteprompt.soconnect.co.jp/fullchain.pem
 Restart=always
 RestartSec=10
 

@@ -313,9 +313,11 @@ final class ChatViewModel: ObservableObject {
         }
         print("DEBUG: startSSEStreaming() - Starting SSE streaming for job \(jobId), messageId: \(messageId)")
         print("DEBUG: startSSEStreaming() - Current SSE connections: \(sseConnections.keys.joined(separator: ", "))")
-        if let existing = sseConnections[jobId] {
-            print("DEBUG: startSSEStreaming() - Disconnecting existing SSE connection for job: \(jobId)")
-            existing.disconnect()
+
+        // 既存接続がある場合は完全にクリーンアップしてから新規作成
+        if sseConnections[jobId] != nil || sseCancellables[jobId] != nil {
+            print("DEBUG: startSSEStreaming() - Cleaning up existing SSE connection for job: \(jobId)")
+            cleanupConnection(for: jobId)
         }
 
         let manager = SSEManager()
@@ -325,8 +327,8 @@ final class ChatViewModel: ObservableObject {
         sseCancellables[jobId] = Set<AnyCancellable>()
 
         // IMPORTANT: 購読をconnect()の前に設定
+        // SSEManagerは既にdelegateQueue: .mainで動作するため、receive(on:)は不要
         manager.$jobStatus
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] status in
                 print("DEBUG: Received job status update: \(status)")
                 self?.updateMessageStatus(messageId: messageId, status: status)
@@ -350,7 +352,6 @@ final class ChatViewModel: ObservableObject {
 
         manager.$isConnected
             .dropFirst() // 初期値(false)をスキップ
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] connected in
                 print("DEBUG: SSE connection status changed: \(connected)")
                 guard let self else { return }
@@ -376,7 +377,6 @@ final class ChatViewModel: ObservableObject {
 
         manager.$errorMessage
             .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] message in
                 print("DEBUG: SSE error: \(message)")
                 self?.errorMessage = message

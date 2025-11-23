@@ -554,8 +554,8 @@ async def stream_job_status(job_id: str, request: Request) -> StreamingResponse:
         if job_dict:
             initial_payload = {
                 "status": job_dict.get("status"),
-                "started_at": job_dict.get("started_at").isoformat() if job_dict.get("started_at") else None,
-                "finished_at": job_dict.get("finished_at").isoformat() if job_dict.get("finished_at") else None,
+                "started_at": job_dict.get("started_at"),  # Already ISO8601 string from to_dict()
+                "finished_at": job_dict.get("finished_at"),  # Already ISO8601 string from to_dict()
                 "exit_code": job_dict.get("exit_code"),
             }
             yield f"data: {json.dumps(initial_payload)}\n\n"
