@@ -227,8 +227,9 @@ final class ChatMessageCell: UITableViewCell {
         // Phase 4: 展開ボタン設定
         expandButton.translatesAutoresizingMaskIntoConstraints = false
         expandButton.setTitle("続きを読む", for: .normal)
-        expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .footnote)
+        expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)  // footnote → body に変更
         expandButton.addTarget(self, action: #selector(toggleExpand), for: .touchUpInside)
+        expandButton.contentHorizontalAlignment = .trailing  // 右寄せ
         expandButton.isHidden = true
         bubbleView.addSubview(expandButton)
 
@@ -236,7 +237,8 @@ final class ChatMessageCell: UITableViewCell {
 
         NSLayoutConstraint.activate([
             expandButton.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 4),
-            expandButton.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
+            expandButton.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),  // 右下に配置
+            expandButton.leadingAnchor.constraint(greaterThanOrEqualTo: bubbleView.leadingAnchor, constant: 12),  // 最小マージン確保
             expandButtonBottomConstraint!
         ])
 
@@ -289,6 +291,8 @@ final class ChatMessageCell: UITableViewCell {
 
             bubbleView.backgroundColor = UIColor.systemBlue
             textView.textColor = .white
+            // Phase 4: ユーザー送信の展開ボタンは白色
+            expandButton.setTitleColor(.white, for: .normal)
         } else {
             // Assistant: 左寄せ（アバター右）、画面幅の75%
             bubbleLeadingConstraint = bubbleView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 8)
@@ -298,6 +302,8 @@ final class ChatMessageCell: UITableViewCell {
             bubbleView.backgroundColor = UIColor.systemGray6
             textView.textColor = .label  // システム標準色（自動切替）
             textView.tintColor = .label
+            // Phase 4: Assistantの展開ボタンはシステムデフォルト
+            expandButton.setTitleColor(.systemBlue, for: .normal)
         }
 
         bubbleLeadingConstraint?.isActive = true
