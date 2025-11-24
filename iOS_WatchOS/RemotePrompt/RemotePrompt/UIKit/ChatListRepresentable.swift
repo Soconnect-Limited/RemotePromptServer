@@ -97,26 +97,64 @@ struct MessageParser {
             .paragraphStyle: paragraphStyle
         ])
 
-        // 見出し（# ## ### ####）- 行頭のみ
-        let headingPattern = "^(#{1,4})\\s+(.+)$"
-        if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
+        // ステップ1: インラインコード（属性追加のみ、文字列変更なし）
+        // この処理は文字列を変更しないため、最初に実行
+        let inlineCodePattern = "`([^`\n]+)`"
+        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in matches {
+                attributed.addAttribute(.font, value: mono, range: match.range)
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
+            }
+        }
+
+        // ステップ2: 文字列置換を伴う処理（逆順で実行してインデックスの整合性を保つ）
+
+        // 斜体（*text*）- 太字の前に処理（**の中の*を誤検知しないため）
+        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
+        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: italicFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 太字（**text**）
+        let boldPattern = "\\*\\*([^*]+)\\*\\*"
+        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: boldFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 箇条書きリスト（- * •）- 行頭のみ
+        let bulletListPattern = "^([-*•]\\s+)(.*)$"
+        if let regex = try? NSRegularExpression(pattern: bulletListPattern, options: [.anchorsMatchLines]) {
             let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 3 {
-                    let hashCount = (attributed.string as NSString).substring(with: match.range(at: 1)).count
                     let contentRange = match.range(at: 2)
                     let content = (attributed.string as NSString).substring(with: contentRange)
 
-                    let headingFont: UIFont
-                    switch hashCount {
-                    case 1: headingFont = h1Font
-                    case 2: headingFont = h2Font
-                    case 3: headingFont = h3Font
-                    default: headingFont = h4Font
-                    }
-
-                    let replacement = NSAttributedString(string: content, attributes: [
-                        .font: headingFont,
+                    let replacement = NSAttributedString(string: "• \(content)", attributes: [
+                        .font: bodyFont,
                         .foregroundColor: textColor
                     ])
                     attributed.replaceCharacters(in: match.range, with: replacement)
@@ -144,61 +182,26 @@ struct MessageParser {
             }
         }
 
-        // 箇条書きリスト（- * •）- 行頭のみ
-        let bulletListPattern = "^([-*•]\\s+)(.*)$"
-        if let regex = try? NSRegularExpression(pattern: bulletListPattern, options: [.anchorsMatchLines]) {
+        // 見出し（# ## ### ####）- 行頭のみ（最後に処理）
+        let headingPattern = "^(#{1,4})\\s+(.+)$"
+        if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
             let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 3 {
+                    let hashCount = (attributed.string as NSString).substring(with: match.range(at: 1)).count
                     let contentRange = match.range(at: 2)
                     let content = (attributed.string as NSString).substring(with: contentRange)
 
-                    let replacement = NSAttributedString(string: "• \(content)", attributes: [
-                        .font: bodyFont,
-                        .foregroundColor: textColor
-                    ])
-                    attributed.replaceCharacters(in: match.range, with: replacement)
-                }
-            }
-        }
+                    let headingFont: UIFont
+                    switch hashCount {
+                    case 1: headingFont = h1Font
+                    case 2: headingFont = h2Font
+                    case 3: headingFont = h3Font
+                    default: headingFont = h4Font
+                    }
 
-        // インラインコード（`code`）
-        let inlineCodePattern = "`([^`\n]+)`"
-        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
-            for match in matches {
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
-            }
-        }
-
-        // 太字（**text**）
-        let boldPattern = "\\*\\*([^*]+)\\*\\*"
-        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
-            for match in matches.reversed() {
-                if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    let content = (attributed.string as NSString).substring(with: contentRange)
                     let replacement = NSAttributedString(string: content, attributes: [
-                        .font: boldFont,
-                        .foregroundColor: textColor
-                    ])
-                    attributed.replaceCharacters(in: match.range, with: replacement)
-                }
-            }
-        }
-
-        // 斜体（*text*）
-        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
-        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
-            for match in matches.reversed() {
-                if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    let content = (attributed.string as NSString).substring(with: contentRange)
-                    let replacement = NSAttributedString(string: content, attributes: [
-                        .font: italicFont,
+                        .font: headingFont,
                         .foregroundColor: textColor
                     ])
                     attributed.replaceCharacters(in: match.range, with: replacement)
