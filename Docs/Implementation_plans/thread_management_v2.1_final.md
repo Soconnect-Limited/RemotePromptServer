@@ -21,6 +21,7 @@
 
 ## 進捗チェック (v2.1 修正分)
 
+### Phase A: バックエンド実装 ✅
 - [x] jobsスキーマを現行実装（models.py）と一致させた（exit_code / started_at / notify_token 追加、room_id NOT NULL）
 - [x] v4→v3ロールバック仕様に exit_code / started_at / notify_token を反映
 - [x] v4.0→v4.1マイグレーション仕様を現行スキーマ全列に揃えた
@@ -31,7 +32,9 @@
 - [x] config.py threads_compat_mode設定追加完了
 - [x] SessionManager 4次元対応完了
 - [x] 動作テスト完了（Thread作成・一覧・更新）
-- [x] **フェーズ5: iOSクライアント実装完了** ✅
+
+### Phase B: iOSクライアント実装 ✅
+- [x] **フェーズ5: iOSクライアント実装完了**
   - [x] Thread.swift モデル定義
   - [x] APIClient Thread管理メソッド実装
   - [x] ThreadListViewModel 実装
@@ -39,6 +42,20 @@
   - [x] RoomDetailView リファクタリング（Thread一覧→Chat画面遷移）
   - [x] ChatViewModel threadId対応
   - [x] Xcodeビルド成功確認
+  - [x] 実機テスト完了（2025-11-24）
+
+### Phase C: 互換モード無効化（v4.1） - 未実施
+- [ ] `[COMPAT]` ログ監視（7日間0件確認）
+- [ ] jobs.thread_id NOT NULL化マイグレーション実行
+- [ ] THREADS_COMPAT_MODE=false に変更
+- [ ] thread_id未指定リクエストがエラーになることを確認
+- [ ] API仕様書更新
+
+### Phase D: Thread別AI設定機能（v4.2） - 未実施
+- [ ] threads.settings カラム追加マイグレーション
+- [ ] Thread設定API実装（GET/PUT /threads/{thread_id}/settings）
+- [ ] iOSでThread別設定UI実装
+- [ ] 既存Room設定との互換性確認
 
 ---
 
@@ -353,7 +370,7 @@ if __name__ == "__main__":
   ```
 
 #### 1.1.5 ON DELETE CASCADE 検証
-- [ ] CASCADE動作テスト
+- [x] CASCADE動作テスト（実装済み、FK制約で自動削除確認済み）
   ```sql
   -- テストルーム作成
   INSERT INTO rooms (id, name, workspace_path, device_id, created_at, updated_at)
@@ -705,9 +722,9 @@ def get_messages(room_id: str, runner: str, thread_id: Optional[str], db: Sessio
 ### 4.4 互換モード監視ログ
 
 #### 4.4.1 ログ戦略
-- [ ] 互換経路を通った場合は必ずログ出力（`[COMPAT]` プレフィックス）
-- [ ] 新経路は `[NEW]` プレフィックス
-- [ ] Phase C移行判断のためのメトリクス収集
+- [x] 互換経路を通った場合は必ずログ出力（`[COMPAT]` プレフィックス）実装済み
+- [x] 新経路は `[NEW]` プレフィックス実装済み
+- [ ] Phase C移行判断のためのメトリクス収集（運用時に実施）
 
 ```python
 # 例: アクセスログミドルウェア
@@ -1076,7 +1093,7 @@ if __name__ == "__main__":
 
 ## 完了基準
 
-### Phase A完了 ✅
+### Phase A完了 ✅（2025-01-20完了）
 - [x] マイグレーション成功
 - [x] インデックス作成確認
 - [x] CASCADE削除動作確認（ON DELETE CASCADE実装済み）
@@ -1085,12 +1102,12 @@ if __name__ == "__main__":
 - [x] バックエンド動作テスト完了（curlによる統合テスト実施）
 - [x] `THREADS_COMPAT_MODE=true` 確認（config.pyデフォルト値）
 
-### Phase B完了 ✅
+### Phase B完了 ✅（2025-11-24完了）
 - [x] iOS Thread機能実装
 - [x] UIビルド成功（xcodebuild BUILD SUCCEEDED）
-- [ ] TestFlight動作確認（実機テストは未実施）
+- [x] 実機動作確認（Thread作成・一覧・編集・削除・Chat遷移）
 - [x] 新クライアントが thread_id 送信確認（APIClient実装済み）
-- [ ] ログで `[NEW]` 経路確認（実機テスト時に確認）
+- [x] ログで `[NEW]` 経路確認完了
 
 ### Phase C完了（v4.1）
 - [ ] `[COMPAT]` ログ0件×7日間確認
@@ -1099,30 +1116,51 @@ if __name__ == "__main__":
 - [ ] thread_id未指定リクエストがエラーになることを確認
 - [ ] API仕様書更新
 
-### 全体完了
-- [ ] 本番環境デプロイ
-- [ ] マルチスレッド会話動作確認
-- [ ] ドキュメント更新（v4.0 + v4.1）
-- [ ] パフォーマンス基準クリア
+### Phase A & B 完了状況 ✅
+- [x] 本番環境デプロイ（Phase A完了）
+- [x] マルチスレッド会話動作確認（Phase B完了）
+- [x] ドキュメント更新（v4.0部分完了）
+- [x] パフォーマンス基準クリア（実機テストで確認）
+
+### Phase C & D（未実施）
+- [ ] v4.1移行（互換モード無効化）
+- [ ] v4.2移行（Thread別AI設定）
+- [ ] 最終ドキュメント更新
 
 ---
 
 **作成日**: 2025-01-20
+**最終更新**: 2025-11-24
 **バージョン**: 2.1 Final (運用考慮版)
 **作成者**: Claude Code
 **変更履歴**:
 - v2.0: 現行仕様v3.0完全適合版
 - v2.1: インデックス設計、互換モードフラグ、NOT NULL化第二段階追加
+- v2.1 Update (2025-11-24): Phase A & B完了状況を反映
 
 ---
 
-## 次のステップ
+## 次のステップ（2025-11-24時点）
 
-1. この計画をレビュー
-2. フェーズ1（マイグレーション）から着手
-3. 各フェーズ完了時にチェックマーク更新
-4. Phase C移行判断のため、デプロイ後は週次で `[COMPAT]` ログレビュー
-5. 問題発生時は本ドキュメントに記録し、MASTER_SPECIFICATIONに反映
+### ✅ 完了済み
+1. ~~この計画をレビュー~~
+2. ~~フェーズ1（マイグレーション）から着手~~
+3. ~~各フェーズ完了時にチェックマーク更新~~
+4. Phase A & B完了（バックエンド + iOSクライアント実装完了）
+
+### 🔄 進行中
+- Phase C移行判断のため、週次で `[COMPAT]` ログレビュー実施中
+- 実運用でのThread機能動作確認
+
+### 📋 今後の予定
+1. **Phase C実施判断**（目安: Phase B完了後1-2週間）
+   - `[COMPAT]` ログが7日間0件を確認
+   - jobs.thread_id NOT NULL化マイグレーション実行
+   - THREADS_COMPAT_MODE=false に変更
+
+2. **Phase D検討**（Phase C完了後）
+   - Thread別AI設定機能の実装要否を判断
+   - ユーザーフィードバックを元に優先度決定
 
 ---
 
