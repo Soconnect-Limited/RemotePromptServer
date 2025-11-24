@@ -158,6 +158,8 @@ final class ChatMessageCell: UITableViewCell {
     private var bubbleLeadingConstraint: NSLayoutConstraint?
     private var bubbleTrailingConstraint: NSLayoutConstraint?
     private var avatarLeadingConstraint: NSLayoutConstraint?
+    private var textViewBottomConstraint: NSLayoutConstraint?
+    private var expandButtonBottomConstraint: NSLayoutConstraint?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -230,14 +232,19 @@ final class ChatMessageCell: UITableViewCell {
         expandButton.isHidden = true
         bubbleView.addSubview(expandButton)
 
+        expandButtonBottomConstraint = expandButton.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
+
         NSLayoutConstraint.activate([
-            expandButton.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 8),
+            expandButton.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 4),
             expandButton.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
-            expandButton.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
+            expandButtonBottomConstraint!
         ])
 
         // アバター制約（Assistant時のみ表示）
         avatarLeadingConstraint = avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12)
+
+        // textViewのbottom制約は動的に切り替える（展開ボタン表示時は変更）
+        textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor)
 
         NSLayoutConstraint.activate([
             avatarImageView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
@@ -248,7 +255,7 @@ final class ChatMessageCell: UITableViewCell {
             bubbleView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
 
             textView.topAnchor.constraint(equalTo: bubbleView.topAnchor),
-            textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor),
+            textViewBottomConstraint!,
             textView.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor)
         ])
@@ -314,7 +321,19 @@ final class ChatMessageCell: UITableViewCell {
             // Phase 4: 長文折りたたみ（1000文字超）
             let shouldTruncate = markdown.count > truncateThreshold && !isExpanded
             let displayContent = shouldTruncate ? String(markdown.prefix(truncateThreshold)) : markdown
-            expandButton.isHidden = markdown.count <= truncateThreshold
+            let showExpandButton = markdown.count > truncateThreshold
+            expandButton.isHidden = !showExpandButton
+
+            // Phase 4: textViewのbottom制約を切り替え
+            textViewBottomConstraint?.isActive = false
+            if showExpandButton {
+                // 展開ボタンがある場合はtextViewの下にボタンを配置
+                textViewBottomConstraint = textView.bottomAnchor.constraint(lessThanOrEqualTo: expandButton.topAnchor, constant: -4)
+            } else {
+                // 展開ボタンがない場合はtextViewがbubbleの下まで伸びる
+                textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor)
+            }
+            textViewBottomConstraint?.isActive = true
 
             // Phase 3-A: 性能計測（100KB以上のコンテンツのみ）
             let shouldMeasure = markdown.utf8.count >= 100_000
