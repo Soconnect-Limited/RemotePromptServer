@@ -369,7 +369,91 @@ final class CodeBlockView: UIView {
     func configure(code: String, language: String?) {
         codeContent = code
         languageLabel.text = language?.uppercased() ?? "CODE"
-        codeTextView.text = code
+
+        // シンタックスハイライト適用
+        let highlightedCode = applySyntaxHighlighting(code: code, language: language)
+        codeTextView.attributedText = highlightedCode
+    }
+
+    private func applySyntaxHighlighting(code: String, language: String?) -> NSAttributedString {
+        let baseFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular)
+        let baseColor = UIColor.label
+
+        let attributedString = NSMutableAttributedString(string: code, attributes: [
+            .font: baseFont,
+            .foregroundColor: baseColor
+        ])
+
+        guard let lang = language?.lowercased() else {
+            return attributedString
+        }
+
+        // 言語ごとのキーワードとカラー定義
+        let keywordColor = UIColor.systemPurple
+        let stringColor = UIColor.systemRed
+        let commentColor = UIColor.systemGreen
+        let numberColor = UIColor.systemBlue
+
+        var keywords: [String] = []
+
+        switch lang {
+        case "swift":
+            keywords = ["import", "class", "struct", "enum", "protocol", "extension", "func", "var", "let", "if", "else", "for", "while", "return", "guard", "switch", "case", "default", "break", "continue", "private", "public", "internal", "static", "mutating", "init", "deinit", "self", "super", "true", "false", "nil"]
+        case "python", "py":
+            keywords = ["import", "from", "class", "def", "if", "elif", "else", "for", "while", "return", "try", "except", "finally", "with", "as", "pass", "break", "continue", "lambda", "yield", "True", "False", "None", "and", "or", "not", "in", "is"]
+        case "javascript", "js", "typescript", "ts":
+            keywords = ["import", "export", "class", "function", "const", "let", "var", "if", "else", "for", "while", "return", "try", "catch", "finally", "throw", "async", "await", "new", "this", "super", "true", "false", "null", "undefined"]
+        case "java":
+            keywords = ["import", "package", "class", "interface", "extends", "implements", "public", "private", "protected", "static", "final", "abstract", "void", "if", "else", "for", "while", "return", "try", "catch", "finally", "throw", "new", "this", "super", "true", "false", "null"]
+        case "go":
+            keywords = ["package", "import", "func", "var", "const", "type", "struct", "interface", "if", "else", "for", "return", "defer", "go", "chan", "select", "case", "default", "break", "continue", "true", "false", "nil"]
+        case "rust", "rs":
+            keywords = ["use", "mod", "fn", "let", "mut", "const", "static", "struct", "enum", "trait", "impl", "if", "else", "for", "while", "loop", "return", "match", "break", "continue", "pub", "self", "Self", "true", "false"]
+        case "c", "cpp", "c++":
+            keywords = ["include", "class", "struct", "public", "private", "protected", "static", "const", "void", "int", "char", "float", "double", "if", "else", "for", "while", "return", "try", "catch", "throw", "new", "delete", "true", "false", "nullptr", "NULL"]
+        default:
+            keywords = []
+        }
+
+        // キーワードのハイライト
+        for keyword in keywords {
+            let pattern = "\\b\(keyword)\\b"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+                for match in matches {
+                    attributedString.addAttribute(.foregroundColor, value: keywordColor, range: match.range)
+                }
+            }
+        }
+
+        // 文字列リテラルのハイライト（簡易版）
+        let stringPattern = "\"[^\"]*\"|'[^']*'"
+        if let regex = try? NSRegularExpression(pattern: stringPattern, options: []) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                attributedString.addAttribute(.foregroundColor, value: stringColor, range: match.range)
+            }
+        }
+
+        // コメントのハイライト（簡易版）
+        let commentPattern = "//.*$|/\\*[\\s\\S]*?\\*/|#.*$"
+        if let regex = try? NSRegularExpression(pattern: commentPattern, options: [.anchorsMatchLines]) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                attributedString.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+            }
+        }
+
+        // 数値のハイライト
+        let numberPattern = "\\b\\d+(\\.\\d+)?\\b"
+        if let regex = try? NSRegularExpression(pattern: numberPattern, options: []) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                attributedString.addAttribute(.foregroundColor, value: numberColor, range: match.range)
+            }
+        }
+
+        return attributedString
     }
 
     @objc private func copyCode() {
