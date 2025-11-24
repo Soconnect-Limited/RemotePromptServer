@@ -12,6 +12,11 @@ struct ChatListRepresentable: UIViewRepresentable {
         view.tableView.dataSource = context.coordinator
         view.tableView.delegate = context.coordinator
         view.tableView.register(ChatMessageCell.self, forCellReuseIdentifier: ChatMessageCell.reuseId)
+
+        // Phase 4: prefetchDataSource 無効化（不要な先読みを防ぐ）
+        view.tableView.prefetchDataSource = nil
+        view.tableView.isPrefetchingEnabled = false
+
         context.coordinator.tableView = view.tableView
         context.coordinator.runner = runner
         context.coordinator.reload(with: messages)

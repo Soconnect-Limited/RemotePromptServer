@@ -44,6 +44,8 @@
 - [x] 100KB Markdown 変換時間を計測（目標 <50ms）。超過なら Phase 3-A' にフォールバック。
   - 100KB以上のコンテンツで自動計測実装済み
   - 50ms超過時に警告ログ出力
+  - **実測結果: 100KBで4.5〜11.7ms（目標50ms以下を達成）**
+  - Phase 3-A'（段階的レンダリング）は不要と判断
 #### Phase 3-A' 段階的レンダリング（必要時）
 - [ ] 10KBチャンクに分割しBGで変換→Mainで反映。
 #### Phase 3-B コードブロック装飾
@@ -56,7 +58,9 @@
 
 ### Phase 4 パフォーマンス調整
 - [x] rowHeight=automatic, estimatedRowHeightを可変設定（実装済み）。
-- [ ] prefetchDataSource 無効化。
+- [x] prefetchDataSource 無効化。
+  - isPrefetchingEnabled = false に設定
+  - prefetchDataSource = nil に設定
 - [ ] 表示は最新50件まで、古い履歴はページング取得。
 - [ ] 長文は最初の1000文字＋「続きを読む」折りたたみで高さ計算を抑制。
 
