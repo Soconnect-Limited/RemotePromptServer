@@ -119,7 +119,8 @@ struct MessageParser {
                     default: headingFont = h4Font
                     }
 
-                    // 属性のみ設定（文字列置換なし）
+                    // removeAttributeで既存のフォントを削除してから新しいフォントを追加
+                    attributed.removeAttribute(.font, range: contentRange)
                     attributed.addAttribute(.font, value: headingFont, range: contentRange)
                 }
             }
@@ -138,6 +139,7 @@ struct MessageParser {
             for match in matches {
                 if match.numberOfRanges >= 2 {
                     let contentRange = match.range(at: 1)
+                    attributed.removeAttribute(.font, range: contentRange)
                     attributed.addAttribute(.font, value: boldFont, range: contentRange)
                 }
             }
@@ -150,6 +152,7 @@ struct MessageParser {
             for match in matches {
                 if match.numberOfRanges >= 2 {
                     let contentRange = match.range(at: 1)
+                    attributed.removeAttribute(.font, range: contentRange)
                     attributed.addAttribute(.font, value: italicFont, range: contentRange)
                 }
             }
@@ -160,6 +163,7 @@ struct MessageParser {
         if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
             let matches = regex.matches(in: text, options: [], range: fullRange)
             for match in matches {
+                attributed.removeAttribute(.font, range: match.range)
                 attributed.addAttribute(.font, value: mono, range: match.range)
                 attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
             }
