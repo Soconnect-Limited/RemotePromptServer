@@ -47,7 +47,9 @@
 - [x] CodeBlockViewクラス実装確認（Lines 144-243）。
 - [x] MessageParser実装確認（Lines 20-142）。
 - [x] 既存renderMarkdown()の動作確認（Lines 616-715）。
-- [ ] Master_Specification 8.7のテスト要件を確認。
+- [x] Master_Specification 8.7のテスト要件を確認。
+  - MarkdownRenderer.render(_:)がAttributedString(markdown:)を実行し、例外時はプレーンテキストへフォールバック
+  - Phase 7で実装済み：renderTextInternal()でthrows、renderText()でdo-catchフォールバック
 
 ### Phase 1 ChatMessageCell構造のUIStackView化
 - [x] `ChatMessageCell`にプライベートプロパティ`contentStackView: UIStackView`を追加。
