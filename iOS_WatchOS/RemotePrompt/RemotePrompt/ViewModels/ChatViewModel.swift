@@ -19,7 +19,8 @@ final class ChatViewModel: ObservableObject {
     private let shouldValidateAPIKey: Bool
     private var sseConnections: [String: SSEManager] = [:]
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
-    private var finalResultFetched: Set<String> = []  // ジョブごとの最終取得ガード
+    private var finalResultFetched: Set<String> = []  // ジョブごとの最終取得ガード（@MainActor 保護）
+    private var terminalStatusReceived: Set<String> = []  // success/failed を受信済みのジョブ
     private var runner: String  // v4.1: Changed from `let` to `var` for dynamic runner switching
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
@@ -321,6 +322,10 @@ final class ChatViewModel: ObservableObject {
         let manager = SSEManager()
         sseConnections[jobId] = manager
 
+        // 新規ジョブ開始時に既存フラグをリセット
+        finalResultFetched.remove(jobId)
+        terminalStatusReceived.remove(jobId)
+
         // IMPORTANT: sseCancellablesに直接格納するためのSet を先に作成
         sseCancellables[jobId] = Set<AnyCancellable>()
 
@@ -334,17 +339,13 @@ final class ChatViewModel: ObservableObject {
                 // 終端ステータスで二重実行防止付きfetch
                 guard let self else { return }
                 if status == "success" || status == "failed" {
+                    terminalStatusReceived.insert(jobId)
                     guard !self.finalResultFetched.contains(jobId) else {
                         print("DEBUG: Terminal status already fetched for job: \(jobId)")
                         return
                     }
                     self.finalResultFetched.insert(jobId)
                     Task { @MainActor in
-                        defer {
-                            // 例外やエラーでも確実にフラグをクリア
-                            self.finalResultFetched.remove(jobId)
-                            print("DEBUG: finalResultFetched cleared in defer for job: \(jobId)")
-                        }
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
                     }
@@ -359,18 +360,17 @@ final class ChatViewModel: ObservableObject {
                 guard let self else { return }
                 if !connected {
                     print("DEBUG: SSE disconnected")
-                    // Terminal statusを受信せずに切断された場合のみfetch
+                    // Terminal statusを受信せず、まだフェッチしていない場合のみ実行
+                    guard !self.terminalStatusReceived.contains(jobId) else {
+                        print("DEBUG: Terminal status already received for job: \(jobId)")
+                        return
+                    }
                     guard !self.finalResultFetched.contains(jobId) else {
                         print("DEBUG: Final result already fetched/scheduled for job: \(jobId)")
                         return
                     }
                     self.finalResultFetched.insert(jobId)
                     Task { @MainActor in
-                        defer {
-                            // 例外やエラーでも確実にフラグをクリア
-                            self.finalResultFetched.remove(jobId)
-                            print("DEBUG: finalResultFetched cleared in defer (disconnect) for job: \(jobId)")
-                        }
                         await self.fetchFinalResult(jobId: jobId, messageId: messageId)
                         self.cleanupConnection(for: jobId)
                     }
@@ -410,6 +410,8 @@ final class ChatViewModel: ObservableObject {
 
         sseConnections.removeValue(forKey: jobId)
         sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
+        finalResultFetched.remove(jobId)
+        terminalStatusReceived.remove(jobId)
 
         // finalResultFetchedはTask内のdeferで管理するため、ここでは削除しない
         // （Step 1.1/1.2のdeferが責務を持つ）

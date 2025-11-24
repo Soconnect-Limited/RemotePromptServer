@@ -42,12 +42,8 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             "Cache-Control": "no-cache",
             "Accept-Encoding": "identity",
         ]
-        // バックグラウンドキュー使用（メインスレッドブロック回避）
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 1
-        queue.qualityOfService = .userInitiated
-        session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
-        print("DEBUG: SSEManager.init() - Created URLSession with background delegateQueue")
+        session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
+        print("DEBUG: SSEManager.init() - Created URLSession with main delegateQueue (spec v4.3)")
     }
 
     func connect(jobId: String) {
@@ -62,11 +58,8 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 "Cache-Control": "no-cache",
                 "Accept-Encoding": "identity",
             ]
-            let queue = OperationQueue()
-            queue.maxConcurrentOperationCount = 1
-            queue.qualityOfService = .userInitiated
-            session = URLSession(configuration: config, delegate: self, delegateQueue: queue)
-            print("DEBUG: SSEManager.connect() - Recreated URLSession")
+            session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
+            print("DEBUG: SSEManager.connect() - Recreated URLSession (delegateQueue.main)")
         }
 
         // 既存のタスクがあればキャンセル
