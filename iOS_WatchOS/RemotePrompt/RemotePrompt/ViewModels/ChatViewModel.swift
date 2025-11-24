@@ -173,18 +173,27 @@ final class ChatViewModel: ObservableObject {
             historyOffset = reset ? jobs.count : historyOffset + jobs.count
 
             let historicalMessages = convertJobsToMessages(jobs)
+
+            // デバッグ: API返却順序を確認
+            if let first = historicalMessages.first, let last = historicalMessages.last {
+                print("DEBUG: fetchHistory() - First message date: \(first.createdAt), Last message date: \(last.createdAt)")
+                print("DEBUG: fetchHistory() - Order is: \(first.createdAt > last.createdAt ? "newest->oldest" : "oldest->newest")")
+            }
+
             var combinedMessages: [Message]
             if reset {
-                combinedMessages = historicalMessages
+                // APIが新しい順で返す場合は反転が必要
+                combinedMessages = historicalMessages.reversed()
             } else {
                 // R-8.6.1: Message ID重複排除（ForEach警告・UI凍結の原因）
                 let existingIds = Set(messages.map { $0.id })
-                let newMessages = historicalMessages.filter { !existingIds.contains($0.id) }
+                let newMessages = historicalMessages.reversed().filter { !existingIds.contains($0.id) }
                 let duplicateCount = historicalMessages.count - newMessages.count
                 if duplicateCount > 0 {
                     print("DEBUG: fetchHistory() - Filtered \(duplicateCount) duplicate messages")
                 }
-                combinedMessages = newMessages + messages
+                // 既存メッセージ（新しい）+ 新規取得（古い）の順序で結合
+                combinedMessages = messages + newMessages
             }
 
             // UI負荷軽減のため最新 displayLimit 件に絞る

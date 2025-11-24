@@ -91,28 +91,85 @@ struct MessageParser {
         paragraphStyle.lineSpacing = 2
         paragraphStyle.paragraphSpacing = 4
 
-        let attributed = NSMutableAttributedString(string: text, attributes: [
-            .font: bodyFont,
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraphStyle
-        ])
+        // 戦略: 後ろから前に向かって文字列置換＋属性適用
+        // 1. マッチ情報を収集（処理順序が重要：インラインコード→太字→斜体）
+        // 2. 後ろから置換（インデックスずれ防止）
+        // 3. 属性適用
 
-        // 戦略: 文字列置換ではなく属性のみで全て処理する
-        // これにより範囲外アクセスを完全に防ぐ
+        struct MarkdownMatch {
+            let range: NSRange
+            let replacement: String
+            let font: UIFont?
+            let backgroundColor: UIColor?
+            let isLink: Bool
+            let linkURL: String?
+        }
 
-        let fullRange = NSRange(location: 0, length: text.utf16.count)
+        var matches: [MarkdownMatch] = []
 
-        print("[DEBUG] renderText called with text length: \(text.count), first 50 chars: \(String(text.prefix(50)))")
+        // 1. インラインコード（`code`）- 最優先（他のパターンと競合しないように）
+        let inlineCodePattern = "`([^`\n]+)`"
+        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
+                if match.numberOfRanges >= 2 {
+                    let content = (text as NSString).substring(with: match.range(at: 1))
+                    matches.append(MarkdownMatch(range: match.range, replacement: content, font: mono, backgroundColor: UIColor.systemGray5, isLink: false, linkURL: nil))
+                }
+            }
+        }
 
-        // 見出し（# ## ### ####）- 行頭のみ
+        // 2. リンク（[text](url)）- 太字・斜体より前に処理
+        let linkPattern = "\\[([^\\]]+)\\]\\(([^)]+)\\)"
+        if let regex = try? NSRegularExpression(pattern: linkPattern, options: []) {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
+                if match.numberOfRanges >= 3 {
+                    let linkText = (text as NSString).substring(with: match.range(at: 1))
+                    let linkURL = (text as NSString).substring(with: match.range(at: 2))
+                    matches.append(MarkdownMatch(range: match.range, replacement: linkText, font: bodyFont, backgroundColor: nil, isLink: true, linkURL: linkURL))
+                }
+            }
+        }
+
+        // 3. 太字（**text**）- 斜体より前に処理（**を先に消費）
+        let boldPattern = "\\*\\*([^*]+)\\*\\*"
+        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
+                if match.numberOfRanges >= 2 {
+                    let content = (text as NSString).substring(with: match.range(at: 1))
+                    matches.append(MarkdownMatch(range: match.range, replacement: content, font: boldFont, backgroundColor: nil, isLink: false, linkURL: nil))
+                }
+            }
+        }
+
+        // 4. 斜体（*text*）- 太字処理後に実行
+        let italicPattern = "(?<!\\*)\\*([^*\n]+?)\\*(?!\\*)"
+        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
+                if match.numberOfRanges >= 2 {
+                    let content = (text as NSString).substring(with: match.range(at: 1))
+                    // 既に太字/リンク/コードの範囲内かチェック（重複回避）
+                    let isOverlapping = matches.contains { existing in
+                        NSIntersectionRange(existing.range, match.range).length > 0
+                    }
+                    if !isOverlapping {
+                        matches.append(MarkdownMatch(range: match.range, replacement: content, font: italicFont, backgroundColor: nil, isLink: false, linkURL: nil))
+                    }
+                }
+            }
+        }
+
+        // 5. 見出し（# text）
         let headingPattern = "^(#{1,4})\\s+(.+)$"
         if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            print("[DEBUG] Heading matches: \(matches.count)")
-            for match in matches {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
                 if match.numberOfRanges >= 3 {
                     let hashCount = (text as NSString).substring(with: match.range(at: 1)).count
-                    let contentRange = match.range(at: 2)
+                    let content = (text as NSString).substring(with: match.range(at: 2))
 
                     let headingFont: UIFont
                     switch hashCount {
@@ -122,58 +179,71 @@ struct MessageParser {
                     default: headingFont = h4Font
                     }
 
-                    print("[DEBUG] Applying heading font (level \(hashCount)) to range: \(contentRange)")
-                    // removeAttributeで既存のフォントを削除してから新しいフォントを追加
-                    attributed.removeAttribute(.font, range: contentRange)
-                    attributed.addAttribute(.font, value: headingFont, range: contentRange)
+                    matches.append(MarkdownMatch(range: match.range, replacement: content, font: headingFont, backgroundColor: nil, isLink: false, linkURL: nil))
                 }
             }
         }
 
-        // 番号付きリスト（1. 2. 3.）- 行頭のみ（番号はそのまま表示）
-        // 属性のみ処理なので何もしない
-
-        // 箇条書きリスト（- * •）- 行頭のみ（記号はそのまま表示）
-        // 属性のみ処理なので何もしない
-
-        // 太字（**text**）- 属性のみ設定
-        let boldPattern = "\\*\\*([^*]+)\\*\\*"
-        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            print("[DEBUG] Bold matches: \(matches.count)")
-            for match in matches {
+        // 6. 箇条書き（- → •）とネスト対応（  - → ◦）
+        let listPattern = "^(\\s*)-\\s+"
+        if let regex = try? NSRegularExpression(pattern: listPattern, options: [.anchorsMatchLines]) {
+            let foundMatches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: text.utf16.count))
+            for match in foundMatches {
                 if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    let content = (text as NSString).substring(with: contentRange)
-                    print("[DEBUG] Applying bold to: '\(content)'")
-                    attributed.removeAttribute(.font, range: contentRange)
-                    attributed.addAttribute(.font, value: boldFont, range: contentRange)
+                    let indent = (text as NSString).substring(with: match.range(at: 1))
+                    let bullet = indent.count >= 2 ? "  ◦ " : "• "  // インデント2文字以上でネスト記号
+                    matches.append(MarkdownMatch(range: match.range, replacement: bullet, font: nil, backgroundColor: nil, isLink: false, linkURL: nil))
                 }
             }
         }
 
-        // 斜体（*text*）- 属性のみ設定
-        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
-        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    attributed.removeAttribute(.font, range: contentRange)
-                    attributed.addAttribute(.font, value: italicFont, range: contentRange)
-                }
-            }
+        // 位置順にソート（後ろから処理するため降順）
+        matches.sort { $0.range.location > $1.range.location }
+
+        // 文字列置換実行
+        var workingText = text
+        for match in matches {
+            workingText = (workingText as NSString).replacingCharacters(in: match.range, with: match.replacement)
         }
 
-        // インラインコード（`code`）- 属性のみ設定
-        let inlineCodePattern = "`([^`\n]+)`"
-        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                attributed.removeAttribute(.font, range: match.range)
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
+        // AttributedString作成
+        let attributed = NSMutableAttributedString(string: workingText, attributes: [
+            .font: bodyFont,
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
+        ])
+
+        // 属性適用（置換後の位置で）
+        // matchesは降順なので、前から順に処理して位置を調整
+        matches.reverse()  // 前から処理するため昇順に戻す
+
+        var offset = 0
+        for match in matches {
+            let newLocation = match.range.location - offset
+            let newLength = match.replacement.utf16.count
+            let newRange = NSRange(location: newLocation, length: newLength)
+
+            if newRange.location >= 0 && newRange.location + newRange.length <= workingText.utf16.count {
+                // リンクの場合
+                if match.isLink, let url = match.linkURL, let validURL = URL(string: url) {
+                    attributed.addAttribute(.link, value: validURL, range: newRange)
+                    attributed.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: newRange)
+                    attributed.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: newRange)
+                }
+                // 通常の装飾（フォント）
+                else if let font = match.font {
+                    attributed.removeAttribute(.font, range: newRange)
+                    attributed.addAttribute(.font, value: font, range: newRange)
+                }
+
+                // 背景色（インラインコード）
+                if let bgColor = match.backgroundColor {
+                    attributed.addAttribute(.backgroundColor, value: bgColor, range: newRange)
+                }
             }
+
+            // オフセット更新（元の長さ - 新しい長さ）
+            offset += (match.range.length - match.replacement.utf16.count)
         }
 
         return attributed
@@ -368,16 +438,18 @@ struct ChatListRepresentable: UIViewRepresentable {
 
             messages = newMessages
 
-            // バッチ更新
-            tableView.performBatchUpdates {
-                if !indexPathsToInsert.isEmpty {
-                    tableView.insertRows(at: indexPathsToInsert, with: .none)
+            // バッチ更新（アニメーション無効化）
+            UIView.performWithoutAnimation {
+                tableView.performBatchUpdates {
+                    if !indexPathsToInsert.isEmpty {
+                        tableView.insertRows(at: indexPathsToInsert, with: .none)
+                    }
+                    if !indexPathsToReload.isEmpty {
+                        tableView.reloadRows(at: indexPathsToReload, with: .none)
+                    }
+                } completion: { _ in
+                    self.scrollToBottomIfNeeded()
                 }
-                if !indexPathsToReload.isEmpty {
-                    tableView.reloadRows(at: indexPathsToReload, with: .none)
-                }
-            } completion: { _ in
-                self.scrollToBottomIfNeeded()
             }
         }
 
@@ -385,7 +457,8 @@ struct ChatListRepresentable: UIViewRepresentable {
             guard let tableView else { return }
             guard !messages.isEmpty else { return }
             let last = IndexPath(row: messages.count - 1, section: 0)
-            tableView.scrollToRow(at: last, at: .bottom, animated: true)
+            // アニメーション無効化（ユーザー要望: 滑らかな遷移、アニメーション不要）
+            tableView.scrollToRow(at: last, at: .bottom, animated: false)
         }
 
         // MARK: UITableViewDataSource
@@ -662,8 +735,10 @@ final class ChatMessageCell: UITableViewCell {
         newTextView.textContainerInset = .zero
         newTextView.textContainer.lineFragmentPadding = 0
         newTextView.backgroundColor = .clear
-        newTextView.font = UIFont.preferredFont(forTextStyle: .body)
-        newTextView.textColor = isUser ? .white : UIColor.label
+        // IMPORTANT: .fontを設定すると、attributedTextの全てのフォント属性が上書きされるため削除
+        // newTextView.font = UIFont.preferredFont(forTextStyle: .body)
+        // IMPORTANT: .textColorも同様にattributedTextの色属性を上書きするため削除
+        // newTextView.textColor = isUser ? .white : UIColor.label
         newTextView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
         newTextView.dataDetectorTypes = []
         newTextView.delaysContentTouches = false
