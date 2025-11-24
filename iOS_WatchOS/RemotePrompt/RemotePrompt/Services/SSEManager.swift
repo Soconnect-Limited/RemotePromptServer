@@ -21,6 +21,16 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     }
 
     private var session: URLSession?
+    private var delegateQueue: OperationQueue? {
+        if Constants.useMainDelegateQueue {
+            return .main
+        } else {
+            let queue = OperationQueue()
+            queue.maxConcurrentOperationCount = 1
+            queue.qualityOfService = .userInitiated
+            return queue
+        }
+    }
     private var buffer = Data()
     private var task: URLSessionDataTask?
     private var jobId: String?
@@ -42,15 +52,15 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             "Cache-Control": "no-cache",
             "Accept-Encoding": "identity",
         ]
-        session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
-        print("DEBUG: SSEManager.init() - Created URLSession with main delegateQueue (spec v4.3)")
+        session = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+        print("DEBUG: SSEManager.init() - Created URLSession with \(Constants.useMainDelegateQueue ? "main" : "bg") delegateQueue")
     }
 
     func connect(jobId: String) {
         self.jobId = jobId
 
         // セッションが無効な場合は再生成（長時間接続後のフォールバック）
-        if session == nil {
+        if session == nil || !Constants.reuseSSESession {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = 60
             config.httpAdditionalHeaders = [
@@ -58,8 +68,8 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 "Cache-Control": "no-cache",
                 "Accept-Encoding": "identity",
             ]
-            session = URLSession(configuration: config, delegate: self, delegateQueue: .main)
-            print("DEBUG: SSEManager.connect() - Recreated URLSession (delegateQueue.main)")
+            session = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+            print("DEBUG: SSEManager.connect() - Recreated URLSession (\(Constants.useMainDelegateQueue ? "main" : "bg"))")
         }
 
         // 既存のタスクがあればキャンセル

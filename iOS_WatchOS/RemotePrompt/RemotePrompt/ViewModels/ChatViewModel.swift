@@ -21,6 +21,7 @@ final class ChatViewModel: ObservableObject {
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
     private var finalResultFetched: Set<String> = []  // ジョブごとの最終取得ガード（@MainActor 保護）
     private var terminalStatusReceived: Set<String> = []  // success/failed を受信済みのジョブ
+    private static var memoryMonitorStarted = false
     private var runner: String  // v4.1: Changed from `let` to `var` for dynamic runner switching
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
@@ -57,6 +58,17 @@ final class ChatViewModel: ObservableObject {
         messages = messageStore.messages
         print("DEBUG: ChatViewModel init - roomId: \(roomId), threadId: \(threadId ?? "nil"), runner: \(runner)")
         print("DEBUG: ChatViewModel init - autoLoadMessages: \(autoLoadMessages), messages count: \(messages.count)")
+
+        // メモリ圧力監視（iOS13+）。警告で古いメッセージを削除、クリティカルでSSE切断
+        if #available(iOS 13.0, *), !Self.memoryMonitorStarted {
+            MemoryPressureMonitor.shared.start {
+                self.messageStore.clearAll()
+            } onCritical: {
+                self.cleanupAllConnections()
+                self.messageStore.clearAll()
+            }
+            Self.memoryMonitorStarted = true
+        }
         if autoLoadMessages {
             Task {
                 print("DEBUG: ChatViewModel init - Starting autoLoadMessages Task")
@@ -75,6 +87,20 @@ final class ChatViewModel: ObservableObject {
 
     func loadMoreMessages() async {
         await fetchHistory(reset: false)
+    }
+
+    /// デバッグ用長文送信（UI貼り付け回避）
+    func sendLoadTestPayload(sizeKB: Int = 100) {
+        let targetBytes = max(1, sizeKB) * 1024
+        var payload = ""
+        let chunk = "lorem ipsum dolor sit amet "
+        while payload.utf8.count < targetBytes {
+            payload.append(chunk)
+        }
+        // 目標サイズに近づけるために短く切る
+        let trimmed = payload.prefix(targetBytes + 512)
+        inputText = String(trimmed)
+        sendMessage()
     }
 
     private func fetchHistory(reset: Bool) async {

@@ -36,7 +36,9 @@ struct ChatView: View {
                         }
                     }
                     .onChange(of: viewModel.messages.map { $0.id }) { ids in
-                        print("DEBUG: [VIEW-ONCHANGE] message IDs changed, count: \(ids.count)")
+                        if Constants.enableVerboseLogs {
+                            print("DEBUG: [VIEW-ONCHANGE] message IDs changed, count: \(ids.count)")
+                        }
                         if !viewModel.isHistoryLoading {
                             hasFinishedInitialFetch = true
                         }
@@ -71,6 +73,16 @@ struct ChatView: View {
                 isLoading: viewModel.isLoading,
                 isFocused: $isInputFocused
             )
+#if DEBUG
+            HStack {
+                Button("100KB送信") {
+                    viewModel.sendLoadTestPayload()
+                }
+                .buttonStyle(.bordered)
+                .padding(.horizontal)
+                Spacer()
+            }
+#endif
         }
         .refreshable {
             await viewModel.loadLatestMessages()
