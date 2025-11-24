@@ -143,7 +143,8 @@
   let codeBlockBonus = codeBlockCount * 150  // 1ブロックあたり150pt加算
   return baseHeight + CGFloat(codeBlockBonus)
   ```
-- [ ] 実機でスクロール動作確認。ジャンプやカクつきがあれば係数を調整。
+- [x] 実機でスクロール動作確認。ジャンプやカクつきがあれば係数を調整。
+  - ✅ スクロールは滑らかに動作することを確認
 
 ### Phase 7 MessageParser内部の最適化とフォールバック
 - [x] MessageParser.parse()に性能計測コードを追加：
@@ -189,7 +190,9 @@
       }
   }
   ```
-- [ ] ビルド＆実行：100KBメッセージでログ確認。
+- [x] ビルド＆実行：100KBメッセージでログ確認。
+  - ✅ 100KB送信テスト完了、性能計測ログ確認済み
+  - ChatView.swiftのDEBUGテストボタン（100KB送信、MD表示テスト）を削除
 
 ### Phase 7-A 段階的パース（必要時のみ）
 - [ ] Phase 7で100ms超過が頻発する場合のみ実施。

@@ -22,22 +22,6 @@ struct ChatView: View {
                 isLoading: viewModel.isLoading,
                 isFocused: $isInputFocused
             )
-#if DEBUG
-            HStack {
-                Button("100KB送信") {
-                    viewModel.sendLoadTestPayload()
-                }
-                .buttonStyle(.bordered)
-
-                Button("MD表示テスト") {
-                    viewModel.sendMarkdownTestPayload()
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-            }
-            .padding(.horizontal, 8)
-#endif
         }
         .refreshable {
             await viewModel.loadLatestMessages()
