@@ -393,12 +393,33 @@ final class CodeBlockView: UIView {
         let stringColor = UIColor.systemRed
         let commentColor = UIColor.systemGreen
         let numberColor = UIColor.systemBlue
+        let functionColor = UIColor.systemTeal       // 関数名
+        let parameterColor = UIColor.systemOrange    // 引数・パラメータ
 
         var keywords: [String] = []
 
         switch lang {
         case "swift":
-            keywords = ["import", "class", "struct", "enum", "protocol", "extension", "func", "var", "let", "if", "else", "for", "while", "return", "guard", "switch", "case", "default", "break", "continue", "private", "public", "internal", "static", "mutating", "init", "deinit", "self", "super", "true", "false", "nil"]
+            keywords = [
+                // 宣言キーワード
+                "import", "class", "struct", "enum", "protocol", "extension", "typealias", "associatedtype",
+                // 関数・プロパティ
+                "func", "var", "let", "subscript", "init", "deinit",
+                // 制御フロー
+                "if", "else", "guard", "switch", "case", "default", "for", "while", "repeat", "break", "continue", "fallthrough", "return", "defer", "do", "try", "catch", "throw", "throws", "rethrows", "where",
+                // アクセス制御
+                "private", "fileprivate", "internal", "public", "open",
+                // 修飾子
+                "static", "final", "lazy", "weak", "unowned", "mutating", "nonmutating", "dynamic", "optional", "required", "convenience", "override", "infix", "prefix", "postfix", "indirect",
+                // 型関連
+                "self", "Self", "super", "as", "is", "some", "any", "Any", "AnyObject",
+                // プロパティ監視・アクセサ
+                "get", "set", "willSet", "didSet", "inout",
+                // 非同期・並行処理
+                "async", "await", "actor",
+                // リテラル・定数
+                "true", "false", "nil"
+            ]
         case "python", "py":
             keywords = ["import", "from", "class", "def", "if", "elif", "else", "for", "while", "return", "try", "except", "finally", "with", "as", "pass", "break", "continue", "lambda", "yield", "True", "False", "None", "and", "or", "not", "in", "is"]
         case "javascript", "js", "typescript", "ts":
@@ -415,41 +436,95 @@ final class CodeBlockView: UIView {
             keywords = []
         }
 
-        // キーワードのハイライト
-        for keyword in keywords {
-            let pattern = "\\b\(keyword)\\b"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-                let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
-                for match in matches {
-                    attributedString.addAttribute(.foregroundColor, value: keywordColor, range: match.range)
-                }
-            }
-        }
+        // ハイライトの優先順位: コメント > 文字列 > キーワード > 数値
+        // 既にハイライト済みの範囲を記録するセット
+        var highlightedRanges: [NSRange] = []
 
-        // 文字列リテラルのハイライト（簡易版）
-        let stringPattern = "\"[^\"]*\"|'[^']*'"
-        if let regex = try? NSRegularExpression(pattern: stringPattern, options: []) {
-            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
-            for match in matches {
-                attributedString.addAttribute(.foregroundColor, value: stringColor, range: match.range)
-            }
-        }
-
-        // コメントのハイライト（簡易版）
+        // 1. コメントのハイライト（最優先）
         let commentPattern = "//.*$|/\\*[\\s\\S]*?\\*/|#.*$"
         if let regex = try? NSRegularExpression(pattern: commentPattern, options: [.anchorsMatchLines]) {
             let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
             for match in matches {
                 attributedString.addAttribute(.foregroundColor, value: commentColor, range: match.range)
+                highlightedRanges.append(match.range)
             }
         }
 
-        // 数値のハイライト
+        // 2. 文字列リテラルのハイライト
+        let stringPattern = "\"[^\"]*\"|'[^']*'"
+        if let regex = try? NSRegularExpression(pattern: stringPattern, options: []) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                // 既にコメント範囲内ならスキップ
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    attributedString.addAttribute(.foregroundColor, value: stringColor, range: match.range)
+                    highlightedRanges.append(match.range)
+                }
+            }
+        }
+
+        // 3. キーワードのハイライト
+        for keyword in keywords {
+            let pattern = "\\b\(keyword)\\b"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+                let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+                for match in matches {
+                    // 既にコメント・文字列範囲内ならスキップ
+                    if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                        attributedString.addAttribute(.foregroundColor, value: keywordColor, range: match.range)
+                    }
+                }
+            }
+        }
+
+        // 4. 関数定義・呼び出しのハイライト
+        // パターン: func funcName( または funcName( の形式
+        let functionPattern = "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\("
+        if let regex = try? NSRegularExpression(pattern: functionPattern, options: []) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                if match.numberOfRanges >= 2 {
+                    let funcNameRange = match.range(at: 1)
+                    // 既にコメント・文字列範囲内ならスキップ
+                    if !highlightedRanges.contains(where: { NSIntersectionRange($0, funcNameRange).length > 0 }) {
+                        // キーワードでない場合のみ関数名として扱う
+                        let funcName = (code as NSString).substring(with: funcNameRange)
+                        if !keywords.contains(funcName) {
+                            attributedString.addAttribute(.foregroundColor, value: functionColor, range: funcNameRange)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. パラメータ・引数のハイライト（Swift/Python/JS等で name: の形式）
+        let parameterPattern = "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:"
+        if let regex = try? NSRegularExpression(pattern: parameterPattern, options: []) {
+            let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
+            for match in matches {
+                if match.numberOfRanges >= 2 {
+                    let paramNameRange = match.range(at: 1)
+                    // 既にコメント・文字列範囲内ならスキップ
+                    if !highlightedRanges.contains(where: { NSIntersectionRange($0, paramNameRange).length > 0 }) {
+                        // キーワードでない場合のみパラメータ名として扱う
+                        let paramName = (code as NSString).substring(with: paramNameRange)
+                        if !keywords.contains(paramName) {
+                            attributedString.addAttribute(.foregroundColor, value: parameterColor, range: paramNameRange)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 6. 数値のハイライト
         let numberPattern = "\\b\\d+(\\.\\d+)?\\b"
         if let regex = try? NSRegularExpression(pattern: numberPattern, options: []) {
             let matches = regex.matches(in: code, options: [], range: NSRange(location: 0, length: code.utf16.count))
             for match in matches {
-                attributedString.addAttribute(.foregroundColor, value: numberColor, range: match.range)
+                // 既にコメント・文字列範囲内ならスキップ
+                if !highlightedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    attributedString.addAttribute(.foregroundColor, value: numberColor, range: match.range)
+                }
             }
         }
 
@@ -718,17 +793,20 @@ final class ChatMessageCell: UITableViewCell {
         // Phase 4: 展開ボタン設定
         expandButton.translatesAutoresizingMaskIntoConstraints = false
         expandButton.setTitle("続きを読む", for: .normal)
-        expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)  // footnote → body に変更
+        expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         expandButton.addTarget(self, action: #selector(toggleExpand), for: .touchUpInside)
-        expandButton.contentHorizontalAlignment = .trailing  // 右寄せ
+        expandButton.contentHorizontalAlignment = .trailing
+        expandButton.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.9)  // 背景を追加して視認性向上
+        expandButton.layer.cornerRadius = 4
+        expandButton.contentEdgeInsets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)
         expandButton.isHidden = true
         bubbleView.addSubview(expandButton)
 
         expandButtonBottomConstraint = expandButton.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
 
         NSLayoutConstraint.activate([
-            expandButton.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),  // 右下に配置
-            expandButton.leadingAnchor.constraint(greaterThanOrEqualTo: bubbleView.leadingAnchor, constant: 12),  // 最小マージン確保
+            expandButton.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),
+            expandButton.leadingAnchor.constraint(greaterThanOrEqualTo: bubbleView.leadingAnchor, constant: 12),
             expandButtonBottomConstraint!
         ])
 
@@ -752,6 +830,9 @@ final class ChatMessageCell: UITableViewCell {
             contentStackView.leadingAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.leadingAnchor),
             contentStackView.trailingAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.trailingAnchor)
         ])
+
+        // expandButtonを最前面に移動（contentStackViewの上に表示）
+        bubbleView.bringSubviewToFront(expandButton)
 
         // textViewのbottom制約は動的に切り替える（展開ボタン表示時は変更）
         textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor)
@@ -904,136 +985,6 @@ final class ChatMessageCell: UITableViewCell {
         let codeBlockView = CodeBlockView()
         codeBlockView.configure(code: code, language: language)
         return codeBlockView
-    }
-
-    private func renderMarkdown(_ text: String, isUser: Bool) -> NSMutableAttributedString {
-        let textColor: UIColor = isUser ? .white : .label
-        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
-        let boldFont = UIFont.preferredFont(forTextStyle: .body).withTraits(.traitBold)
-        let italicFont = UIFont.preferredFont(forTextStyle: .body).withTraits(.traitItalic)
-        let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
-
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 2
-        paragraphStyle.paragraphSpacing = 4
-
-        let attributed = NSMutableAttributedString(string: text, attributes: [
-            .font: bodyFont,
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraphStyle
-        ])
-
-        let fullRange = NSRange(location: 0, length: attributed.length)
-
-        // コードブロック（```...```）→ 等幅フォント + 背景色
-        let codeBlockPattern = "```[a-zA-Z]*\\n?([\\s\\S]*?)```"
-        if let regex = try? NSRegularExpression(pattern: codeBlockPattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray4, range: match.range)
-            }
-        }
-
-        // インラインコード（`code`）→ 等幅フォント + 薄い背景色
-        let inlineCodePattern = "`([^`\n]+)`"
-        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
-            }
-        }
-
-        // 太字（**text**）
-        let boldPattern = "\\*\\*([^*]+)\\*\\*"
-        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
-            for match in matches.reversed() {
-                if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    let content = (attributed.string as NSString).substring(with: contentRange)
-                    let replacement = NSAttributedString(string: content, attributes: [
-                        .font: boldFont,
-                        .foregroundColor: textColor
-                    ])
-                    attributed.replaceCharacters(in: match.range, with: replacement)
-                }
-            }
-        }
-
-        // 斜体（*text*）
-        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
-        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
-            for match in matches.reversed() {
-                if match.numberOfRanges >= 2 {
-                    let contentRange = match.range(at: 1)
-                    let content = (attributed.string as NSString).substring(with: contentRange)
-                    let replacement = NSAttributedString(string: content, attributes: [
-                        .font: italicFont,
-                        .foregroundColor: textColor
-                    ])
-                    attributed.replaceCharacters(in: match.range, with: replacement)
-                }
-            }
-        }
-
-        return attributed
-    }
-
-    private func applyCodeStyling(_ attributed: NSMutableAttributedString, isUser: Bool) {
-        let fullRange = NSRange(location: 0, length: attributed.length)
-        let textColor: UIColor = isUser ? .white : .label
-        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
-        let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
-
-        // 段落スタイルを設定（改行の行間調整）
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 2  // 行間を適度に（4→2に縮小）
-        paragraphStyle.paragraphSpacing = 4  // 段落間を適度に（8→4に縮小）
-        attributed.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
-
-        // フォントサイズを統一（Markdown由来のサイズ調整を保持しつつベースを設定）
-        attributed.enumerateAttribute(.font, in: fullRange, options: []) { value, range, _ in
-            if let font = value as? UIFont {
-                // 見出しなど既存のフォント属性のサイズ比率を保持
-                let newFont = font.withSize(max(font.pointSize, bodyFont.pointSize))
-                attributed.addAttribute(.font, value: newFont, range: range)
-            } else {
-                // フォント未設定の範囲にはbodyフォントを適用
-                attributed.addAttribute(.font, value: bodyFont, range: range)
-            }
-        }
-
-        // テキスト色を設定（User=白、Assistant=自動）
-        attributed.enumerateAttribute(.foregroundColor, in: fullRange, options: []) { _, range, _ in
-            attributed.addAttribute(.foregroundColor, value: textColor, range: range)
-        }
-
-        // コードブロック検出（```で囲まれた部分全体をスタイリング）
-        let text = attributed.string
-        let pattern = "```[a-zA-Z]*\\n?([\\s\\S]*?)```"
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                // バッククォートを含む全体にスタイル適用
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray4, range: match.range)
-                attributed.addAttribute(.foregroundColor, value: textColor, range: match.range)
-            }
-        }
-
-        // インラインコード（`code`）のスタイリング
-        let inlinePattern = "`([^`]+)`"
-        if let inlineRegex = try? NSRegularExpression(pattern: inlinePattern, options: []) {
-            let matches = inlineRegex.matches(in: text, options: [], range: fullRange)
-            for match in matches {
-                attributed.addAttribute(.font, value: mono, range: match.range)
-                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
-                attributed.addAttribute(.foregroundColor, value: textColor, range: match.range)
-            }
-        }
     }
 
     // Phase 4: 展開/折りたたみトグル（UIStackViewベース）

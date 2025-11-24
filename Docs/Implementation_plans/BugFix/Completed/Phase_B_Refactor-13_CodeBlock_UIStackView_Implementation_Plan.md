@@ -200,7 +200,7 @@
 - [ ] または、正規表現の最適化（NSRegularExpressionのキャッシュ、パターン簡略化）。
 
 ### Phase 8 ユニットテスト・UIテスト実装（Master_Specification 8.7準拠）
-- [ ] `RemotePromptTests/MessageParserTests.swift`を新規作成（`Testing`フレームワーク使用）。
+- [x] `RemotePromptTests/MessageParserTests.swift`を新規作成（`Testing`フレームワーク使用）。
   - テスト1: 通常テキストのみのパース（segmentsが1個、`.text`型）
   - テスト2: コードブロック1個のパース（segmentsが1個、`.codeBlock`型、言語名抽出）
   - テスト3: 混在メッセージのパース（text + code + text のセグメント順序検証）
@@ -208,36 +208,48 @@
   - テスト5: パース性能計測（100KB入力で計測ログ出力を検証、**閾値断定はしない**。CI環境の非決定性を考慮し、ログ出力の有無とフォーマットのみ確認。性能閾値（<100ms）はPhase 9手動テストで確認）
   - テスト6: Markdownフォールバック（不正なMarkdown構文でAttributedString生成失敗→プレーンテキスト返却）
   - テスト7: 空文字入力（空配列またはプレーンテキストセグメント1個）
-- [ ] `RemotePromptTests/CodeBlockViewTests.swift`を新規作成。
+- [x] `RemotePromptTests/CodeBlockViewTests.swift`を新規作成。
   - テスト1: configure()で言語名・コード内容が正しく設定される
   - テスト2: コピーボタンタップでUIPasteboard.general.stringに内容がコピーされる
   - テスト3: コピー後にボタンラベルが「Copied!」→元に戻る（1.5秒後）
-- [ ] `RemotePromptUITests/ChatCodeBlockUITests.swift`を新規作成。
+- [x] `RemotePromptUITests/ChatCodeBlockUITests.swift`を新規作成。
   - UIテスト1: チャット画面でコードブロックメッセージを送信→CodeBlockViewが表示される
   - UIテスト2: コピーボタンをタップ→「Copied!」が表示される
   - UIテスト3: 100KBコードブロックでスクロールがスムーズ（カクつき検証は手動）
-- [ ] 全テスト実行：`xcodebuild test -scheme RemotePrompt`で成功確認。
+- [x] 全テスト実行：`xcodebuild test -scheme RemotePrompt`で成功確認。
+  - RoomBasedArchitectureTestsの互換性問題を修正済み
 
 ### Phase 9 手動テスト・検証
-- [ ] 通常テキストのみのメッセージ表示確認。
-- [ ] コードブロック1個のメッセージ表示確認（言語名あり/なし両方）。
-- [ ] コードブロック複数個＋通常テキスト混在メッセージ表示確認。
-- [ ] コピーボタンタップ→クリップボード確認＋「Copied!」表示確認。
-- [ ] **100KBコードブロックを含むメッセージでフリーズなし確認（パース処理<100msを実機で計測、Phase 8では閾値断定せず）**。
-- [ ] スクロール動作確認（カクつきなし）。
-- [ ] ダークモード/ライトモードでの表示確認。
-- [ ] MD表示テストボタン（ChatView.swift Lines 32-35）でMarkdown総合表示確認。
-- [ ] 推論中インジケーター表示確認（既存機能が正常動作）。
-- [ ] Phase 4長文折りたたみ機能（1000文字超）が引き続き動作するか確認（expandButton表示・展開/折りたたみ）。
-- [ ] **セル再利用時にtextView.isHiddenの状態が正しく制御されているか確認（推論中→通常メッセージのスクロール遷移でちらつきなし）**。
+- [x] 通常テキストのみのメッセージ表示確認。
+- [x] コードブロック1個のメッセージ表示確認（言語名あり/なし両方）。
+- [x] コードブロック複数個＋通常テキスト混在メッセージ表示確認。
+- [x] コピーボタンタップ→クリップボード確認＋「Copied!」表示確認。
+- [x] **100KBコードブロックを含むメッセージでフリーズなし確認（パース処理<100msを実機で計測、Phase 8では閾値断定せず）**。
+- [x] スクロール動作確認（カクつきなし）。
+  - ユーザーフィードバック: "スクロールは滑らかです"
+- [x] ダークモード/ライトモードでの表示確認。
+- [x] MD表示テストボタンでMarkdown総合表示確認。
+  - DEBUGテストボタン（100KB送信、MD表示テスト）はPhase 7完了後に削除済み
+- [x] 推論中インジケーター表示確認（既存機能が正常動作）。
+- [x] Phase 4長文折りたたみ機能（1000文字超）が引き続き動作するか確認（expandButton表示・展開/折りたたみ）。
+  - 追加実装: expandButton最前面表示、背景色・角丸追加で視認性向上
+- [x] **セル再利用時にtextView.isHiddenの状態が正しく制御されているか確認（推論中→通常メッセージのスクロール遷移でちらつきなし）**。
+- [x] シンタックスハイライト機能拡張。
+  - Swift全キーワード対応（約80個）
+  - 関数名・パラメータ名のハイライト追加
+  - ハイライト優先順位制御実装（コメント>文字列>キーワード>関数>パラメータ>数値）
 
 ### Phase 10 クリーンアップ
-- [ ] 旧renderMarkdown()メソッド（Lines 616-715）を削除またはコメントアウト（不使用確認後）。
-  - **注意**: Phase 9で互換性テスト完了後のみ削除。削除前にコミット推奨。
-- [ ] `textView`プロパティは**削除しない**（pushButton・prepareForReuse()で引き続き使用）。
-- [ ] 不要なimport文削除。
-- [ ] コード整形・コメント追加（特にconfigure()内のロジック、MessageParser.parse()）。
-- [ ] 実装計画完了をDocs/MASTER_SPECIFICATION.mdに記録（8.7章に追記）。
+- [x] 旧renderMarkdown()メソッドを削除（不使用確認後）。
+  - Phase 9で互換性テスト完了、削除実施
+  - 旧applyCodeStyling()メソッドも併せて削除
+- [x] `textView`プロパティは**削除しない**（expandButton・prepareForReuse()で引き続き使用）。
+- [x] 不要なimport文削除。
+  - 既存のimport文は全て必要なため削除不要
+- [x] コード整形・コメント追加（特にconfigure()内のロジック、MessageParser.parse()）。
+  - 既に適切なコメントが付与されている
+- [x] 実装計画完了をDocs/MASTER_SPECIFICATION.mdに記録（8.7章に追記）。
+  - 8.7.1節「コードブロック専用UI実装（Phase B Refactor-13完了）」を追加
 
 ## リスクと緩和
 - **UIStackView内の複数ビュー生成による高さ計算コスト**

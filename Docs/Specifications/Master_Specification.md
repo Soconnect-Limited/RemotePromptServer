@@ -2758,6 +2758,39 @@ extension Notification.Name {
 - `MarkdownRenderer.render(_:)` は `AttributedString(markdown:)` を実行し、例外時はプレーンテキストへフォールバックする。依存性注入可能な `Parser` 引数を持ち、ユニットテストで異常系を再現できる。
 - テスト要件: `RemotePromptTests/MarkdownRendererTests.swift` で (1) Markdown構文の変換、(2) 強制失敗時のフォールバック、(3) 空文字の取り扱いを `Testing` フレームワークで検証する。
 
+#### 8.7.1 コードブロック専用UI実装（Phase B Refactor-13完了）
+
+**実装日**: 2025-11-24
+
+**概要**: チャットメッセージ内のMarkdownコードブロック（```言語名\nコード\n```）を専用UIで表示する機能を実装。
+
+**主要コンポーネント**:
+- `ChatListRepresentable.swift`:
+  - `CodeBlockView`: コードブロック専用UIコンポーネント
+    - ヘッダー: 言語名表示（大文字）+ コピーボタン
+    - シンタックスハイライト: Swift/Python/JavaScript/Java/Go/Rust/C/C++対応
+    - カラーリング: キーワード（紫）、文字列（赤）、コメント（緑）、数値（青）、関数名（青緑）、パラメータ名（オレンジ）
+  - `MessageParser`: Markdownパーサー
+    - コードブロックと通常テキストの分離
+    - セグメント上限20個（DoS防止）
+    - 100KB以上のメッセージで性能計測ログ出力
+    - Markdown構文エラー時のフォールバック（プレーンテキスト表示）
+  - `ChatMessageCell`: UIStackViewベースの混在レイアウト
+    - UITextView（通常テキスト）とCodeBlockView（コードブロック）の動的配置
+    - 1000文字以上の長文折りたたみ機能（expandButton）
+    - セル再利用時の適切なクリーンアップ
+
+**テスト**:
+- `RemotePromptTests/MessageParserTests.swift`: パース機能のユニットテスト（8件）
+- `RemotePromptTests/CodeBlockViewTests.swift`: CodeBlockViewのユニットテスト（5件）
+- `RemotePromptUITests/ChatCodeBlockUITests.swift`: UI統合テスト（4件）
+
+**性能**:
+- 100KBメッセージのパース処理: <100ms（目標達成）
+- スクロール性能: カクつきなし（実機確認済み）
+
+**実装計画**: `Docs/Implementation_plans/BugFix/Plans/Phase_B_Refactor-13_CodeBlock_UIStackView_Implementation_Plan.md`
+
 ### 8.8 APIキー設定と構成値解決
 
 - `Support/AppConfiguration.swift` が Info.plist → `Support/RemotePromptConfig.plist` → 環境変数 (`REMOTE_PROMPT_BASE_URL` / `REMOTE_PROMPT_API_KEY`) の順で値を解決し、`Constants` から `baseURL` と `apiKey` を提供する。
