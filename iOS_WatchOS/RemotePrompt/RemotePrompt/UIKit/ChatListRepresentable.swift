@@ -35,9 +35,65 @@ struct ChatListRepresentable: UIViewRepresentable {
 
         // MARK: Public API
         func reload(with newMessages: [Message]) {
+            guard let tableView else {
+                messages = newMessages
+                return
+            }
+
+            let oldCount = messages.count
+            let newCount = newMessages.count
+
+            // 初回ロードまたは大幅な変更の場合は全体リロード
+            if oldCount == 0 || abs(newCount - oldCount) > 10 {
+                messages = newMessages
+                tableView.reloadData()
+                scrollToBottomIfNeeded()
+                return
+            }
+
+            // 差分検出と部分更新
+            var indexPathsToReload: [IndexPath] = []
+            var indexPathsToInsert: [IndexPath] = []
+
+            // 既存メッセージの変更検出
+            let minCount = min(oldCount, newCount)
+            for i in 0..<minCount {
+                let oldMsg = messages[i]
+                let newMsg = newMessages[i]
+                // ID が同じでも content/status が変わっている場合は更新
+                if oldMsg.id == newMsg.id {
+                    if oldMsg.content != newMsg.content || oldMsg.status != newMsg.status {
+                        indexPathsToReload.append(IndexPath(row: i, section: 0))
+                    }
+                } else {
+                    // ID が違う場合は全体リロード（順序変更）
+                    messages = newMessages
+                    tableView.reloadData()
+                    scrollToBottomIfNeeded()
+                    return
+                }
+            }
+
+            // 新規追加メッセージの検出
+            if newCount > oldCount {
+                for i in oldCount..<newCount {
+                    indexPathsToInsert.append(IndexPath(row: i, section: 0))
+                }
+            }
+
             messages = newMessages
-            tableView?.reloadData()
-            scrollToBottomIfNeeded()
+
+            // バッチ更新
+            tableView.performBatchUpdates {
+                if !indexPathsToInsert.isEmpty {
+                    tableView.insertRows(at: indexPathsToInsert, with: .none)
+                }
+                if !indexPathsToReload.isEmpty {
+                    tableView.reloadRows(at: indexPathsToReload, with: .none)
+                }
+            } completion: { _ in
+                self.scrollToBottomIfNeeded()
+            }
         }
 
         private func scrollToBottomIfNeeded() {
