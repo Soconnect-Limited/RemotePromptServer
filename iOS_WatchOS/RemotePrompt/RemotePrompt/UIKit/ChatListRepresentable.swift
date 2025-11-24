@@ -384,6 +384,9 @@ final class ChatMessageCell: UITableViewCell {
     private let bubbleView = UIView()
     private let textView = UITextView()
 
+    // Phase B-13: UIStackView for mixed text and code block views
+    private let contentStackView = UIStackView()
+
     // 推論中インジケーター
     private let loadingStackView = UIStackView()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
@@ -485,6 +488,24 @@ final class ChatMessageCell: UITableViewCell {
         // アバター制約（Assistant時のみ表示）
         avatarLeadingConstraint = avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12)
 
+        // Phase B-13: contentStackView設定
+        contentStackView.translatesAutoresizingMaskIntoConstraints = false
+        contentStackView.axis = .vertical
+        contentStackView.spacing = 8
+        contentStackView.distribution = .fill
+        contentStackView.alignment = .fill
+        bubbleView.addSubview(contentStackView)
+
+        // bubbleViewのlayoutMarginsを設定（既存のtextView制約と同等）
+        bubbleView.layoutMargins = UIEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+
+        NSLayoutConstraint.activate([
+            contentStackView.topAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.topAnchor),
+            contentStackView.bottomAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.bottomAnchor),
+            contentStackView.leadingAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.leadingAnchor),
+            contentStackView.trailingAnchor.constraint(equalTo: bubbleView.layoutMarginsGuide.trailingAnchor)
+        ])
+
         // textViewのbottom制約は動的に切り替える（展開ボタン表示時は変更）
         textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor)
 
@@ -501,6 +522,9 @@ final class ChatMessageCell: UITableViewCell {
             textView.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor)
         ])
+
+        // Phase B-13: textViewを非表示化（削除しない - expandButton等で使用）
+        textView.isHidden = true
     }
 
     func configure(with message: Message, runner: String) {
@@ -550,66 +574,78 @@ final class ChatMessageCell: UITableViewCell {
         bubbleTrailingConstraint?.isActive = true
         textView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
 
+        // Phase B-13: contentStackViewをクリア
+        for view in contentStackView.arrangedSubviews {
+            contentStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
         // 推論中の場合はインジケーターを表示
         if isLoading {
             loadingStackView.isHidden = false
             textView.isHidden = true
             activityIndicator.startAnimating()
+            // contentStackViewは空のまま（推論中は既存のloadingStackViewを使用）
         } else {
             loadingStackView.isHidden = true
-            textView.isHidden = false
             activityIndicator.stopAnimating()
 
-            // Markdownレンダリング
+            // Phase B-13: MessageParser.parse()でMarkdownをセグメント化
             let markdown = message.content
             fullContent = markdown  // Phase 4: 全文を保存
 
-            // Phase 4: 長文折りたたみ（1000文字超）
-            let shouldTruncate = markdown.count > truncateThreshold && !isExpanded
-            let displayContent = shouldTruncate ? String(markdown.prefix(truncateThreshold)) : markdown
-            let showExpandButton = markdown.count > truncateThreshold
-            expandButton.isHidden = !showExpandButton
+            var segments = MessageParser.parse(markdown, isUser: isUser)
 
-            // Phase 4: textViewのbottom制約を切り替え（制約を再利用）
-            textViewBottomConstraint?.isActive = false
-            if showExpandButton {
-                // 展開ボタンがある場合はtextViewの下端を制限しない（内容に応じて伸びる）
-                // expandButtonがbubbleView.bottomに固定されているので、textViewは自然にその上に配置される
-                // textViewBottomConstraintは不要（nil）
-            } else {
-                // 展開ボタンがない場合はtextViewがbubbleの下まで伸びる
-                textViewBottomConstraint?.isActive = true
+            // セグメント数チェック（DoS防止）
+            if segments.count > 20 {
+                print("[Phase B-13] ⚠️ Segment count \(segments.count) exceeds limit 20, truncating")
+                segments = Array(segments.prefix(20))
             }
 
-            // Phase 3-A: 性能計測（100KB以上のコンテンツのみ）
-            let shouldMeasure = markdown.utf8.count >= 100_000
-            let startTime = shouldMeasure ? CFAbsoluteTimeGetCurrent() : 0
-
-            // 手動でMarkdownスタイリングを適用（コードブロックを保持）
-            let mutable = renderMarkdown(displayContent, isUser: isUser)
-
-            if shouldMeasure {
-                let conversionTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-                let sizeKB = Double(markdown.utf8.count) / 1024.0
-                print("[Phase 3-A] Markdown conversion: \(String(format: "%.1f", sizeKB))KB in \(String(format: "%.1f", conversionTime))ms")
-
-                if conversionTime > 50 {
-                    print("[Phase 3-A] ⚠️ Conversion exceeded 50ms target, consider Phase 3-A' chunked rendering")
+            // segmentsをループ処理してcontentStackViewに追加
+            for segment in segments {
+                switch segment {
+                case .text(let attributedString):
+                    let textView = createTextView(with: attributedString, isUser: isUser)
+                    contentStackView.addArrangedSubview(textView)
+                case .codeBlock(let code, let language):
+                    let codeBlockView = createCodeBlockView(code: code, language: language)
+                    contentStackView.addArrangedSubview(codeBlockView)
                 }
             }
 
-            textView.attributedText = mutable
+            // Phase B-13: 旧textViewは完全に隠す
+            textView.isHidden = true
 
-            // Phase 4: 折りたたみ時に省略記号を追加
-            if shouldTruncate {
-                let ellipsis = NSAttributedString(string: "...", attributes: [
-                    .font: UIFont.preferredFont(forTextStyle: .body),
-                    .foregroundColor: isUser ? UIColor.white : UIColor.label
-                ])
-                mutable.append(ellipsis)
-                textView.attributedText = mutable
-            }
+            // Phase 4: 長文折りたたみ（現状は無効化 - 今後UIStackViewベースで再実装）
+            expandButton.isHidden = true
         }
+    }
+
+    // Phase B-13: テキスト用UITextView生成メソッド
+    private func createTextView(with attributedString: NSAttributedString, isUser: Bool) -> UITextView {
+        let newTextView = UITextView()
+        newTextView.translatesAutoresizingMaskIntoConstraints = false
+        newTextView.attributedText = attributedString
+        newTextView.isEditable = false
+        newTextView.isSelectable = true
+        newTextView.isScrollEnabled = false
+        newTextView.textContainerInset = .zero
+        newTextView.textContainer.lineFragmentPadding = 0
+        newTextView.backgroundColor = .clear
+        newTextView.font = UIFont.preferredFont(forTextStyle: .body)
+        newTextView.textColor = isUser ? .white : UIColor.label
+        newTextView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
+        newTextView.dataDetectorTypes = []
+        newTextView.delaysContentTouches = false
+        return newTextView
+    }
+
+    // Phase B-13: CodeBlockView生成メソッド
+    private func createCodeBlockView(code: String, language: String?) -> CodeBlockView {
+        let codeBlockView = CodeBlockView()
+        codeBlockView.configure(code: code, language: language)
+        return codeBlockView
     }
 
     private func renderMarkdown(_ text: String, isUser: Bool) -> NSMutableAttributedString {
