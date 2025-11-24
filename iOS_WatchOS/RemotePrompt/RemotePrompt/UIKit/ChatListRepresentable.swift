@@ -44,7 +44,7 @@ struct ChatListRepresentable: UIViewRepresentable {
             guard let tableView else { return }
             guard !messages.isEmpty else { return }
             let last = IndexPath(row: messages.count - 1, section: 0)
-            tableView.scrollToRow(at: last, at: .bottom, animated: false)
+            tableView.scrollToRow(at: last, at: .bottom, animated: true)
         }
 
         // MARK: UITableViewDataSource
@@ -81,6 +81,11 @@ final class ChatMessageCell: UITableViewCell {
     private let avatarImageView = UIImageView()
     private let bubbleView = UIView()
     private let textView = UITextView()
+
+    // 推論中インジケーター
+    private let loadingStackView = UIStackView()
+    private let activityIndicator = UIActivityIndicatorView(style: .medium)
+    private let loadingLabel = UILabel()
 
     // 制約を保持して再利用時に更新可能にする
     private var bubbleLeadingConstraint: NSLayoutConstraint?
@@ -126,6 +131,30 @@ final class ChatMessageCell: UITableViewCell {
         textView.delaysContentTouches = false
         bubbleView.addSubview(textView)
 
+        // ローディングインジケーター設定
+        loadingStackView.translatesAutoresizingMaskIntoConstraints = false
+        loadingStackView.axis = .horizontal
+        loadingStackView.spacing = 8
+        loadingStackView.alignment = .center
+        loadingStackView.isHidden = true
+        bubbleView.addSubview(loadingStackView)
+
+        activityIndicator.color = .label
+        activityIndicator.hidesWhenStopped = true
+        loadingStackView.addArrangedSubview(activityIndicator)
+
+        loadingLabel.text = "応答を生成中..."
+        loadingLabel.font = UIFont.preferredFont(forTextStyle: .body)
+        loadingLabel.textColor = .label
+        loadingStackView.addArrangedSubview(loadingLabel)
+
+        NSLayoutConstraint.activate([
+            loadingStackView.topAnchor.constraint(equalTo: bubbleView.topAnchor, constant: 12),
+            loadingStackView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -12),
+            loadingStackView.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
+            loadingStackView.trailingAnchor.constraint(lessThanOrEqualTo: bubbleView.trailingAnchor, constant: -12)
+        ])
+
         // アバター制約（Assistant時のみ表示）
         avatarLeadingConstraint = avatarImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12)
 
@@ -146,6 +175,7 @@ final class ChatMessageCell: UITableViewCell {
 
     func configure(with message: Message, runner: String) {
         let isUser = message.type == .user
+        let isLoading = message.content.isEmpty && message.isRunning
 
         // アバター表示制御
         if isUser {
@@ -186,16 +216,27 @@ final class ChatMessageCell: UITableViewCell {
         bubbleTrailingConstraint?.isActive = true
         textView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
 
-        // Markdownレンダリング
-        let markdown = message.content
-        if let attributed = try? AttributedString(markdown: markdown) {
-            let mutable = NSMutableAttributedString(attributed)
-            // Assistant用の色を明示的に設定（isUserフラグを渡す）
-            applyCodeStyling(mutable, isUser: isUser)
-            textView.attributedText = mutable
+        // 推論中の場合はインジケーターを表示
+        if isLoading {
+            loadingStackView.isHidden = false
+            textView.isHidden = true
+            activityIndicator.startAnimating()
         } else {
-            textView.text = markdown
-            textView.font = UIFont.preferredFont(forTextStyle: .body)
+            loadingStackView.isHidden = true
+            textView.isHidden = false
+            activityIndicator.stopAnimating()
+
+            // Markdownレンダリング
+            let markdown = message.content
+            if let attributed = try? AttributedString(markdown: markdown) {
+                let mutable = NSMutableAttributedString(attributed)
+                // Assistant用の色を明示的に設定（isUserフラグを渡す）
+                applyCodeStyling(mutable, isUser: isUser)
+                textView.attributedText = mutable
+            } else {
+                textView.text = markdown
+                textView.font = UIFont.preferredFont(forTextStyle: .body)
+            }
         }
     }
 
@@ -228,5 +269,8 @@ final class ChatMessageCell: UITableViewCell {
         super.prepareForReuse()
         avatarImageView.image = nil
         textView.attributedText = nil
+        activityIndicator.stopAnimating()
+        loadingStackView.isHidden = true
+        textView.isHidden = false
     }
 }
