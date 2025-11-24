@@ -35,6 +35,7 @@ struct ChatView: View {
                             scrollToBottom()
                         }
                     }
+                    // 自動スクロールは一時無効化（フリーズ回避）。必要なら手動で最下部へ。
                     .onChange(of: viewModel.messages.count) { count in
                         if Constants.enableVerboseLogs {
                             print("DEBUG: [VIEW-ONCHANGE] message count changed: \(count)")
@@ -42,9 +43,7 @@ struct ChatView: View {
                         if !viewModel.isHistoryLoading {
                             hasFinishedInitialFetch = true
                         }
-                        if !viewModel.isLoadingMoreHistory {
-                            scrollToBottom()
-                        }
+                        // scrollToBottom() を呼ばない
                     }
                     .onChange(of: isInputFocused) { focused in
                         if focused {
