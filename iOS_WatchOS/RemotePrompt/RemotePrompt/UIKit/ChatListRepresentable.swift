@@ -89,8 +89,8 @@ final class ChatMessageCell: UITableViewCell {
 
     private func setup() {
         selectionStyle = .none
-        backgroundColor = .clear
-        contentView.backgroundColor = .clear
+        backgroundColor = .systemBackground
+        contentView.backgroundColor = .systemBackground
 
         bubbleView.translatesAutoresizingMaskIntoConstraints = false
         bubbleView.layer.cornerRadius = 12
@@ -121,8 +121,8 @@ final class ChatMessageCell: UITableViewCell {
 
     func configure(with message: Message) {
         let isUser = message.type == .user
-        bubbleView.backgroundColor = isUser ? UIColor.systemBlue.withAlphaComponent(0.12) : UIColor.secondarySystemBackground
-        textView.textColor = isUser ? .label : .label
+        bubbleView.backgroundColor = isUser ? UIColor.systemBlue.withAlphaComponent(0.16) : UIColor.systemBackground.withAlphaComponent(0.9)
+        textView.textColor = .label
         textView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
 
         let markdown = message.content

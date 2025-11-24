@@ -14,6 +14,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             if FeatureFlags.useUIKitChatList {
                 ChatListRepresentable(messages: viewModel.messages)
+                    .background(Color(.systemBackground))
             } else {
                 ZStack {
                     ScrollViewReader { proxy in
