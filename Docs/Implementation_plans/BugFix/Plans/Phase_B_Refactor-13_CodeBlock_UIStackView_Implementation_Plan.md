@@ -50,36 +50,37 @@
 - [ ] Master_Specification 8.7のテスト要件を確認。
 
 ### Phase 1 ChatMessageCell構造のUIStackView化
-- [ ] `ChatMessageCell`にプライベートプロパティ`contentStackView: UIStackView`を追加。
+- [x] `ChatMessageCell`にプライベートプロパティ`contentStackView: UIStackView`を追加。
   - axis = .vertical
   - spacing = 8
   - distribution = .fill
   - alignment = .fill
-- [ ] `setup()`内で`contentStackView`をbubbleViewに追加し、AutoLayoutで制約設定。
+- [x] `setup()`内で`contentStackView`をbubbleViewに追加し、AutoLayoutで制約設定。
   - top/bottom/leading/trailing = bubbleView.layoutMarginsGuide
-  - bubbleView.layoutMargins を左右16, 上下12に設定（既存のtextView制約と同等）
-- [ ] 既存の`textView`を**非表示化**（`textView.isHidden = true`）。**削除しない**（pushButton・prepareForReuse()で参照されているため）。
-- [ ] ビルド確認：エラーなしでコンパイル通過を確認。
+  - bubbleView.layoutMargins を左右12, 上下10に設定（既存のtextView制約と同等）
+- [x] 既存の`textView`を**非表示化**（`textView.isHidden = true`）。**削除しない**（pushButton・prepareForReuse()で参照されているため）。
+- [x] ビルド確認：エラーなしでコンパイル通過を確認。
 
 ### Phase 2 configure(message:isUser:runner:)のリファクタリング
-- [ ] `configure(message:isUser:runner:)`冒頭で`contentStackView.arrangedSubviews`を全削除。
+- [x] `configure(message:isUser:runner:)`冒頭で`contentStackView.arrangedSubviews`を全削除。
   ```swift
   for view in contentStackView.arrangedSubviews {
       contentStackView.removeArrangedSubview(view)
       view.removeFromSuperview()
   }
   ```
-- [ ] 推論中インジケーター表示ロジック（Lines 555-562）を**維持**。推論中の場合は既存のloadingStackViewを表示し、contentStackViewは空のまま終了。
-- [ ] 通常メッセージの場合、`MessageParser.parse(message.content, isUser: isUser)`を呼び出し、`[MessageContentSegment]`を取得。
+- [x] 推論中インジケーター表示ロジック（Lines 583-589）を**維持**。推論中の場合は既存のloadingStackViewを表示し、contentStackViewは空のまま終了。
+- [x] 通常メッセージの場合、`MessageParser.parse(message.content, isUser: isUser)`を呼び出し、`[MessageContentSegment]`を取得。
   - **セグメント数チェック**: `segments.count > 20`の場合、`segments = Array(segments.prefix(20))`で切り詰め、警告ログ出力。
-- [ ] segmentsをループ処理：
+- [x] segmentsをループ処理：
   - `.text(let attrString)` → `createTextView(with:isUser:)`で新UITextViewを作成し、contentStackViewに追加。
   - `.codeBlock(let code, let language)` → `createCodeBlockView(code:language:)`で新CodeBlockViewを作成し、contentStackViewに追加。
-- [ ] `textView.isHidden = true`を設定（旧UITextViewを完全に隠す）。
-- [ ] ビルド＆実行：単純なテキストメッセージが表示されることを確認。
+- [x] `textView.isHidden = true`を設定（旧UITextViewを完全に隠す）。
+- [x] Phase 4長文折りたたみ機能を一時無効化（`expandButton.isHidden = true`）。
+- [x] ビルド＆実行：単純なテキストメッセージが表示されることを確認。
 
 ### Phase 3 テキスト用UITextView生成メソッド実装
-- [ ] `createTextView(with attributedString: NSAttributedString, isUser: Bool) -> UITextView`を実装。
+- [x] `createTextView(with attributedString: NSAttributedString, isUser: Bool) -> UITextView`を実装。
   - UITextViewを生成
   - attributedText = attributedString
   - isEditable = false, isSelectable = true, isScrollEnabled = false
@@ -92,14 +93,14 @@
   - dataDetectorTypes = []
   - delaysContentTouches = false
   - returnで生成したUITextView
-- [ ] ビルド確認。
+- [x] ビルド確認。
 
 ### Phase 4 CodeBlockView生成メソッド実装
-- [ ] `createCodeBlockView(code: String, language: String?) -> CodeBlockView`を実装。
+- [x] `createCodeBlockView(code: String, language: String?) -> CodeBlockView`を実装。
   - CodeBlockView()を生成
   - configure(code: code, language: language)を呼び出し
   - returnで生成したCodeBlockView
-- [ ] ビルド確認。
+- [x] ビルド確認。
 
 ### Phase 5 prepareForReuse()実装修正
 - [ ] `prepareForReuse()`メソッドを更新。
