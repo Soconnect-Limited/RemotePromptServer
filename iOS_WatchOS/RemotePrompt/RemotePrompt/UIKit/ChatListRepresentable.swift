@@ -284,8 +284,24 @@ final class ChatMessageCell: UITableViewCell {
 
             // Markdownレンダリング
             let markdown = message.content
+
+            // Phase 3-A: 性能計測（100KB以上のコンテンツのみ）
+            let shouldMeasure = markdown.utf8.count >= 100_000
+            let startTime = shouldMeasure ? CFAbsoluteTimeGetCurrent() : 0
+
             if let attributed = try? AttributedString(markdown: markdown) {
                 let mutable = NSMutableAttributedString(attributed)
+
+                if shouldMeasure {
+                    let conversionTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                    let sizeKB = Double(markdown.utf8.count) / 1024.0
+                    print("[Phase 3-A] Markdown conversion: \(String(format: "%.1f", sizeKB))KB in \(String(format: "%.1f", conversionTime))ms")
+
+                    if conversionTime > 50 {
+                        print("[Phase 3-A] ⚠️ Conversion exceeded 50ms target, consider Phase 3-A' chunked rendering")
+                    }
+                }
+
                 // Assistant用の色を明示的に設定（isUserフラグを渡す）
                 applyCodeStyling(mutable, isUser: isUser)
                 textView.attributedText = mutable

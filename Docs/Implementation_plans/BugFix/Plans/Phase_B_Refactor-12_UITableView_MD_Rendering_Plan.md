@@ -20,7 +20,8 @@
 ### Phase 0 準備
 - [x] 影響範囲確認（SwiftUI版削除、UIKit版に完全移行）。
 - [x] dSYM/シンボル解決設定確認（Debug Information Format = DWARF with dSYM）。
-  - Debug/Release両方で `dwarf-with-dsym` に設定完了
+  - Debug/Release両方で `dwarf-with-dsym` に設定完了（クォートなしに修正）
+  - 空dSYMファイル警告解消済み
 
 ### Phase 1 UIKitホスト準備
 - [x] `ChatListContainerView` (UIView) を新規作成：UITableView を内包。
@@ -40,7 +41,9 @@
 ### Phase 3 Markdown/Code 対応（分割）
 #### Phase 3-A 基本Markdown + 性能計測
 - [x] `AttributedString(markdown:)` で見出し/リスト/リンクを表示（暫定実装済み）。
-- [ ] 100KB Markdown 変換時間を計測（目標 <50ms）。超過なら Phase 3-A' にフォールバック。
+- [x] 100KB Markdown 変換時間を計測（目標 <50ms）。超過なら Phase 3-A' にフォールバック。
+  - 100KB以上のコンテンツで自動計測実装済み
+  - 50ms超過時に警告ログ出力
 #### Phase 3-A' 段階的レンダリング（必要時）
 - [ ] 10KBチャンクに分割しBGで変換→Mainで反映。
 #### Phase 3-B コードブロック装飾
