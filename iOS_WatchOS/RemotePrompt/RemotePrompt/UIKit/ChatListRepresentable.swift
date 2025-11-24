@@ -102,10 +102,13 @@ struct MessageParser {
 
         let fullRange = NSRange(location: 0, length: text.utf16.count)
 
+        print("[DEBUG] renderText called with text length: \(text.count), first 50 chars: \(String(text.prefix(50)))")
+
         // 見出し（# ## ### ####）- 行頭のみ
         let headingPattern = "^(#{1,4})\\s+(.+)$"
         if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
             let matches = regex.matches(in: text, options: [], range: fullRange)
+            print("[DEBUG] Heading matches: \(matches.count)")
             for match in matches {
                 if match.numberOfRanges >= 3 {
                     let hashCount = (text as NSString).substring(with: match.range(at: 1)).count
@@ -119,6 +122,7 @@ struct MessageParser {
                     default: headingFont = h4Font
                     }
 
+                    print("[DEBUG] Applying heading font (level \(hashCount)) to range: \(contentRange)")
                     // removeAttributeで既存のフォントを削除してから新しいフォントを追加
                     attributed.removeAttribute(.font, range: contentRange)
                     attributed.addAttribute(.font, value: headingFont, range: contentRange)
@@ -136,9 +140,12 @@ struct MessageParser {
         let boldPattern = "\\*\\*([^*]+)\\*\\*"
         if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
             let matches = regex.matches(in: text, options: [], range: fullRange)
+            print("[DEBUG] Bold matches: \(matches.count)")
             for match in matches {
                 if match.numberOfRanges >= 2 {
                     let contentRange = match.range(at: 1)
+                    let content = (text as NSString).substring(with: contentRange)
+                    print("[DEBUG] Applying bold to: '\(content)'")
                     attributed.removeAttribute(.font, range: contentRange)
                     attributed.addAttribute(.font, value: boldFont, range: contentRange)
                 }
