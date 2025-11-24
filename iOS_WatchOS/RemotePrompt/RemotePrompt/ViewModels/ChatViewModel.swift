@@ -104,6 +104,43 @@ final class ChatViewModel: ObservableObject {
         sendMessage()
     }
 
+    /// Phase 5: Markdownテスト用ペイロード送信
+    func sendMarkdownTestPayload() {
+        inputText = """
+        # Markdown Display Test
+
+        ## Headings Work
+
+        ### And Subheadings Too
+
+        **Bold text** and *italic text* rendering.
+
+        Inline code: `let x = 10`
+
+        Lists:
+        - Item 1
+        - Item 2
+          - Nested item
+
+        Numbered:
+        1. First
+        2. Second
+        3. Third
+
+        Links: [GitHub](https://github.com)
+
+        Code blocks:
+        ```swift
+        func hello() {
+            print("Hello World")
+        }
+        ```
+
+        This tests all major Markdown features.
+        """
+        sendMessage()
+    }
+
     private func fetchHistory(reset: Bool) async {
         if reset {
             guard !isHistoryLoading else { return }

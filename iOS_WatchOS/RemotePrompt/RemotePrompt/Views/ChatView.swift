@@ -28,9 +28,15 @@ struct ChatView: View {
                     viewModel.sendLoadTestPayload()
                 }
                 .buttonStyle(.bordered)
-                .padding(.horizontal)
+
+                Button("MD表示テスト") {
+                    viewModel.sendMarkdownTestPayload()
+                }
+                .buttonStyle(.bordered)
+
                 Spacer()
             }
+            .padding(.horizontal, 8)
 #endif
         }
         .refreshable {

@@ -1,6 +1,247 @@
 import SwiftUI
 import UIKit
 
+// MARK: - UIFont Extension
+extension UIFont {
+    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else {
+            return self
+        }
+        return UIFont(descriptor: descriptor, size: pointSize)
+    }
+}
+
+// MARK: - Message Content Types
+enum MessageContentSegment {
+    case text(NSAttributedString)
+    case codeBlock(code: String, language: String?)
+}
+
+// MARK: - Message Parser
+struct MessageParser {
+    static func parse(_ markdown: String, isUser: Bool) -> [MessageContentSegment] {
+        var segments: [MessageContentSegment] = []
+        let pattern = "```([a-zA-Z]*)\\n([\\s\\S]*?)```"
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            // Regex失敗時はテキストとして返す
+            let attributed = renderText(markdown, isUser: isUser)
+            return [.text(attributed)]
+        }
+
+        let fullRange = NSRange(location: 0, length: (markdown as NSString).length)
+        let matches = regex.matches(in: markdown, options: [], range: fullRange)
+
+        var lastIndex = 0
+
+        for match in matches {
+            // コードブロック前のテキスト
+            if match.range.location > lastIndex {
+                let textRange = NSRange(location: lastIndex, length: match.range.location - lastIndex)
+                let textContent = (markdown as NSString).substring(with: textRange)
+                if !textContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let attributed = renderText(textContent, isUser: isUser)
+                    segments.append(.text(attributed))
+                }
+            }
+
+            // コードブロック
+            if match.numberOfRanges >= 3 {
+                let languageRange = match.range(at: 1)
+                let codeRange = match.range(at: 2)
+
+                let language = languageRange.length > 0
+                    ? (markdown as NSString).substring(with: languageRange)
+                    : nil
+                let code = (markdown as NSString).substring(with: codeRange)
+
+                segments.append(.codeBlock(code: code, language: language))
+            }
+
+            lastIndex = match.range.location + match.range.length
+        }
+
+        // 最後のテキスト
+        if lastIndex < (markdown as NSString).length {
+            let textRange = NSRange(location: lastIndex, length: (markdown as NSString).length - lastIndex)
+            let textContent = (markdown as NSString).substring(with: textRange)
+            if !textContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let attributed = renderText(textContent, isUser: isUser)
+                segments.append(.text(attributed))
+            }
+        }
+
+        return segments.isEmpty ? [.text(renderText(markdown, isUser: isUser))] : segments
+    }
+
+    private static func renderText(_ text: String, isUser: Bool) -> NSAttributedString {
+        let textColor: UIColor = isUser ? .white : .label
+        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+        let boldFont = bodyFont.withTraits(.traitBold)
+        let italicFont = bodyFont.withTraits(.traitItalic)
+        let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
+
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 2
+        paragraphStyle.paragraphSpacing = 4
+
+        let attributed = NSMutableAttributedString(string: text, attributes: [
+            .font: bodyFont,
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
+        ])
+
+        let fullRange = NSRange(location: 0, length: attributed.length)
+
+        // インラインコード（`code`）
+        let inlineCodePattern = "`([^`\n]+)`"
+        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                attributed.addAttribute(.font, value: mono, range: match.range)
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
+            }
+        }
+
+        // 太字（**text**）
+        let boldPattern = "\\*\\*([^*]+)\\*\\*"
+        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (text as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: boldFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 斜体（*text*）
+        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
+        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: italicFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        return attributed
+    }
+}
+
+// MARK: - CodeBlockView
+final class CodeBlockView: UIView {
+    private let headerView = UIView()
+    private let languageLabel = UILabel()
+    private let copyButton = UIButton(type: .system)
+    private let codeTextView = UITextView()
+    private var codeContent: String = ""
+
+    init() {
+        super.init(frame: .zero)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setup()
+    }
+
+    private func setup() {
+        // コンテナ設定
+        layer.cornerRadius = 8
+        layer.borderWidth = 1
+        layer.borderColor = UIColor.systemGray4.cgColor
+        backgroundColor = UIColor.systemGray6.withAlphaComponent(0.3)
+        translatesAutoresizingMaskIntoConstraints = false
+
+        // ヘッダー設定
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        headerView.backgroundColor = UIColor.systemGray5.withAlphaComponent(0.5)
+        addSubview(headerView)
+
+        // 言語ラベル設定
+        languageLabel.translatesAutoresizingMaskIntoConstraints = false
+        languageLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        languageLabel.textColor = .secondaryLabel
+        headerView.addSubview(languageLabel)
+
+        // コピーボタン設定
+        copyButton.translatesAutoresizingMaskIntoConstraints = false
+        copyButton.setTitle("Copy", for: .normal)
+        copyButton.titleLabel?.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        copyButton.addTarget(self, action: #selector(copyCode), for: .touchUpInside)
+        headerView.addSubview(copyButton)
+
+        // コードテキストビュー設定
+        codeTextView.translatesAutoresizingMaskIntoConstraints = false
+        codeTextView.isEditable = false
+        codeTextView.isSelectable = true
+        codeTextView.isScrollEnabled = false
+        codeTextView.backgroundColor = .clear
+        codeTextView.font = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular)
+        codeTextView.textColor = .label
+        codeTextView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        codeTextView.textContainer.lineFragmentPadding = 0
+        addSubview(codeTextView)
+
+        NSLayoutConstraint.activate([
+            // ヘッダー
+            headerView.topAnchor.constraint(equalTo: topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            headerView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            headerView.heightAnchor.constraint(equalToConstant: 32),
+
+            // 言語ラベル
+            languageLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 12),
+            languageLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+
+            // コピーボタン
+            copyButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -12),
+            copyButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            copyButton.leadingAnchor.constraint(greaterThanOrEqualTo: languageLabel.trailingAnchor, constant: 8),
+
+            // コードテキストビュー
+            codeTextView.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            codeTextView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            codeTextView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            codeTextView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    func configure(code: String, language: String?) {
+        codeContent = code
+        languageLabel.text = language?.uppercased() ?? "CODE"
+        codeTextView.text = code
+    }
+
+    @objc private func copyCode() {
+        UIPasteboard.general.string = codeContent
+
+        // コピー成功のフィードバック
+        let originalTitle = copyButton.titleLabel?.text
+        copyButton.setTitle("Copied!", for: .normal)
+        copyButton.isEnabled = false
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.copyButton.setTitle(originalTitle, for: .normal)
+            self?.copyButton.isEnabled = true
+        }
+    }
+}
+
 /// SwiftUIからUIKitチャットリストを利用するためのブリッジ。
 struct ChatListRepresentable: UIViewRepresentable {
     /// 表示対象のメッセージ配列（最新順を想定）。
@@ -236,7 +477,6 @@ final class ChatMessageCell: UITableViewCell {
         expandButtonBottomConstraint = expandButton.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
 
         NSLayoutConstraint.activate([
-            expandButton.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 4),
             expandButton.trailingAnchor.constraint(equalTo: bubbleView.trailingAnchor, constant: -12),  // 右下に配置
             expandButton.leadingAnchor.constraint(greaterThanOrEqualTo: bubbleView.leadingAnchor, constant: 12),  // 最小マージン確保
             expandButtonBottomConstraint!
@@ -330,74 +570,173 @@ final class ChatMessageCell: UITableViewCell {
             let showExpandButton = markdown.count > truncateThreshold
             expandButton.isHidden = !showExpandButton
 
-            // Phase 4: textViewのbottom制約を切り替え
+            // Phase 4: textViewのbottom制約を切り替え（制約を再利用）
             textViewBottomConstraint?.isActive = false
             if showExpandButton {
-                // 展開ボタンがある場合はtextViewの下にボタンを配置
-                textViewBottomConstraint = textView.bottomAnchor.constraint(lessThanOrEqualTo: expandButton.topAnchor, constant: -4)
+                // 展開ボタンがある場合はtextViewの下端を制限しない（内容に応じて伸びる）
+                // expandButtonがbubbleView.bottomに固定されているので、textViewは自然にその上に配置される
+                // textViewBottomConstraintは不要（nil）
             } else {
                 // 展開ボタンがない場合はtextViewがbubbleの下まで伸びる
-                textViewBottomConstraint = textView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor)
+                textViewBottomConstraint?.isActive = true
             }
-            textViewBottomConstraint?.isActive = true
 
             // Phase 3-A: 性能計測（100KB以上のコンテンツのみ）
             let shouldMeasure = markdown.utf8.count >= 100_000
             let startTime = shouldMeasure ? CFAbsoluteTimeGetCurrent() : 0
 
-            if let attributed = try? AttributedString(markdown: displayContent) {
-                let mutable = NSMutableAttributedString(attributed)
+            // 手動でMarkdownスタイリングを適用（コードブロックを保持）
+            let mutable = renderMarkdown(displayContent, isUser: isUser)
 
-                if shouldMeasure {
-                    let conversionTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
-                    let sizeKB = Double(markdown.utf8.count) / 1024.0
-                    print("[Phase 3-A] Markdown conversion: \(String(format: "%.1f", sizeKB))KB in \(String(format: "%.1f", conversionTime))ms")
+            if shouldMeasure {
+                let conversionTime = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+                let sizeKB = Double(markdown.utf8.count) / 1024.0
+                print("[Phase 3-A] Markdown conversion: \(String(format: "%.1f", sizeKB))KB in \(String(format: "%.1f", conversionTime))ms")
 
-                    if conversionTime > 50 {
-                        print("[Phase 3-A] ⚠️ Conversion exceeded 50ms target, consider Phase 3-A' chunked rendering")
-                    }
+                if conversionTime > 50 {
+                    print("[Phase 3-A] ⚠️ Conversion exceeded 50ms target, consider Phase 3-A' chunked rendering")
                 }
+            }
 
-                // Assistant用の色を明示的に設定（isUserフラグを渡す）
-                applyCodeStyling(mutable, isUser: isUser)
+            textView.attributedText = mutable
+
+            // Phase 4: 折りたたみ時に省略記号を追加
+            if shouldTruncate {
+                let ellipsis = NSAttributedString(string: "...", attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: isUser ? UIColor.white : UIColor.label
+                ])
+                mutable.append(ellipsis)
                 textView.attributedText = mutable
-
-                // Phase 4: 折りたたみ時に省略記号を追加
-                if shouldTruncate {
-                    let ellipsis = NSAttributedString(string: "...", attributes: [
-                        .font: UIFont.preferredFont(forTextStyle: .body),
-                        .foregroundColor: isUser ? UIColor.white : UIColor.label
-                    ])
-                    mutable.append(ellipsis)
-                    textView.attributedText = mutable
-                }
-            } else {
-                textView.text = displayContent
-                textView.font = UIFont.preferredFont(forTextStyle: .body)
             }
         }
     }
 
-    private func applyCodeStyling(_ attributed: NSMutableAttributedString, isUser: Bool) {
-        let fullRange = NSRange(location: 0, length: attributed.length)
+    private func renderMarkdown(_ text: String, isUser: Bool) -> NSMutableAttributedString {
+        let textColor: UIColor = isUser ? .white : .label
         let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+        let boldFont = UIFont.preferredFont(forTextStyle: .body).withTraits(.traitBold)
+        let italicFont = UIFont.preferredFont(forTextStyle: .body).withTraits(.traitItalic)
         let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
 
-        // フォントを設定
-        attributed.addAttribute(.font, value: bodyFont, range: fullRange)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 2
+        paragraphStyle.paragraphSpacing = 4
 
-        // テキスト色を設定（User=白、Assistant=自動）
-        let textColor: UIColor = isUser ? .white : .label
-        attributed.addAttribute(.foregroundColor, value: textColor, range: fullRange)
+        let attributed = NSMutableAttributedString(string: text, attributes: [
+            .font: bodyFont,
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraphStyle
+        ])
 
-        // コードブロックのスタイリング
-        let pattern = "```([\\s\\S]*?)```"
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let matches = regex.matches(in: attributed.string, options: [], range: fullRange)
+        let fullRange = NSRange(location: 0, length: attributed.length)
+
+        // コードブロック（```...```）→ 等幅フォント + 背景色
+        let codeBlockPattern = "```[a-zA-Z]*\\n?([\\s\\S]*?)```"
+        if let regex = try? NSRegularExpression(pattern: codeBlockPattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
             for match in matches {
                 attributed.addAttribute(.font, value: mono, range: match.range)
                 attributed.addAttribute(.backgroundColor, value: UIColor.systemGray4, range: match.range)
-                // コードブロック内も同じ色
+            }
+        }
+
+        // インラインコード（`code`）→ 等幅フォント + 薄い背景色
+        let inlineCodePattern = "`([^`\n]+)`"
+        if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                attributed.addAttribute(.font, value: mono, range: match.range)
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
+            }
+        }
+
+        // 太字（**text**）
+        let boldPattern = "\\*\\*([^*]+)\\*\\*"
+        if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (text as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: boldFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 斜体（*text*）
+        let italicPattern = "(?<!\\*)\\*([^*\n]+)\\*(?!\\*)"
+        if let regex = try? NSRegularExpression(pattern: italicPattern, options: []) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2 {
+                    let contentRange = match.range(at: 1)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: italicFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        return attributed
+    }
+
+    private func applyCodeStyling(_ attributed: NSMutableAttributedString, isUser: Bool) {
+        let fullRange = NSRange(location: 0, length: attributed.length)
+        let textColor: UIColor = isUser ? .white : .label
+        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+        let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
+
+        // 段落スタイルを設定（改行の行間調整）
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 2  // 行間を適度に（4→2に縮小）
+        paragraphStyle.paragraphSpacing = 4  // 段落間を適度に（8→4に縮小）
+        attributed.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
+
+        // フォントサイズを統一（Markdown由来のサイズ調整を保持しつつベースを設定）
+        attributed.enumerateAttribute(.font, in: fullRange, options: []) { value, range, _ in
+            if let font = value as? UIFont {
+                // 見出しなど既存のフォント属性のサイズ比率を保持
+                let newFont = font.withSize(max(font.pointSize, bodyFont.pointSize))
+                attributed.addAttribute(.font, value: newFont, range: range)
+            } else {
+                // フォント未設定の範囲にはbodyフォントを適用
+                attributed.addAttribute(.font, value: bodyFont, range: range)
+            }
+        }
+
+        // テキスト色を設定（User=白、Assistant=自動）
+        attributed.enumerateAttribute(.foregroundColor, in: fullRange, options: []) { _, range, _ in
+            attributed.addAttribute(.foregroundColor, value: textColor, range: range)
+        }
+
+        // コードブロック検出（```で囲まれた部分全体をスタイリング）
+        let text = attributed.string
+        let pattern = "```[a-zA-Z]*\\n?([\\s\\S]*?)```"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                // バッククォートを含む全体にスタイル適用
+                attributed.addAttribute(.font, value: mono, range: match.range)
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray4, range: match.range)
+                attributed.addAttribute(.foregroundColor, value: textColor, range: match.range)
+            }
+        }
+
+        // インラインコード（`code`）のスタイリング
+        let inlinePattern = "`([^`]+)`"
+        if let inlineRegex = try? NSRegularExpression(pattern: inlinePattern, options: []) {
+            let matches = inlineRegex.matches(in: text, options: [], range: fullRange)
+            for match in matches {
+                attributed.addAttribute(.font, value: mono, range: match.range)
+                attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
                 attributed.addAttribute(.foregroundColor, value: textColor, range: match.range)
             }
         }
@@ -410,25 +749,20 @@ final class ChatMessageCell: UITableViewCell {
 
         // 全文表示/省略表示を切り替え
         let displayContent = isExpanded ? fullContent : String(fullContent.prefix(truncateThreshold))
+        let isUser = bubbleView.backgroundColor == UIColor.systemBlue
 
-        if let attributed = try? AttributedString(markdown: displayContent) {
-            let mutable = NSMutableAttributedString(attributed)
-            // 色設定は元のconfigureと同じロジック（簡易版）
-            let isUser = bubbleView.backgroundColor == UIColor.systemBlue
-            applyCodeStyling(mutable, isUser: isUser)
+        // 手動でMarkdownスタイリングを適用（コードブロックを保持）
+        let mutable = renderMarkdown(displayContent, isUser: isUser)
 
-            if !isExpanded && fullContent.count > truncateThreshold {
-                let ellipsis = NSAttributedString(string: "...", attributes: [
-                    .font: UIFont.preferredFont(forTextStyle: .body),
-                    .foregroundColor: isUser ? UIColor.white : UIColor.label
-                ])
-                mutable.append(ellipsis)
-            }
-
-            textView.attributedText = mutable
-        } else {
-            textView.text = displayContent
+        if !isExpanded && fullContent.count > truncateThreshold {
+            let ellipsis = NSAttributedString(string: "...", attributes: [
+                .font: UIFont.preferredFont(forTextStyle: .body),
+                .foregroundColor: isUser ? UIColor.white : UIColor.label
+            ])
+            mutable.append(ellipsis)
         }
+
+        textView.attributedText = mutable
 
         // 高さ再計算
         if let tableView = superview as? UITableView {
@@ -450,5 +784,8 @@ final class ChatMessageCell: UITableViewCell {
         fullContent = ""
         expandButton.isHidden = true
         expandButton.setTitle("続きを読む", for: .normal)
+
+        // 制約をリセット（textViewBottomConstraintは再設定時に制御される）
+        textViewBottomConstraint?.isActive = false
     }
 }
