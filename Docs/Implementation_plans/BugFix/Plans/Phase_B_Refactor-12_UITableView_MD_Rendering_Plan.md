@@ -17,23 +17,23 @@
 
 ## フェーズとチェックリスト（改訂版）
 ### Phase 0 準備
-- [ ] 影響範囲確認・feature flag で切替設計（SwiftUI版は保持）。
+- [x] 影響範囲確認・feature flag で切替設計（SwiftUI版は保持）。
 - [ ] dSYM/シンボル解決設定確認（Debug Information Format = DWARF with dSYM）。
 
 ### Phase 1 UIKitホスト準備
-- [ ] `ChatListContainerView` (UIView) を新規作成：UITableView を内包。
-- [ ] SwiftUI `ChatListRepresentable` (UIViewRepresentable) を用意し、ViewModelから配列を受け取れるようにする。
-- [ ] Feature flag `USE_UIKIT_CHAT_LIST` で切替。
+- [x] `ChatListContainerView` (UIView) を新規作成：UITableView を内包。
+- [x] SwiftUI `ChatListRepresentable` (UIViewRepresentable) を用意し、ViewModelから配列を受け取れるようにする。
+- [x] Feature flag `USE_UIKIT_CHAT_LIST` で切替（デフォルトON）。
 
 ### Phase 2 DataSource/Delegate 実装（標準DataSource）
-- [ ] セルID定義（user/assistant）。
-- [ ] 再利用登録、automaticDimension 有効化。
+- [x] セルID定義（user/assistant）。
+- [x] 再利用登録、automaticDimension 有効化。
 - [ ] 追加は insertRows、更新は reloadRows 部分更新（diffableは採用しない、必要なら後から）。
-- [ ] estimatedRowHeight を短文/長文で可変（例: <1k文字:80, <10k:300, それ以上:1000）。
+- [x] estimatedRowHeight を短文/長文で可変（例: <1k文字:80, <10k:300, それ以上:1000）。
 
 ### Phase 3 Markdown/Code 対応（分割）
 #### Phase 3-A 基本Markdown + 性能計測
-- [ ] `AttributedString(markdown:)` で見出し/リスト/リンクを表示。
+- [x] `AttributedString(markdown:)` で見出し/リスト/リンクを表示（暫定実装済み）。
 - [ ] 100KB Markdown 変換時間を計測（目標 <50ms）。超過なら Phase 3-A' にフォールバック。
 #### Phase 3-A' 段階的レンダリング（必要時）
 - [ ] 10KBチャンクに分割しBGで変換→Mainで反映。
