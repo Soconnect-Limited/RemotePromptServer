@@ -11,14 +11,14 @@ enum MarkdownBench {
         let attributed = try? AttributedString(markdown: sample)
         let t2 = CFAbsoluteTimeGetCurrent()
 
-        let tv = UITextView(frame: CGRect(x: 0, y: 0, width: 300, height: .greatestFiniteMagnitude))
+        let tv = UITextView(frame: CGRect(x: 0, y: 0, width: 300, height: CGFloat.greatestFiniteMagnitude))
         if let attributed {
             tv.attributedText = NSAttributedString(attributed)
         } else {
             tv.text = sample
         }
         let t3 = CFAbsoluteTimeGetCurrent()
-        _ = tv.sizeThatFits(CGSize(width: 300, height: .greatestFiniteMagnitude))
+        _ = tv.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
         let t4 = CFAbsoluteTimeGetCurrent()
 
         print("[MD-BENCH] size=\(contentSizeKB)KB, convert=\((t2 - t1)*1000)ms, layout=\((t4 - t3)*1000)ms")
