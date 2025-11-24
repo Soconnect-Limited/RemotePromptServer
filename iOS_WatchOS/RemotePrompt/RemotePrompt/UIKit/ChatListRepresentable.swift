@@ -696,7 +696,11 @@ final class ChatMessageCell: UITableViewCell {
             let markdown = message.content
             fullContent = markdown  // Phase 4: 全文を保存
 
-            var segments = MessageParser.parse(markdown, isUser: isUser)
+            // Phase 4: 長文チェック（1000文字以上）
+            let shouldTruncate = markdown.count > truncateThreshold && !isExpanded
+
+            let displayContent = shouldTruncate ? String(markdown.prefix(truncateThreshold)) : markdown
+            var segments = MessageParser.parse(displayContent, isUser: isUser)
 
             // セグメント数チェック（DoS防止）
             if segments.count > 20 {
@@ -716,11 +720,26 @@ final class ChatMessageCell: UITableViewCell {
                 }
             }
 
+            // Phase 4: 省略時の「...」表示
+            if shouldTruncate {
+                let ellipsisText = NSAttributedString(string: "...", attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: isUser ? UIColor.white : UIColor.label
+                ])
+                let ellipsisView = createTextView(with: ellipsisText, isUser: isUser)
+                contentStackView.addArrangedSubview(ellipsisView)
+            }
+
             // Phase B-13: 旧textViewは完全に隠す
             textView.isHidden = true
 
-            // Phase 4: 長文折りたたみ（現状は無効化 - 今後UIStackViewベースで再実装）
-            expandButton.isHidden = true
+            // Phase 4: 長文折りたたみボタン表示制御
+            if markdown.count > truncateThreshold {
+                expandButton.isHidden = false
+                expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
+            } else {
+                expandButton.isHidden = true
+            }
         }
     }
 
@@ -882,27 +901,51 @@ final class ChatMessageCell: UITableViewCell {
         }
     }
 
-    // Phase 4: 展開/折りたたみトグル
+    // Phase 4: 展開/折りたたみトグル（UIStackViewベース）
     @objc private func toggleExpand() {
         isExpanded.toggle()
         expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
 
-        // 全文表示/省略表示を切り替え
-        let displayContent = isExpanded ? fullContent : String(fullContent.prefix(truncateThreshold))
-        let isUser = bubbleView.backgroundColor == UIColor.systemBlue
+        // contentStackViewをクリアして再構築
+        for view in contentStackView.arrangedSubviews {
+            contentStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
 
-        // 手動でMarkdownスタイリングを適用（コードブロックを保持）
-        let mutable = renderMarkdown(displayContent, isUser: isUser)
+        // 表示内容を決定
+        let shouldTruncate = fullContent.count > truncateThreshold && !isExpanded
+        let displayContent = shouldTruncate ? String(fullContent.prefix(truncateThreshold)) : fullContent
+        let isUser = bubbleView.backgroundColor == UIColor.systemGray5
 
-        if !isExpanded && fullContent.count > truncateThreshold {
-            let ellipsis = NSAttributedString(string: "...", attributes: [
+        // セグメント化して表示
+        var segments = MessageParser.parse(displayContent, isUser: isUser)
+        if segments.count > 20 {
+            segments = Array(segments.prefix(20))
+        }
+
+        for segment in segments {
+            switch segment {
+            case .text(let attributedString):
+                let textView = createTextView(with: attributedString, isUser: isUser)
+                contentStackView.addArrangedSubview(textView)
+            case .codeBlock(let code, let language):
+                let codeBlockView = createCodeBlockView(code: code, language: language)
+                contentStackView.addArrangedSubview(codeBlockView)
+            }
+        }
+
+        // 省略時の「...」表示
+        if shouldTruncate {
+            let ellipsisText = NSAttributedString(string: "...", attributes: [
                 .font: UIFont.preferredFont(forTextStyle: .body),
                 .foregroundColor: isUser ? UIColor.white : UIColor.label
             ])
-            mutable.append(ellipsis)
+            let ellipsisView = createTextView(with: ellipsisText, isUser: isUser)
+            contentStackView.addArrangedSubview(ellipsisView)
         }
 
-        textView.attributedText = mutable
+        // 旧textViewは隠したまま
+        textView.isHidden = true
 
         // 高さ再計算
         if let tableView = superview as? UITableView {
