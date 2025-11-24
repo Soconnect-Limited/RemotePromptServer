@@ -60,10 +60,7 @@ struct InputBar: View {
                     .lineLimit(1...5)
                     .disabled(isLoading)
                     .focused($isFocused)
-                    .autocorrectionDisabled(true)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.asciiCapable)
-                    .submitLabel(.send)
+                    .submitLabel(.return)
                     .onSubmit {
                         if canSend {
                             send()
