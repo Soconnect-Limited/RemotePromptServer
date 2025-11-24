@@ -103,7 +103,7 @@
 - [x] ビルド確認。
 
 ### Phase 5 prepareForReuse()実装修正
-- [ ] `prepareForReuse()`メソッドを更新。
+- [x] `prepareForReuse()`メソッドを更新。
   ```swift
   override func prepareForReuse() {
       super.prepareForReuse()
@@ -128,11 +128,11 @@
       textViewBottomConstraint?.isActive = false
   }
   ```
-- [ ] ビルド確認。
+- [x] ビルド確認。
 
 ### Phase 6 高さ計算最適化
-- [ ] ChatListContainerView内のestimatedRowHeight計算ロジック（Lines 746-759付近）を確認。
-- [ ] コードブロック含有メッセージの推定高さ補正を追加：
+- [x] ChatListContainerView内のestimatedRowHeight計算ロジック（Lines 746-759付近）を確認。
+- [x] コードブロック含有メッセージの推定高さ補正を追加：
   ```swift
   // 既存: 文字数ベースの推定
   let baseHeight = min(max(charCount / 40 * 24, 60), 800)
@@ -144,7 +144,7 @@
 - [ ] 実機でスクロール動作確認。ジャンプやカクつきがあれば係数を調整。
 
 ### Phase 7 MessageParser内部の最適化とフォールバック
-- [ ] MessageParser.parse()に性能計測コードを追加：
+- [x] MessageParser.parse()に性能計測コードを追加：
   ```swift
   static func parse(_ markdown: String, isUser: Bool) -> [MessageContentSegment] {
       let shouldMeasure = markdown.utf8.count >= 100_000
@@ -171,7 +171,7 @@
       return segments
   }
   ```
-- [ ] MessageParser.renderText()にフォールバック処理を追加（Master_Specification 8.7準拠）：
+- [x] MessageParser.renderText()にフォールバック処理を追加（Master_Specification 8.7準拠）：
   ```swift
   private static func renderText(_ text: String, isUser: Bool) -> NSAttributedString {
       do {

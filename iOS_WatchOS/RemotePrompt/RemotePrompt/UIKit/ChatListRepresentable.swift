@@ -20,6 +20,10 @@ enum MessageContentSegment {
 // MARK: - Message Parser
 struct MessageParser {
     static func parse(_ markdown: String, isUser: Bool) -> [MessageContentSegment] {
+        // Phase 7: 性能計測（100KB以上のメッセージ）
+        let shouldMeasure = markdown.utf8.count >= 100_000
+        let startTime = shouldMeasure ? CFAbsoluteTimeGetCurrent() : 0
+
         var segments: [MessageContentSegment] = []
         let pattern = "```([a-zA-Z]*)\\n([\\s\\S]*?)```"
 
@@ -71,10 +75,42 @@ struct MessageParser {
             }
         }
 
+        // Phase 7: セグメント上限チェック（DoS防止）
+        if segments.count > 20 {
+            print("[Phase 7] ⚠️ Segment count \(segments.count) exceeds limit 20, truncating")
+            segments = Array(segments.prefix(20))
+        }
+
+        // Phase 7: 性能計測ログ出力
+        if shouldMeasure {
+            let elapsed = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+            print("[Phase 7] Parse time: \(String(format: "%.1f", elapsed))ms for \(segments.count) segments")
+            if elapsed > 100 {
+                print("[Phase 7] ⚠️ Parse exceeded 100ms, consider Phase 7-A")
+            }
+        }
+
         return segments.isEmpty ? [.text(renderText(markdown, isUser: isUser))] : segments
     }
 
     private static func renderText(_ text: String, isUser: Bool) -> NSAttributedString {
+        // Phase 7: フォールバック処理（Markdown構文エラー時）
+        let textColor: UIColor = isUser ? .white : .label
+        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+
+        do {
+            return try renderTextInternal(text, isUser: isUser)
+        } catch {
+            // フォールバック: プレーンテキストで返却
+            print("[Phase 7] Markdown parsing failed, fallback to plain text: \(error)")
+            return NSAttributedString(string: text, attributes: [
+                .font: bodyFont,
+                .foregroundColor: textColor
+            ])
+        }
+    }
+
+    private static func renderTextInternal(_ text: String, isUser: Bool) throws -> NSAttributedString {
         let textColor: UIColor = isUser ? .white : .label
         let bodyFont = UIFont.preferredFont(forTextStyle: .body)
         let boldFont = bodyFont.withTraits(.traitBold)
@@ -475,10 +511,25 @@ struct ChatListRepresentable: UIViewRepresentable {
 
         // MARK: UITableViewDelegate
         func tableView(_ tableView: UITableView, estimatedHeightForRowAt indexPath: IndexPath) -> CGFloat {
-            let count = messages[indexPath.row].content.count
-            if count < 1000 { return 80 }
-            if count < 10_000 { return 300 }
-            return 1000
+            // Phase 6: コードブロック数を考慮した高さ推定
+            let message = messages[indexPath.row]
+            let charCount = message.content.count
+
+            // 基本高さ（文字数ベース）
+            let baseHeight: CGFloat
+            if charCount < 1000 {
+                baseHeight = 80
+            } else if charCount < 10_000 {
+                baseHeight = 300
+            } else {
+                baseHeight = 1000
+            }
+
+            // コードブロック数の検出（簡易的に```の出現回数/2）
+            let codeBlockCount = message.content.components(separatedBy: "```").count / 2
+            let codeBlockBonus = CGFloat(codeBlockCount) * 150  // 1ブロックあたり150pt加算
+
+            return baseHeight + codeBlockBonus
         }
 
         func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
@@ -956,11 +1007,22 @@ final class ChatMessageCell: UITableViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        avatarImageView.image = nil
+
+        // Phase 5: contentStackViewのサブビューをクリア
+        for view in contentStackView.arrangedSubviews {
+            contentStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+
+        // 既存のtextViewはクリアのみ（削除しない）
+        // IMPORTANT: isHiddenはリセットしない（configure()の最初で必ず設定されるため不要）
+        textView.text = nil
         textView.attributedText = nil
+
+        // その他既存のリセット処理
+        avatarImageView.image = nil
         activityIndicator.stopAnimating()
         loadingStackView.isHidden = true
-        textView.isHidden = false
 
         // Phase 4: 折りたたみ状態をリセット
         isExpanded = false
