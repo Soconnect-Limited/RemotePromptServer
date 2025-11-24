@@ -324,6 +324,7 @@ final class ChatViewModel: ObservableObject {
         )
         messages.append(userMessage)
         messageStore.addMessage(userMessage)
+        print("DEBUG: sendMessage() - User message appended, messages.count: \(messages.count), last message: \(messages.last?.content.prefix(50) ?? "")")
 
         Task {
             do {
@@ -355,6 +356,7 @@ final class ChatViewModel: ObservableObject {
                 messages.append(assistantMessage)
                 messageStore.addMessage(assistantMessage)
                 historyOffset += 1
+                print("DEBUG: sendMessage() - Assistant message appended, messages.count: \(messages.count)")
 
                 // Job作成成功後、すぐに入力フィールドを有効化（推論中でも入力可能にする）
                 isLoading = false
