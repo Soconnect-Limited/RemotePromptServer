@@ -24,7 +24,7 @@ final class RoomBasedArchitectureTests: XCTestCase {
             return job
         }
 
-        func createJob(runner: String, prompt: String, deviceId: String, roomId: String) async throws -> CreateJobResponse {
+        func createJob(runner: String, prompt: String, deviceId: String, roomId: String, threadId: String? = nil) async throws -> CreateJobResponse {
             let job = Job(
                 id: UUID().uuidString,
                 runner: runner,
@@ -40,7 +40,7 @@ final class RoomBasedArchitectureTests: XCTestCase {
                 finishedAt: Date()
             )
             jobsById[job.id] = job
-            lastCreateJob = CreateJobRequest(runner: runner, inputText: prompt, deviceId: deviceId, roomId: roomId, notifyToken: nil)
+            lastCreateJob = CreateJobRequest(runner: runner, inputText: prompt, deviceId: deviceId, roomId: roomId, notifyToken: nil, threadId: threadId)
             return CreateJobResponse(id: job.id, runner: runner, status: job.status)
         }
 
@@ -80,11 +80,48 @@ final class RoomBasedArchitectureTests: XCTestCase {
             deviceId: String,
             roomId: String,
             runner: String,
+            threadId: String?,
             limit: Int,
             offset: Int
         ) async throws -> [Job] {
             let page = fetchMessagesResponses[offset] ?? []
             return page.filter { $0.roomId == roomId && $0.runner == runner }
+        }
+
+        func getRoomSettings(roomId: String, deviceId: String) async throws -> RoomSettings? {
+            nil
+        }
+
+        func updateRoomSettings(roomId: String, deviceId: String, settings: RoomSettings?) async throws -> RoomSettings? {
+            settings
+        }
+
+        func fetchThreads(roomId: String, deviceId: String) async throws -> [RemotePrompt.Thread] {
+            []
+        }
+
+        func createThread(roomId: String, name: String, deviceId: String) async throws -> RemotePrompt.Thread {
+            RemotePrompt.Thread(
+                id: UUID().uuidString,
+                roomId: roomId,
+                name: name,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        }
+
+        func updateThread(threadId: String, name: String, deviceId: String) async throws -> RemotePrompt.Thread {
+            RemotePrompt.Thread(
+                id: threadId,
+                roomId: "test-room",
+                name: name,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        }
+
+        func deleteThread(threadId: String, deviceId: String) async throws {
+            // No-op
         }
     }
 
