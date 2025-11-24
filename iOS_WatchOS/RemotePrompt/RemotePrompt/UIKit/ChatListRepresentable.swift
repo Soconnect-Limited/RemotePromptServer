@@ -97,17 +97,15 @@ struct MessageParser {
             .paragraphStyle: paragraphStyle
         ])
 
-        let fullRange = NSRange(location: 0, length: attributed.length)
-
         // 見出し（# ## ### ####）- 行頭のみ
         let headingPattern = "^(#{1,4})\\s+(.+)$"
         if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 3 {
-                    let hashCount = (text as NSString).substring(with: match.range(at: 1)).count
+                    let hashCount = (attributed.string as NSString).substring(with: match.range(at: 1)).count
                     let contentRange = match.range(at: 2)
-                    let content = (text as NSString).substring(with: contentRange)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
 
                     let headingFont: UIFont
                     switch hashCount {
@@ -152,9 +150,7 @@ struct MessageParser {
             let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 3 {
-                    let bulletRange = match.range(at: 1)
                     let contentRange = match.range(at: 2)
-                    let bullet = (attributed.string as NSString).substring(with: bulletRange)
                     let content = (attributed.string as NSString).substring(with: contentRange)
 
                     let replacement = NSAttributedString(string: "• \(content)", attributes: [
