@@ -12,56 +12,56 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            if viewModel.canLoadMoreHistory {
-                                historyLoader
-                            }
+            if FeatureFlags.useUIKitChatList {
+                ChatListRepresentable(messages: viewModel.messages)
+            } else {
+                ZStack {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                if viewModel.canLoadMoreHistory {
+                                    historyLoader
+                                }
 
-                            ForEach(viewModel.messages) { message in
-                                EquatableMessageBubble(message: message, runner: viewModel.runnerName)
-                                    .id(message.id)
+                                ForEach(viewModel.messages) { message in
+                                    EquatableMessageBubble(message: message, runner: viewModel.runnerName)
+                                        .id(message.id)
+                                }
                             }
+                            .padding(.vertical)
+                            .transaction { $0.animation = nil }
                         }
-                        .padding(.vertical)
-                        .transaction { $0.animation = nil }
-                    }
-                    .background(Color(.systemBackground))
-                    .animation(nil, value: viewModel.messages.count)
-                    .onAppear {
-                        scrollProxy = proxy
-                        // 初回表示時に最下部へスクロール
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            scrollToBottom()
-                        }
-                    }
-                    // 自動スクロールは一時無効化（フリーズ回避）。必要なら手動で最下部へ。
-                    .onChange(of: viewModel.messages.count) { count in
-                        if Constants.enableVerboseLogs {
-                            print("DEBUG: [VIEW-ONCHANGE] message count changed: \(count)")
-                        }
-                        if !viewModel.isHistoryLoading {
-                            hasFinishedInitialFetch = true
-                        }
-                        // scrollToBottom() を呼ばない
-                    }
-                    .onChange(of: isInputFocused) { focused in
-                        if focused {
-                            // キーボードが開いたら最下部にスクロール
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        .background(Color(.systemBackground))
+                        .animation(nil, value: viewModel.messages.count)
+                        .onAppear {
+                            scrollProxy = proxy
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 scrollToBottom()
                             }
                         }
+                        .onChange(of: viewModel.messages.count) { count in
+                            if Constants.enableVerboseLogs {
+                                print("DEBUG: [VIEW-ONCHANGE] message count changed: \(count)")
+                            }
+                            if !viewModel.isHistoryLoading {
+                                hasFinishedInitialFetch = true
+                            }
+                        }
+                        .onChange(of: isInputFocused) { focused in
+                            if focused {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    scrollToBottom()
+                                }
+                            }
+                        }
                     }
-                }
 
-                if viewModel.isHistoryLoading && viewModel.messages.isEmpty {
-                    ProgressView("履歴を読み込み中...")
-                        .padding()
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
+                    if viewModel.isHistoryLoading && viewModel.messages.isEmpty {
+                        ProgressView("履歴を読み込み中...")
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                    }
                 }
             }
 

@@ -19,6 +19,9 @@ final class ChatListContainerView: UIView {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.separatorStyle = .none
         tableView.allowsSelection = false
+        tableView.backgroundColor = .clear
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 120
         addSubview(tableView)
 
         NSLayoutConstraint.activate([
