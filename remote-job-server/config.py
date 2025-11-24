@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     ]
     threads_compat_mode: bool = True  # thread_id省略を許可する互換モード（Phase A/Bで使用）
 
+    # APNs Push Notification Configuration
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key_path: str = ""
+    apns_bundle_id: str = ""
+    apns_environment: str = "sandbox"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
