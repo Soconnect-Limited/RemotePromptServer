@@ -8,67 +8,81 @@
 - Markdownパラグラフ/コードブロック/インラインコード/リストが正しく表示される。
 - 100KB×10連投でもUI応答を維持し、Jetsamなし。
 
-## 技術方針
-- UIフレームワーク: UIKit UITableView（シンプル・高速）、必要なら UICollectionView compositional へ拡張可能。
-- ホスティング: SwiftUI画面上に UIViewRepresentable で埋め込み。
-- Markdownレンダリング: `AttributedString(markdown:)` (iOS 15+) を基本とし、コードブロックは等幅フォント＋背景色。必要に応じて SyntaxHighlighter (Highlightr など) をオプトイン。依存追加は後段で検討。
-- セル種別: User/Assistant 2種。画像なし、テキスト主体。必要なら後で attachment 対応。
-- セル高さ: UITableView.automaticDimension + 先読みを抑制（estimatedRowHeight を控えめに設定）。
+## 技術方針（改訂）
+- UIフレームワーク: UIKit UITableView（シンプル・高速）、必要に応じてUICollectionViewへ拡張。
+- ホスティング: SwiftUI上にUIViewRepresentableで埋め込み、feature flagでSwiftUI版に戻せる。
+- Markdown: 基本は `AttributedString(markdown:)`。100KB級で遅ければ段階的レンダリング (BG変換→Main反映) に切替。シンタックスハイライトは後段オプトイン。
+- セル: User/Assistant 2種。テキスト主体。長文は折りたたみ表示可。
+- 高さ: automaticDimension。estimatedRowHeight は文字数で可変（短文/中/長）。
 
-## フェーズとチェックリスト
+## フェーズとチェックリスト（改訂版）
 ### Phase 0 準備
-- [ ] 影響範囲確認・既存 SwiftUI チャットビューの保持方法を決める（feature flag で切替）。
-- [ ] 依存追加が必要か判断（Highlightr等は後回し）。
+- [ ] 影響範囲確認・feature flag で切替設計（SwiftUI版は保持）。
+- [ ] dSYM/シンボル解決設定確認（Debug Information Format = DWARF with dSYM）。
 
 ### Phase 1 UIKitホスト準備
 - [ ] `ChatListContainerView` (UIView) を新規作成：UITableView を内包。
-- [ ] SwiftUI `ChatListRepresentable` (UIViewRepresentable) で SwiftUI から利用可能にする。
-- [ ] DI: ViewModel からメッセージ配列を渡す API（bind または data source 注入）。
+- [ ] SwiftUI `ChatListRepresentable` (UIViewRepresentable) を用意し、ViewModelから配列を受け取れるようにする。
+- [ ] Feature flag `USE_UIKIT_CHAT_LIST` で切替。
 
-### Phase 2 DataSource/Delegate 実装
-- [ ] `ChatTableDataSource`: diffable data source または標準 data source（今回単純なので標準でも可）。
+### Phase 2 DataSource/Delegate 実装（標準DataSource）
 - [ ] セルID定義（user/assistant）。
-- [ ] セル再利用登録と高さ自動計算を有効化。
-- [ ] メッセージ更新時に `reloadData` ではなく差分適用（`reloadSections` or diffable）。
+- [ ] 再利用登録、automaticDimension 有効化。
+- [ ] 追加は insertRows、更新は reloadRows 部分更新（diffableは採用しない、必要なら後から）。
+- [ ] estimatedRowHeight を短文/長文で可変（例: <1k文字:80, <10k:300, それ以上:1000）。
 
-### Phase 3 セル実装 (Markdown/Code対応)
-- [ ] BaseCell: 共通レイアウト（UILabelまたは UITextView で Markdown 表示）。
-- [ ] Markdown変換: `AttributedString(markdown:)` を使い、段落/リスト/リンクをサポート。
-- [ ] コードブロック: モノスペースフォント＋淡色背景＋角丸。インラインコードは背景付き。
-- [ ] 行間・余白を最小限に調整し、レイアウト計算を簡素化。
-- [ ] アクセシビリティ識別子付与（UIテスト用）。
+### Phase 3 Markdown/Code 対応（分割）
+#### Phase 3-A 基本Markdown + 性能計測
+- [ ] `AttributedString(markdown:)` で見出し/リスト/リンクを表示。
+- [ ] 100KB Markdown 変換時間を計測（目標 <50ms）。超過なら Phase 3-A' にフォールバック。
+#### Phase 3-A' 段階的レンダリング（必要時）
+- [ ] 10KBチャンクに分割しBGで変換→Mainで反映。
+#### Phase 3-B コードブロック装飾
+- [ ] ``` ブロック検出、等幅フォント＋淡灰背景＋角丸。
+- [ ] シンタックスハイライトは後続フェーズ（Highlightr等はオプトイン）。
+#### Phase 3-C UITextView 最適化
+- [ ] isEditable=false, isSelectable=true, isScrollEnabled=false。
+- [ ] textContainerInset=.zero, lineFragmentPadding=0, delaysContentTouches=false。
+- [ ] タップ/スクロール干渉を実機で確認。
 
 ### Phase 4 SwiftUI への組み込み
-- [ ] 既存 `ChatView` のメッセージ一覧部を `ChatListRepresentable` に置き換え（feature flag）。
-- [ ] スクロール維持/最下部スクロールは必要時のみ（送信完了時に明示スクロール）。
-- [ ] オートスクロールはトグルで制御。
+- [ ] ChatView の一覧部分を `ChatListRepresentable` に置換（flagで切替）。
+- [ ] オートスクロールは明示トリガのみ（送信完了時に必要なら）。
 
 ### Phase 5 パフォーマンス調整
-- [ ] `rowHeight = automatic`, `estimatedRowHeight = 120` など控えめ設定。
-- [ ] `prefetchDataSource` 無効化（長文では逆効果の場合）。
-- [ ] メッセージ保持は最新50件までをテーブルに反映、古い履歴はページング読み込み。
+- [ ] rowHeight=automatic, estimatedRowHeightを上記ルールで可変設定。
+- [ ] prefetchDataSource 無効化。
+- [ ] 表示は最新50件まで、古い履歴はページング取得。
+- [ ] 長文は最初の1000文字＋「続きを読む」折りたたみで高さ計算を抑制。
 
 ### Phase 6 テスト
-- [ ] 通常文(〜2KB)×10送信でフリーズなし。
-- [ ] 100KB×10送信（デバッグボタン）でUI応答維持、Jetsamなし。
-- [ ] Markdown表示確認：見出し/リスト/リンク/インラインコード/コードブロック。
-- [ ] 自動スクロールON/OFFの動作確認。
+- [ ] 通常文(≤2KB)×10送信：フリーズなし。
+- [ ] 100KB×10送信（デバッグボタン）: UI応答維持・Jetsamなし。
+- [ ] Markdown表示（見出し/リスト/リンク/インラインコード/コードブロック）。
+- [ ] オートスクロールON/OFFの挙動確認。
 
 ### Phase 7 フラグ/ロールアウト
-- [ ] Feature flag: `USE_UIKIT_CHAT_LIST`（UserDefaultsまたはビルド設定）。
-- [ ] デフォルト: UIKit版を有効、問題が出たら SwiftUI 版へ即時戻せるよう保持。
+- [ ] `USE_UIKIT_CHAT_LIST` でデフォルトON、問題時に即座にSwiftUI版へ戻せること。
 
-## リスクと緩和
-- リスク: AttributedString(markdown:) のパフォーマンスが不十分 → 部分的にテキスト分割して簡易レンダリングにフォールバック。
-- リスク: セル内UITextViewがタップを奪う → `isSelectable=false` + `textContainerInset`最小化で回避。
-- リスク: Diffable で大量差分時にコスト増 → セクション単位reloadへ切替可能な実装に。
+## リスクと緩和（改訂）
+- AttributedString(markdown:) 性能劣化
+  - 100KB変換が50ms超なら段階的レンダリング（Phase 3-A'）へ切替。
+  - さらに遅い場合は swift-markdown AST 直組み立てにフォールバック。
+- UITextView のタップ/スクロール干渉
+  - isEditable=false, isSelectable=true, isScrollEnabled=false, inset/paddingゼロ。問題時は isSelectable=false ＋長押しメニューに変更。
+- Diffable の差分計算コスト
+  - 今回は標準DataSourceで部分更新。必要時のみ diffable（animatingDifferences=false）。
 
-## 工数目安
-- Phase 1-2: 2.5h
-- Phase 3: 3h（Markdown装飾含む）
-- Phase 4-5: 2h
+## 工数目安（再見積）
+- Phase 0: 0.5h
+- Phase 1: 2h
+- Phase 2: 2h
+- Phase 3-A/B/C: 5.5h
+- Phase 4: 2h
+- Phase 5: 1.5h
 - Phase 6: 2h
-- 合計: 約9.5h（Highlightr等を入れる場合＋1h）
+- Phase 7: 0.5h
+- **合計: 約16h**（シンタックスハイライト導入時は +1h）
 
 ## 完了条件
 - UIKit版がデフォルトで動作し、SwiftUI版に戻すスイッチが生きている。
