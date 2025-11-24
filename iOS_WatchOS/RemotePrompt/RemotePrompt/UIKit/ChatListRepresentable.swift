@@ -166,12 +166,10 @@ struct MessageParser {
             }
         }
 
-        let fullRange = NSRange(location: 0, length: attributed.length)
-
         // インラインコード（`code`）
         let inlineCodePattern = "`([^`\n]+)`"
         if let regex = try? NSRegularExpression(pattern: inlineCodePattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches {
                 attributed.addAttribute(.font, value: mono, range: match.range)
                 attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5, range: match.range)
@@ -181,11 +179,11 @@ struct MessageParser {
         // 太字（**text**）
         let boldPattern = "\\*\\*([^*]+)\\*\\*"
         if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 2 {
                     let contentRange = match.range(at: 1)
-                    let content = (text as NSString).substring(with: contentRange)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
                     let replacement = NSAttributedString(string: content, attributes: [
                         .font: boldFont,
                         .foregroundColor: textColor
@@ -755,11 +753,11 @@ final class ChatMessageCell: UITableViewCell {
         // 太字（**text**）
         let boldPattern = "\\*\\*([^*]+)\\*\\*"
         if let regex = try? NSRegularExpression(pattern: boldPattern, options: []) {
-            let matches = regex.matches(in: text, options: [], range: fullRange)
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
             for match in matches.reversed() {
                 if match.numberOfRanges >= 2 {
                     let contentRange = match.range(at: 1)
-                    let content = (text as NSString).substring(with: contentRange)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
                     let replacement = NSAttributedString(string: content, attributes: [
                         .font: boldFont,
                         .foregroundColor: textColor
