@@ -39,13 +39,17 @@ struct RoomDetailView: View {
         self.room = room
         self.apiClient = apiClient
         self.enableStreaming = enableStreaming
-        _threadListViewModel = StateObject(
-            wrappedValue: ThreadListViewModel(
-                roomId: room.id,
-                runner: nil,  // 全runner表示
-                apiClient: apiClient
-            )
+        let viewModel = ThreadListViewModel(
+            roomId: room.id,
+            runner: nil,  // 全runner表示
+            apiClient: apiClient
         )
+        _threadListViewModel = StateObject(wrappedValue: viewModel)
+
+        // バックグラウンドでスレッド一覧を事前取得（ラグ軽減）
+        Task {
+            await viewModel.fetchThreads()
+        }
     }
 
     var body: some View {
