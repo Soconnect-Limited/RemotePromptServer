@@ -22,6 +22,7 @@ final class ChatListContainerView: UIView {
         tableView.backgroundColor = .clear
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 120
+        tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
         addSubview(tableView)
 
         NSLayoutConstraint.activate([

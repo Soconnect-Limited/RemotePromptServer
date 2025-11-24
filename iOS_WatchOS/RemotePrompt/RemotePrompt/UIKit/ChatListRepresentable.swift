@@ -92,6 +92,9 @@ final class ChatMessageCell: UITableViewCell {
         backgroundColor = .systemBackground
         contentView.backgroundColor = .systemBackground
 
+        // 余白と影を抑えて見やすく
+        contentView.layoutMargins = UIEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
+
         bubbleView.translatesAutoresizingMaskIntoConstraints = false
         bubbleView.layer.cornerRadius = 12
         bubbleView.layer.masksToBounds = true
@@ -121,8 +124,13 @@ final class ChatMessageCell: UITableViewCell {
 
     func configure(with message: Message) {
         let isUser = message.type == .user
-        bubbleView.backgroundColor = isUser ? UIColor.systemBlue.withAlphaComponent(0.16) : UIColor.systemBackground.withAlphaComponent(0.9)
-        textView.textColor = .label
+        if isUser {
+            bubbleView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.45)
+            textView.textColor = .white
+        } else {
+            bubbleView.backgroundColor = UIColor.secondarySystemBackground
+            textView.textColor = .label
+        }
         textView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
 
         let markdown = message.content

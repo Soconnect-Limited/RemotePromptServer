@@ -89,6 +89,7 @@ struct ChatView: View {
         .refreshable {
             await viewModel.loadLatestMessages()
         }
+        .background(Color(.systemBackground).ignoresSafeArea())
         .onChange(of: viewModel.isHistoryLoading) { loading in
             if !loading {
                 hasFinishedInitialFetch = true
