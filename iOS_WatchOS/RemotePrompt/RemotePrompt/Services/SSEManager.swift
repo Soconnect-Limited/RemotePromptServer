@@ -140,8 +140,10 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     // MARK: URLSessionDataDelegate
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let thread = OperationQueue.current == OperationQueue.main ? "main" : "bg"
-        print("DEBUG: [SSE-DATA] received: \(data.count) bytes, bufferSize: \(buffer.count) bytes [thread:\(thread)]")
+        if Constants.enableVerboseLogs {
+            let thread = OperationQueue.current == OperationQueue.main ? "main" : "bg"
+            print("DEBUG: [SSE-DATA] received: \(data.count) bytes, bufferSize: \(buffer.count) bytes [thread:\(thread)]")
+        }
 
         if buffer.count + data.count > MAX_BUFFER_SIZE {
             print("DEBUG: [SSE-BUFFER] LIMIT EXCEEDED! current=\(buffer.count) incoming=\(data.count) max=\(MAX_BUFFER_SIZE)")
@@ -156,7 +158,9 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             return
         }
         let events = chunk.components(separatedBy: "\n\n")
-        print("DEBUG: [SSE-EVENTS] parsed \(events.count) event blocks from buffer")
+        if Constants.enableVerboseLogs {
+            print("DEBUG: [SSE-EVENTS] parsed \(events.count) event blocks from buffer")
+        }
 
         for index in 0..<(events.count - 1) {
             let eventBlock = events[index]
@@ -176,7 +180,9 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
                 continue
             }
             if let event = try? JSONDecoder().decode(JobStatusEvent.self, from: jsonData) {
-                print("DEBUG: [SSE-DECODE] SUCCESS - status: \(event.status)")
+                if Constants.enableVerboseLogs {
+                    print("DEBUG: [SSE-DECODE] SUCCESS - status: \(event.status)")
+                }
                 DispatchQueue.main.async {
                     self.jobStatus = event.status
                 }
