@@ -126,11 +126,6 @@ struct ThreadListView: View {
                 Text(errorMessage)
             }
         }
-        .task {
-            if viewModel.threads.isEmpty {
-                await viewModel.fetchThreads()
-            }
-        }
     }
 }
 

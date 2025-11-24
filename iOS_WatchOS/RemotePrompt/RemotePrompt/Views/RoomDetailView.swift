@@ -45,11 +45,6 @@ struct RoomDetailView: View {
             apiClient: apiClient
         )
         _threadListViewModel = StateObject(wrappedValue: viewModel)
-
-        // バックグラウンドでスレッド一覧を事前取得（ラグ軽減）
-        Task {
-            await viewModel.fetchThreads()
-        }
     }
 
     var body: some View {

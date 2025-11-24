@@ -19,13 +19,21 @@ final class ThreadListViewModel: ObservableObject {
         roomId: String,
         runner: String? = nil,
         deviceId: String = APIClient.getDeviceId(),
-        apiClient: APIClientProtocol = APIClient.shared
+        apiClient: APIClientProtocol = APIClient.shared,
+        autoLoadOnInit: Bool = true
     ) {
         self.roomId = roomId
         self.runnerFilter = runner
         self.defaultRunner = runner ?? "claude"
         self.deviceId = deviceId
         self.apiClient = apiClient
+
+        // 初期化時に自動的にfetchを開始（ラグ軽減）
+        if autoLoadOnInit {
+            Task {
+                await fetchThreads()
+            }
+        }
     }
 
     /// スレッド一覧を取得
