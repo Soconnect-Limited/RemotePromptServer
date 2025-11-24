@@ -9,9 +9,11 @@
 
 ## フェーズ構成
 - Phase 1: 入力経路分離・キーボード負荷低減
-- Phase 2: SSE処理の専用キュー化 + A/B切替
+- Phase 2': SSE処理の専用キュー化（BG化を最優先） + A/B切替
 - Phase 3: ログ/計測の最小化
-- Phase 4: メッセージ保持の軽量化
+- Phase E: Jetsam早期警告モニタ
+- Phase 4: メッセージ保持の軽量化（短期対症）
+- Phase A/B/C/D: 長期的抜本対策（ストリーム処理・Lazy Loading・fetchStreaming・Session Pool）
 - Phase 5: テストプロトコル整備
 
 ---
@@ -29,15 +31,16 @@
   - [ ] UIから直接送信（貼り付け不要）
 
 ## Phase 2: SSE処理の専用キュー化 + A/B切替
-- [ ] SSEManagerを single OperationQueue(.userInitiated, maxConcurrentOperationCount=1) に戻す
+### Phase 2': SSE処理の専用キュー化（最優先）
+- [ ] SSEManagerを single OperationQueue(.userInitiated, maxConcurrentOperationCount=1) に戻す（BGキュー）
 - [ ] delegateQueueをコンフィグで切替可能にする
-  - [ ] Option A: delegateQueue = .main（Spec準拠）
-  - [ ] Option B: delegateQueue = BG queue（負荷分散）
-  - [ ] 設定フラグでA/Bを起動時に選択
+  - [ ] Option A: delegateQueue = .main（Spec準拠・デフォルト）
+  - [ ] Option B: delegateQueue = BG queue（UI負荷分散、現状推奨）
+  - [ ] 設定フラグでA/Bを起動時に選択（UserDefaults / env）
 - [ ] URLSession生成方針のスイッチ
-  - [ ] A: 接続毎生成
-  - [ ] B: インスタンス再利用
-  - [ ] デフォルト: B（再利用）
+  - [ ] A: 接続毎生成（Spec準拠）
+  - [ ] B: インスタンス再利用（性能優先）
+  - [ ] デフォルト: A（Spec準拠）、必要に応じてBに切替
 
 ## Phase 3: ログ/計測の最小化
 - [ ] DEBUGログのレートリミット（state遷移とfetch開始/完了のみ）
@@ -48,12 +51,28 @@
 - [ ] MessageStoreキャッシュ上限を100→50に一時変更
 - [ ] 表示用配列と送信用データを分離（UIは軽量化）
 - [ ] `fetchFinalResult` で巨大stdoutの場合は警告ログのみで早期リターン（必要ならストリーム保存）
+ - [ ] 代替案メモ: stdout圧縮保存、LRUキャッシュ化、ディスク退避（長期）
 
 ## Phase 5: テストプロトコル整備
 - [ ] テストシナリオをREADMEに追記（またはプラン内メモ）
   - [ ] 通常プロンプト(<=2KB)×10連投：フリーズ/二重fetchなし
   - [ ] 長文100KB×10（デバッグボタン使用）：フリーズなし、RSS < 500MB
   - [ ] JetsamEventが生成されないことを確認（解析データ）
+
+## Phase E: Jetsam早期警告モニタ
+- [ ] DispatchSourceMemoryPressure で warning/critical を監視
+- [ ] warning: 古いメッセージを20件残して即時圧縮/ディスク退避
+- [ ] critical: 全SSE切断 + 明示解放 + ログ出力
+
+## Phase A/B/C/D: 長期的抜本対策
+- Phase A: SSE受信ストリーム処理（メモリ爆発防止）
+- Phase B: MessageStore Lazy Loading（3層キャッシュ）
+- Phase C: fetchFinalResult Streaming（チャンクUI更新）
+- Phase D: URLSession共有プール（並行上限制御）
+
+## 優先度と概算工数（目安）
+- 最小構成（即効性）：Phase 1 + Phase 2' + Phase 3 + Phase E ≈ 7h
+- 完全構成（抜本対策）：全Phase ≈ 25.5h
 
 ## ロールバック/スイッチ
 - [ ] delegateQueue A/B 切替スイッチを UserDefaults / 環境変数で持つ
