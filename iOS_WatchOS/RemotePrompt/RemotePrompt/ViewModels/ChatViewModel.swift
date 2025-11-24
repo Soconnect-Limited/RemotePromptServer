@@ -326,6 +326,9 @@ final class ChatViewModel: ObservableObject {
         messageStore.addMessage(userMessage)
         print("DEBUG: sendMessage() - User message appended, messages.count: \(messages.count), last message: \(messages.last?.content.prefix(50) ?? "")")
 
+        // UIの即時更新を促す（スクロールを含む）
+        objectWillChange.send()
+
         Task {
             do {
                 let response = try await apiClient.createJob(
@@ -357,6 +360,9 @@ final class ChatViewModel: ObservableObject {
                 messageStore.addMessage(assistantMessage)
                 historyOffset += 1
                 print("DEBUG: sendMessage() - Assistant message appended, messages.count: \(messages.count)")
+
+                // UIの即時更新を促す（スクロールを含む）
+                objectWillChange.send()
 
                 // Job作成成功後、すぐに入力フィールドを有効化（推論中でも入力可能にする）
                 isLoading = false
