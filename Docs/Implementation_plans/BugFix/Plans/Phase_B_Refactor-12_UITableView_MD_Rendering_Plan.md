@@ -19,7 +19,8 @@
 ## フェーズとチェックリスト（改訂版）
 ### Phase 0 準備
 - [x] 影響範囲確認（SwiftUI版削除、UIKit版に完全移行）。
-- [ ] dSYM/シンボル解決設定確認（Debug Information Format = DWARF with dSYM）。
+- [x] dSYM/シンボル解決設定確認（Debug Information Format = DWARF with dSYM）。
+  - Debug/Release両方で `dwarf-with-dsym` に設定完了
 
 ### Phase 1 UIKitホスト準備
 - [x] `ChatListContainerView` (UIView) を新規作成：UITableView を内包。
@@ -32,7 +33,9 @@
 - [x] 再利用登録、automaticDimension 有効化。
 - [x] estimatedRowHeight を短文/長文で可変（例: <1k文字:80, <10k:300, それ以上:1000）。
 - [x] 推論中インジケーター（UIActivityIndicatorView + "応答を生成中..."）実装。
-- [ ] 追加は insertRows、更新は reloadRows 部分更新（diffableは採用しない、必要なら後から）。
+- [x] 追加は insertRows、更新は reloadRows 部分更新（diffableは採用しない、必要なら後から）。
+  - 通常メッセージ送信での部分更新動作確認済み
+  - 推論中のリアルタイム更新（reloadRows）確認済み
 
 ### Phase 3 Markdown/Code 対応（分割）
 #### Phase 3-A 基本Markdown + 性能計測
