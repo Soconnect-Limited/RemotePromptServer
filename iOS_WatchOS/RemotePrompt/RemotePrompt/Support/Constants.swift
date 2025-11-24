@@ -23,11 +23,11 @@ enum Constants {
 
     // Debug/behavior toggles (defaults follow spec unless上書き)
     static var useMainDelegateQueue: Bool {
-        // env REMOTE_PROMPT_SSE_MAIN_QUEUE=0 でBGキューに切替
-        if let env = ProcessInfo.processInfo.environment["REMOTE_PROMPT_SSE_MAIN_QUEUE"], env == "0" {
-            return false
+        // デフォルトをBG寄りに倒し、必要なときのみ main を明示（env=1）。
+        if let env = ProcessInfo.processInfo.environment["REMOTE_PROMPT_SSE_MAIN_QUEUE"], env == "1" {
+            return true
         }
-        return true // Spec準拠デフォルト
+        return false
     }
 
     static var reuseSSESession: Bool {
