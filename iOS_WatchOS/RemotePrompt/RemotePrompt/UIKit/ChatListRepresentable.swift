@@ -148,6 +148,12 @@ final class ChatMessageCell: UITableViewCell {
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let loadingLabel = UILabel()
 
+    // Phase 4: 長文折りたたみ
+    private let expandButton = UIButton(type: .system)
+    private var isExpanded = false
+    private var fullContent: String = ""
+    private let truncateThreshold = 1000  // 1000文字以上で折りたたみ
+
     // 制約を保持して再利用時に更新可能にする
     private var bubbleLeadingConstraint: NSLayoutConstraint?
     private var bubbleTrailingConstraint: NSLayoutConstraint?
@@ -214,6 +220,20 @@ final class ChatMessageCell: UITableViewCell {
             loadingStackView.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -12),
             loadingStackView.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
             loadingStackView.trailingAnchor.constraint(lessThanOrEqualTo: bubbleView.trailingAnchor, constant: -12)
+        ])
+
+        // Phase 4: 展開ボタン設定
+        expandButton.translatesAutoresizingMaskIntoConstraints = false
+        expandButton.setTitle("続きを読む", for: .normal)
+        expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .footnote)
+        expandButton.addTarget(self, action: #selector(toggleExpand), for: .touchUpInside)
+        expandButton.isHidden = true
+        bubbleView.addSubview(expandButton)
+
+        NSLayoutConstraint.activate([
+            expandButton.topAnchor.constraint(equalTo: textView.bottomAnchor, constant: 8),
+            expandButton.leadingAnchor.constraint(equalTo: bubbleView.leadingAnchor, constant: 12),
+            expandButton.bottomAnchor.constraint(equalTo: bubbleView.bottomAnchor, constant: -8)
         ])
 
         // アバター制約（Assistant時のみ表示）
@@ -289,12 +309,18 @@ final class ChatMessageCell: UITableViewCell {
 
             // Markdownレンダリング
             let markdown = message.content
+            fullContent = markdown  // Phase 4: 全文を保存
+
+            // Phase 4: 長文折りたたみ（1000文字超）
+            let shouldTruncate = markdown.count > truncateThreshold && !isExpanded
+            let displayContent = shouldTruncate ? String(markdown.prefix(truncateThreshold)) : markdown
+            expandButton.isHidden = markdown.count <= truncateThreshold
 
             // Phase 3-A: 性能計測（100KB以上のコンテンツのみ）
             let shouldMeasure = markdown.utf8.count >= 100_000
             let startTime = shouldMeasure ? CFAbsoluteTimeGetCurrent() : 0
 
-            if let attributed = try? AttributedString(markdown: markdown) {
+            if let attributed = try? AttributedString(markdown: displayContent) {
                 let mutable = NSMutableAttributedString(attributed)
 
                 if shouldMeasure {
@@ -310,8 +336,18 @@ final class ChatMessageCell: UITableViewCell {
                 // Assistant用の色を明示的に設定（isUserフラグを渡す）
                 applyCodeStyling(mutable, isUser: isUser)
                 textView.attributedText = mutable
+
+                // Phase 4: 折りたたみ時に省略記号を追加
+                if shouldTruncate {
+                    let ellipsis = NSAttributedString(string: "...", attributes: [
+                        .font: UIFont.preferredFont(forTextStyle: .body),
+                        .foregroundColor: isUser ? UIColor.white : UIColor.label
+                    ])
+                    mutable.append(ellipsis)
+                    textView.attributedText = mutable
+                }
             } else {
-                textView.text = markdown
+                textView.text = displayContent
                 textView.font = UIFont.preferredFont(forTextStyle: .body)
             }
         }
@@ -342,6 +378,40 @@ final class ChatMessageCell: UITableViewCell {
         }
     }
 
+    // Phase 4: 展開/折りたたみトグル
+    @objc private func toggleExpand() {
+        isExpanded.toggle()
+        expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
+
+        // 全文表示/省略表示を切り替え
+        let displayContent = isExpanded ? fullContent : String(fullContent.prefix(truncateThreshold))
+
+        if let attributed = try? AttributedString(markdown: displayContent) {
+            let mutable = NSMutableAttributedString(attributed)
+            // 色設定は元のconfigureと同じロジック（簡易版）
+            let isUser = bubbleView.backgroundColor == UIColor.systemBlue
+            applyCodeStyling(mutable, isUser: isUser)
+
+            if !isExpanded && fullContent.count > truncateThreshold {
+                let ellipsis = NSAttributedString(string: "...", attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: isUser ? UIColor.white : UIColor.label
+                ])
+                mutable.append(ellipsis)
+            }
+
+            textView.attributedText = mutable
+        } else {
+            textView.text = displayContent
+        }
+
+        // 高さ再計算
+        if let tableView = superview as? UITableView {
+            tableView.beginUpdates()
+            tableView.endUpdates()
+        }
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         avatarImageView.image = nil
@@ -349,5 +419,11 @@ final class ChatMessageCell: UITableViewCell {
         activityIndicator.stopAnimating()
         loadingStackView.isHidden = true
         textView.isHidden = false
+
+        // Phase 4: 折りたたみ状態をリセット
+        isExpanded = false
+        fullContent = ""
+        expandButton.isHidden = true
+        expandButton.setTitle("続きを読む", for: .normal)
     }
 }

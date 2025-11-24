@@ -26,9 +26,9 @@ final class ChatViewModel: ObservableObject {
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
     private let deviceId: String
-    private let historyPageSize = 20
+    private let historyPageSize = 10  // Phase 4: ページング取得サイズ（10件ずつ）
     private var historyOffset = 0
-    private let displayLimit = 20  // UIに載せるメッセージ数をさらに抑制してレイアウト負荷を軽減
+    private let displayLimit = 50  // Phase 4: 表示制限（最新50件まで）
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
