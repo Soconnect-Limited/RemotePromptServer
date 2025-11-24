@@ -24,7 +24,7 @@
 
 ## 実装フェーズ
 
-### Phase 1: サーバー側APNs実装 (2-3時間)
+### Phase 1: サーバー側APNs実装 ✅ 完了 (2025-11-24)
 
 #### 1.1 apns_manager.py作成
 
@@ -47,24 +47,24 @@
 
 #### 1.3 .env設定追加
 
-- [x] `.env`に以下を追加:
+- [x] `.env`に以下を追加（コメントアウト状態）:
   ```bash
   # APNs認証情報
-  APNS_KEY_ID=XXXXXXXXXX
-  APNS_TEAM_ID=YYYYYYYYYY
-  APNS_KEY_PATH=/Users/macstudio/Projects/RemotePrompt/secrets/AuthKey_XXXXXXXXXX.p8
-  APNS_BUNDLE_ID=com.yourteam.RemotePrompt
-  APNS_ENVIRONMENT=sandbox
+  # APNS_KEY_ID=XXXXXXXXXX
+  # APNS_TEAM_ID=YYYYYYYYYY
+  # APNS_KEY_PATH=/Users/macstudio/Projects/RemotePrompt/secrets/AuthKey_XXXXXXXXXX.p8
+  # APNS_BUNDLE_ID=com.yourteam.RemotePrompt
+  # APNS_ENVIRONMENT=sandbox
   ```
 
 #### 1.4 依存ライブラリ追加
 
-- [x] `requirements.txt`に`aioapns`追加
-- [x] `pip install aioapns`実行
+- [x] `requirements.txt`に`aioapns==3.2.0`追加（PyAPNs2から変更）
+- [ ] `pip install aioapns`実行（次回サーバー起動時）
 
 ---
 
-### Phase 2: iOS/watchOS側実装 (2-3時間)
+### Phase 2: iOS/watchOS側実装 ✅ 完了 (2025-11-24)
 
 #### 2.1 AppDelegate追加
 
@@ -77,38 +77,55 @@
 
 #### 2.2 Xcodeプロジェクト設定
 
-- [x] Signing & Capabilities → Push Notifications 追加
-- [x] Bundle Identifierが`.env`の`APNS_BUNDLE_ID`と一致することを確認
+- [ ] Signing & Capabilities → Push Notifications 追加
+- [ ] Bundle Identifierが`.env`の`APNS_BUNDLE_ID`と一致することを確認
 
-#### 2.3 ChatViewModelにnotify_token送信処理追加
+#### 2.3 APIClientにnotify_token送信処理追加
 
-- [x] `sendMessage()`メソッドで:
+- [x] `createJob()`メソッドで:
   - [x] UserDefaultsから`apns_device_token`取得
-  - [x] `createJob()`の`notifyToken`パラメータに渡す
-
-#### 2.4 APIClientのcreateJob()修正
-
-- [x] `CreateJobRequest`に`notify_token`フィールド追加（既にあるか確認）
-- [x] `createJob()`メソッドの引数に`notifyToken: String?`追加
+  - [x] `CreateJobRequest`の`notifyToken`パラメータに渡す
 
 ---
 
-### Phase 3: テスト (1-2時間)
+### Phase 3: セットアップ・テスト (1-2時間)
 
-#### 3.1 実機テスト
+#### 3.1 APNsキーの取得と設定
 
-- [ ] iPhoneでアプリ起動
-- [ ] コンソールで「📱 APNs Device Token」を確認
+- [ ] Apple Developer Portal → Certificates, Identifiers & Profiles
+- [ ] Keys → 「+」ボタン → Apple Push Notifications service (APNs) にチェック
+- [ ] Continue → Register → Download (.p8ファイル)
+- [ ] Key IDとTeam IDをメモ
+- [ ] `.p8`ファイルを`~/Projects/RemotePrompt/secrets/`に保存
+- [ ] `.env`のAPNs設定をコメント解除して実際の値を記入
+- [ ] `.gitignore`に`secrets/`が含まれていることを確認
+
+#### 3.2 Xcodeプロジェクト設定
+
+- [ ] Xcodeで`RemotePrompt`ターゲットを選択
+- [ ] Signing & Capabilities → Push Notifications 追加
+- [ ] Bundle Identifierを`.env`の`APNS_BUNDLE_ID`と一致させる
+
+#### 3.3 サーバー再起動
+
+- [ ] `cd remote-job-server && pip install -r requirements.txt`
+- [ ] サーバー再起動
+
+#### 3.4 実機テスト
+
+- [ ] iPhoneでアプリ起動（シミュレータではAPNs非対応）
+- [ ] 通知許可ダイアログで「許可」を選択
+- [ ] Xcodeコンソールで「📱 APNs Device Token: xxxxxxxx」を確認
 - [ ] Claudeにメッセージ送信
 - [ ] job完了時に通知が届くことを確認
 
-#### 3.2 エラーケーステスト
+#### 3.5 エラーケーステスト
 
 - [ ] APNs設定不正時（.p8ファイル不在）
 - [ ] デバイストークン不正時
 - [ ] ネットワークエラー時
 
-#### 3.3 watchOSテスト
+#### 3.6 watchOSテスト
 
 - [ ] Apple Watch単体でアプリ起動
 - [ ] 通知がWatchに届くことを確認
