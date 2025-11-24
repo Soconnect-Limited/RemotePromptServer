@@ -1,7 +1,6 @@
 """APNs Push Notification Manager for RemotePrompt."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Optional
 import logging
@@ -12,9 +11,7 @@ try:
 except ImportError:
     APNS_AVAILABLE = False
 
-from dotenv import load_dotenv
-
-load_dotenv()
+from config import settings
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,12 +26,12 @@ class APNsManager:
             self.client = None
             return
 
-        # APNs設定を環境変数から取得
-        key_path_str = os.getenv("APNS_KEY_PATH", "")
-        key_id = os.getenv("APNS_KEY_ID", "")
-        team_id = os.getenv("APNS_TEAM_ID", "")
-        bundle_id = os.getenv("APNS_BUNDLE_ID", "")
-        environment = os.getenv("APNS_ENVIRONMENT", "sandbox")
+        # APNs設定をconfigから取得
+        key_path_str = settings.apns_key_path
+        key_id = settings.apns_key_id
+        team_id = settings.apns_team_id
+        bundle_id = settings.apns_bundle_id
+        environment = settings.apns_environment
 
         # 必須パラメータチェック
         if not all([key_path_str, key_id, team_id, bundle_id]):
