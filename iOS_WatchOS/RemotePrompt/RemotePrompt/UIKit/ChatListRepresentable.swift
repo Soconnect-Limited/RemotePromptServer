@@ -81,6 +81,12 @@ struct MessageParser {
         let italicFont = bodyFont.withTraits(.traitItalic)
         let mono = UIFont.monospacedSystemFont(ofSize: bodyFont.pointSize, weight: .regular)
 
+        // 見出し用フォント
+        let h1Font = UIFont.preferredFont(forTextStyle: .title1).withTraits(.traitBold)
+        let h2Font = UIFont.preferredFont(forTextStyle: .title2).withTraits(.traitBold)
+        let h3Font = UIFont.preferredFont(forTextStyle: .title3).withTraits(.traitBold)
+        let h4Font = UIFont.preferredFont(forTextStyle: .headline).withTraits(.traitBold)
+
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 2
         paragraphStyle.paragraphSpacing = 4
@@ -90,6 +96,75 @@ struct MessageParser {
             .foregroundColor: textColor,
             .paragraphStyle: paragraphStyle
         ])
+
+        let fullRange = NSRange(location: 0, length: attributed.length)
+
+        // 見出し（# ## ### ####）- 行頭のみ
+        let headingPattern = "^(#{1,4})\\s+(.+)$"
+        if let regex = try? NSRegularExpression(pattern: headingPattern, options: [.anchorsMatchLines]) {
+            let matches = regex.matches(in: text, options: [], range: fullRange)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 3 {
+                    let hashCount = (text as NSString).substring(with: match.range(at: 1)).count
+                    let contentRange = match.range(at: 2)
+                    let content = (text as NSString).substring(with: contentRange)
+
+                    let headingFont: UIFont
+                    switch hashCount {
+                    case 1: headingFont = h1Font
+                    case 2: headingFont = h2Font
+                    case 3: headingFont = h3Font
+                    default: headingFont = h4Font
+                    }
+
+                    let replacement = NSAttributedString(string: content, attributes: [
+                        .font: headingFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 番号付きリスト（1. 2. 3.）- 行頭のみ
+        let numberedListPattern = "^(\\d+\\.\\s+)(.*)$"
+        if let regex = try? NSRegularExpression(pattern: numberedListPattern, options: [.anchorsMatchLines]) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 3 {
+                    let numberRange = match.range(at: 1)
+                    let contentRange = match.range(at: 2)
+                    let number = (attributed.string as NSString).substring(with: numberRange)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+
+                    let replacement = NSAttributedString(string: "\(number)\(content)", attributes: [
+                        .font: bodyFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
+
+        // 箇条書きリスト（- * •）- 行頭のみ
+        let bulletListPattern = "^([-*•]\\s+)(.*)$"
+        if let regex = try? NSRegularExpression(pattern: bulletListPattern, options: [.anchorsMatchLines]) {
+            let matches = regex.matches(in: attributed.string, options: [], range: NSRange(location: 0, length: attributed.length))
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 3 {
+                    let bulletRange = match.range(at: 1)
+                    let contentRange = match.range(at: 2)
+                    let bullet = (attributed.string as NSString).substring(with: bulletRange)
+                    let content = (attributed.string as NSString).substring(with: contentRange)
+
+                    let replacement = NSAttributedString(string: "• \(content)", attributes: [
+                        .font: bodyFont,
+                        .foregroundColor: textColor
+                    ])
+                    attributed.replaceCharacters(in: match.range, with: replacement)
+                }
+            }
+        }
 
         let fullRange = NSRange(location: 0, length: attributed.length)
 
