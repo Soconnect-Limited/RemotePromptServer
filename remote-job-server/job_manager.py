@@ -10,6 +10,7 @@ from typing import List, Optional, TYPE_CHECKING
 from database import SessionLocal
 from models import Job
 from session_manager import SessionManager
+from apns_manager import APNsManager
 
 if TYPE_CHECKING:  # pragma: no cover
     from sse_manager import SSEManager
@@ -31,6 +32,7 @@ class JobManager:
     ) -> None:
         self.session_manager = session_manager or SessionManager()
         self.sse_manager = sse_manager
+        self.apns_manager = APNsManager()
 
     def create_job(  # pylint: disable=too-many-arguments
         self,
@@ -123,6 +125,16 @@ class JobManager:
                 },
                 close_stream=True,
             )
+
+            # Send push notification
+            if job.notify_token:
+                asyncio.create_task(
+                    self.apns_manager.send_notification(
+                        device_token=job.notify_token,
+                        title="ジョブ完了",
+                        body=f"{job.runner} の実行が{'成功' if job.status == 'success' else '失敗'}しました",
+                    )
+                )
         except Exception:  # pylint: disable=broad-except
             LOGGER.exception("Job %s execution failed", job_id)
             job = db.query(Job).filter_by(id=job_id).first()
@@ -141,6 +153,16 @@ class JobManager:
                     },
                     close_stream=True,
                 )
+
+                # Send push notification
+                if job.notify_token:
+                    asyncio.create_task(
+                        self.apns_manager.send_notification(
+                            device_token=job.notify_token,
+                            title="ジョブ完了",
+                            body=f"{job.runner} の実行が失敗しました",
+                        )
+                    )
         finally:
             db.close()
 

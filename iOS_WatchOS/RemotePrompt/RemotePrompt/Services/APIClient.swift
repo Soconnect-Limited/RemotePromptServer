@@ -145,12 +145,15 @@ final class APIClient: APIClientProtocol {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Get APNs device token from UserDefaults
+        let notifyToken = UserDefaults.standard.string(forKey: "apns_device_token")
+
         let payload = CreateJobRequest(
             runner: runner,
             inputText: prompt,
             deviceId: deviceId,
             roomId: roomId,
-            notifyToken: nil,
+            notifyToken: notifyToken,
             threadId: threadId  // v4.0: nilの場合は互換モードでデフォルトスレッド使用
         )
         request.httpBody = try encoder.encode(payload)
