@@ -531,42 +531,32 @@ final class ChatMessageCell: UITableViewCell {
         let isUser = message.type == .user
         let isLoading = message.content.isEmpty && message.isRunning
 
-        // アバター表示制御
-        if isUser {
-            avatarImageView.isHidden = true
-            avatarLeadingConstraint?.isActive = false
-        } else {
-            avatarImageView.isHidden = false
-            avatarLeadingConstraint?.isActive = true
-
-            // アバター画像設定（SwiftUI版と同じロジック）
-            let iconName = runner.lowercased() == "codex" ? "Codex" : "Claude-Code"
-            avatarImageView.image = UIImage(named: iconName)
-        }
+        // アバター表示制御（常に非表示）
+        avatarImageView.isHidden = true
+        avatarLeadingConstraint?.isActive = false
 
         // バブルレイアウト制約を更新
         bubbleLeadingConstraint?.isActive = false
         bubbleTrailingConstraint?.isActive = false
 
         if isUser {
-            // User: 右寄せ、画面幅の75%
+            // User: 右寄せ、画面幅の75%、グレー背景、角丸
             bubbleLeadingConstraint = bubbleView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: UIScreen.main.bounds.width * 0.25)
             bubbleTrailingConstraint = bubbleView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12)
 
-            bubbleView.backgroundColor = UIColor.systemBlue
-            textView.textColor = .white
-            // Phase 4: ユーザー送信の展開ボタンは白色
-            expandButton.setTitleColor(.white, for: .normal)
+            bubbleView.backgroundColor = UIColor.systemGray5
+            bubbleView.layer.cornerRadius = 16
+            textView.textColor = .label
+            expandButton.setTitleColor(.label, for: .normal)
         } else {
-            // Assistant: 左寄せ（アバター右）、画面幅の75%
-            bubbleLeadingConstraint = bubbleView.leadingAnchor.constraint(equalTo: avatarImageView.trailingAnchor, constant: 8)
-            bubbleTrailingConstraint = bubbleView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -12)
+            // Assistant: 画面幅いっぱい、背景なし、角丸なし
+            bubbleLeadingConstraint = bubbleView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12)
+            bubbleTrailingConstraint = bubbleView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12)
 
-            // 背景は暗めのグレー、文字は自動（ダークモードで白、ライトモードで黒）
-            bubbleView.backgroundColor = UIColor.systemGray6
-            textView.textColor = .label  // システム標準色（自動切替）
+            bubbleView.backgroundColor = .clear
+            bubbleView.layer.cornerRadius = 0
+            textView.textColor = .label
             textView.tintColor = .label
-            // Phase 4: Assistantの展開ボタンはシステムデフォルト
             expandButton.setTitleColor(.systemBlue, for: .normal)
         }
 
