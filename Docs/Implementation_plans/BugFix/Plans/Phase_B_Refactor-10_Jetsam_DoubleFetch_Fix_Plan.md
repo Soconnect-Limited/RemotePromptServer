@@ -18,17 +18,17 @@
 
 ## タスクチェックリスト
 ### A. 原因箇所修正 (ChatViewModel.swift)
-- [ ] `finalResultFetched` の管理を「一度だけフェッチ」に変更
-  - [ ] 終端ステータス受信時にフラグをセットし、切断側は未受信かつ未フェッチの場合のみ実行
-  - [ ] `defer` でフラグを即クリアしない（二重実行防止を優先）
-  - [ ] フラグは @MainActor 保護下の Bool または OSAllocatedUnfairLock<Bool> で管理し、競合を防止
-  - [ ] 新規ジョブ開始時（sendMessage/createJob直後）に対象 jobId のフラグを明示リセット
-- [ ] 切断イベントのフェッチ条件を「jobStatus未終端かつ未フェッチ」に限定
+- [x] `finalResultFetched` の管理を「一度だけフェッチ」に変更
+  - [x] 終端ステータス受信時にフラグをセットし、切断側は未受信かつ未フェッチの場合のみ実行
+  - [x] `defer` でフラグを即クリアしない（二重実行防止を優先）
+  - [x] フラグは @MainActor 保護下の Bool または OSAllocatedUnfairLock<Bool> で管理し、競合を防止
+  - [x] 新規ジョブ開始時（sendMessage/createJob直後）に対象 jobId のフラグを明示リセット
+- [x] 切断イベントのフェッチ条件を「jobStatus未終端かつ未フェッチ」に限定
 - [ ] ログメッセージを二重起動検知用に整理（fetch開始を一意に）
 
 ### B. SSEManager 仕様整合
-- [ ] URLSession delegateQueue を `.main` に固定（v4.3準拠）
-- [ ] URLSession 生成方針を Master Spec 確認のうえ明記
+- [x] URLSession delegateQueue を `.main` に固定（v4.3準拠）
+- [x] URLSession 生成方針を Master Spec 確認のうえ明記
   - A案: 接続毎に生成・破棄（仕様優先）
   - B案: インスタンス内で再利用し、connect毎の新規生成を抑制（メモリ効率優先）
   - 現時点の採用: delegateQueue.main 固定＋再利用（B案）。仕様上A案が求められる場合は方針を切替。
