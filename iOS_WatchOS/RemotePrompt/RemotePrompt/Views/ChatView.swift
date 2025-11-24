@@ -13,7 +13,7 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             if FeatureFlags.useUIKitChatList {
-                ChatListRepresentable(messages: viewModel.messages)
+                ChatListRepresentable(messages: viewModel.messages, runner: viewModel.runnerName)
                     .background(Color(.systemBackground))
             } else {
                 ZStack {
