@@ -28,7 +28,7 @@ final class ChatViewModel: ObservableObject {
     private let deviceId: String
     private let historyPageSize = 20
     private var historyOffset = 0
-    private let displayLimit = 30  // UIに載せるメッセージ数を抑制してレイアウト負荷を軽減
+    private let displayLimit = 20  // UIに載せるメッセージ数をさらに抑制してレイアウト負荷を軽減
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }

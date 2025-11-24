@@ -21,13 +21,15 @@ struct ChatView: View {
                             }
 
                             ForEach(viewModel.messages) { message in
-                                MessageBubble(message: message, runner: viewModel.runnerName)
+                                EquatableMessageBubble(message: message, runner: viewModel.runnerName)
                                     .id(message.id)
                             }
                         }
                         .padding(.vertical)
+                        .transaction { $0.animation = nil }
                     }
                     .background(Color(.systemBackground))
+                    .animation(nil, value: viewModel.messages.count)
                     .onAppear {
                         scrollProxy = proxy
                         // 初回表示時に最下部へスクロール
@@ -131,4 +133,21 @@ struct ChatView: View {
 
 #Preview {
     ChatView(viewModel: ChatViewModel(runner: "claude", roomId: "preview"))
+}
+
+// Equatable wrapper to avoid unnecessary re-layout when content/status unchanged
+private struct EquatableMessageBubble: View, Equatable {
+    let message: Message
+    let runner: String
+
+    var body: some View {
+        MessageBubble(message: message, runner: runner)
+    }
+
+    static func == (lhs: EquatableMessageBubble, rhs: EquatableMessageBubble) -> Bool {
+        lhs.message.id == rhs.message.id &&
+        lhs.message.status == rhs.message.status &&
+        lhs.message.content.count == rhs.message.content.count &&
+        lhs.runner == rhs.runner
+    }
 }
