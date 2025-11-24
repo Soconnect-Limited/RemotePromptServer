@@ -28,6 +28,7 @@ final class ChatViewModel: ObservableObject {
     private let deviceId: String
     private let historyPageSize = 20
     private var historyOffset = 0
+    private let displayLimit = 30  // UIに載せるメッセージ数を抑制してレイアウト負荷を軽減
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
@@ -135,7 +136,7 @@ final class ChatViewModel: ObservableObject {
             historyOffset = reset ? jobs.count : historyOffset + jobs.count
 
             let historicalMessages = convertJobsToMessages(jobs)
-            let combinedMessages: [Message]
+            var combinedMessages: [Message]
             if reset {
                 combinedMessages = historicalMessages
             } else {
@@ -147,6 +148,11 @@ final class ChatViewModel: ObservableObject {
                     print("DEBUG: fetchHistory() - Filtered \(duplicateCount) duplicate messages")
                 }
                 combinedMessages = newMessages + messages
+            }
+
+            // UI負荷軽減のため最新 displayLimit 件に絞る
+            if combinedMessages.count > displayLimit {
+                combinedMessages = Array(combinedMessages.suffix(displayLimit))
             }
 
             messageStore.replaceAll(combinedMessages)

@@ -35,9 +35,9 @@ struct ChatView: View {
                             scrollToBottom()
                         }
                     }
-                    .onChange(of: viewModel.messages.map { $0.id }) { ids in
+                    .onChange(of: viewModel.messages.count) { count in
                         if Constants.enableVerboseLogs {
-                            print("DEBUG: [VIEW-ONCHANGE] message IDs changed, count: \(ids.count)")
+                            print("DEBUG: [VIEW-ONCHANGE] message count changed: \(count)")
                         }
                         if !viewModel.isHistoryLoading {
                             hasFinishedInitialFetch = true
