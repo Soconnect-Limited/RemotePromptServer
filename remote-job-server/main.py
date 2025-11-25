@@ -41,11 +41,13 @@ from auth_helpers import verify_room_ownership
 from file_operations import list_files, read_file, write_file, WriteResult
 from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
 
+# Setup logging BEFORE any manager initialization
+setup_logging()
+
 LOGGER = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
-    setup_logging()
     init_db()
     yield
 

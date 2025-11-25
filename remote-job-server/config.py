@@ -67,3 +67,7 @@ def setup_logging() -> None:
 
     logger.addHandler(file_handler)
     logger.addHandler(console)
+
+    # Enable debug logging for aioapns and h2
+    logging.getLogger("aioapns").setLevel(logging.DEBUG)
+    logging.getLogger("h2").setLevel(logging.DEBUG)
