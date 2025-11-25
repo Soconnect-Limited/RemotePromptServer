@@ -539,9 +539,11 @@ final class CodeBlockView: UIView {
         copyButton.setTitle("Copied!", for: .normal)
         copyButton.isEnabled = false
 
+        // Memory Leak Fix: [weak self] を使用して循環参照を防止
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            self?.copyButton.setTitle(originalTitle, for: .normal)
-            self?.copyButton.isEnabled = true
+            guard let self = self else { return }
+            self.copyButton.setTitle(originalTitle, for: .normal)
+            self.copyButton.isEnabled = true
         }
     }
 }
@@ -1044,8 +1046,14 @@ final class ChatMessageCell: UITableViewCell {
         super.prepareForReuse()
 
         // Phase 5: contentStackViewのサブビューをクリア
+        // Memory Leak Fix: CodeBlockView等の複雑なビューを完全に解放
         for view in contentStackView.arrangedSubviews {
             contentStackView.removeArrangedSubview(view)
+            // サブビューの階層も再帰的にクリア
+            if let codeBlockView = view as? CodeBlockView {
+                // CodeBlockViewの内部コンポーネントを明示的に解放
+                codeBlockView.subviews.forEach { $0.removeFromSuperview() }
+            }
             view.removeFromSuperview()
         }
 

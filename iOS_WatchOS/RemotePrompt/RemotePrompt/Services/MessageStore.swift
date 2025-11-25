@@ -18,7 +18,8 @@ final class MessageStore: ObservableObject {
     private let cacheLimit: Int
     private let legacyStorageKey = "chat_messages"
 
-    init(defaultRoomId: String = "default-room", defaultRunner: String = "claude", defaultThreadId: String = "default-thread", cacheLimit: Int = 100) {
+    // Memory Leak Fix: cacheLimitを50に削減（メモリ使用量削減）
+    init(defaultRoomId: String = "default-room", defaultRunner: String = "claude", defaultThreadId: String = "default-thread", cacheLimit: Int = 50) {
         self.cacheLimit = cacheLimit
         let context = Context(roomId: defaultRoomId, runner: defaultRunner, threadId: defaultThreadId)
         self.activeContext = context

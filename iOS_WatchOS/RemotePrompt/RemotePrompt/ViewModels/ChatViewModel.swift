@@ -28,7 +28,7 @@ final class ChatViewModel: ObservableObject {
     private let deviceId: String
     private let historyPageSize = 10  // Phase 4: ページング取得サイズ（10件ずつ）
     private var historyOffset = 0
-    private let displayLimit = 50  // Phase 4: 表示制限（最新50件まで）
+    private let displayLimit = 30  // Memory Leak Fix: 表示制限を30件に削減（メモリ使用量削減）
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
@@ -61,10 +61,13 @@ final class ChatViewModel: ObservableObject {
         print("DEBUG: ChatViewModel init - autoLoadMessages: \(autoLoadMessages), messages count: \(messages.count)")
 
         // メモリ圧力監視（iOS13+）。警告で古いメッセージを削除、クリティカルでSSE切断
+        // Memory Leak Fix: [weak self] を使用して循環参照を防止
         if #available(iOS 13.0, *), !Self.memoryMonitorStarted {
-            MemoryPressureMonitor.shared.start {
+            MemoryPressureMonitor.shared.start { [weak self] in
+                guard let self = self else { return }
                 self.messageStore.clearAll()
-            } onCritical: {
+            } onCritical: { [weak self] in
+                guard let self = self else { return }
                 self.cleanupAllConnections()
                 self.messageStore.clearAll()
             }
@@ -654,8 +657,16 @@ final class ChatViewModel: ObservableObject {
     }
 
     deinit {
-        for manager in sseConnections.values {
+        // Memory Leak Fix: SSE接続とCombine購読を完全にクリーンアップ
+        print("DEBUG: ChatViewModel deinit - Cleaning up \(sseConnections.count) SSE connections")
+        for (jobId, manager) in sseConnections {
             manager.disconnect()
+            sseCancellables[jobId]?.forEach { $0.cancel() }
         }
+        sseConnections.removeAll()
+        sseCancellables.removeAll()
+        finalResultFetched.removeAll()
+        terminalStatusReceived.removeAll()
+        print("DEBUG: ChatViewModel deinit - Cleanup completed")
     }
 }
