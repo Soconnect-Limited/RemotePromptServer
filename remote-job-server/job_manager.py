@@ -128,13 +128,20 @@ class JobManager:
 
             # Send push notification
             if job.notify_token:
-                asyncio.create_task(
-                    self.apns_manager.send_notification(
-                        device_token=job.notify_token,
-                        title="ジョブ完了",
-                        body=f"{job.runner} の実行が{'成功' if job.status == 'success' else '失敗'}しました",
+                LOGGER.debug("🔔 Sending notification for token=%s", job.notify_token[:8])
+                try:
+                    import asyncio
+                    asyncio.run(
+                        self.apns_manager.send_notification(
+                            device_token=job.notify_token,
+                            title="ジョブ完了",
+                            body=f"{job.runner} の実行が{'成功' if job.status == 'success' else '失敗'}しました",
+                        )
                     )
-                )
+                except Exception as e:
+                    LOGGER.error("Failed to send notification: %s", e)
+            else:
+                LOGGER.debug("🔔 No notify_token, skipping notification")
         except Exception:  # pylint: disable=broad-except
             LOGGER.exception("Job %s execution failed", job_id)
             job = db.query(Job).filter_by(id=job_id).first()
@@ -156,13 +163,18 @@ class JobManager:
 
                 # Send push notification
                 if job.notify_token:
-                    asyncio.create_task(
-                        self.apns_manager.send_notification(
-                            device_token=job.notify_token,
-                            title="ジョブ完了",
-                            body=f"{job.runner} の実行が失敗しました",
+                    LOGGER.debug("🔔 Sending notification (error) for token=%s", job.notify_token[:8])
+                    try:
+                        import asyncio
+                        asyncio.run(
+                            self.apns_manager.send_notification(
+                                device_token=job.notify_token,
+                                title="ジョブ完了",
+                                body=f"{job.runner} の実行が失敗しました",
+                            )
                         )
-                    )
+                    except Exception as e:
+                        LOGGER.error("Failed to send notification: %s", e)
         finally:
             db.close()
 
