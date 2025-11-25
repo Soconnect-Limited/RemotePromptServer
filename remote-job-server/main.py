@@ -170,7 +170,8 @@ def get_rooms(
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> List[dict]:
-    rooms = db.query(Room).filter_by(device_id=device_id).order_by(Room.updated_at.desc()).all()
+    # sort_orderでソート（小さい順）、同じ場合はupdated_atで降順
+    rooms = db.query(Room).filter_by(device_id=device_id).order_by(Room.sort_order.asc(), Room.updated_at.desc()).all()
     return [room.to_dict() for room in rooms]
 
 
@@ -185,12 +186,16 @@ def create_room(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # 新しいRoomは最後に追加（既存の最大sort_order + 1）
+    max_order = db.query(Room).filter_by(device_id=req.device_id).count()
+
     room = Room(
         id=str(uuid.uuid4()),
         name=req.name,
         workspace_path=validated_path,
         icon=req.icon,
         device_id=req.device_id,
+        sort_order=max_order,
         created_at=utcnow(),
         updated_at=utcnow(),
     )
@@ -216,6 +221,36 @@ def delete_room(
     db.query(DeviceSession).filter_by(room_id=room_id).delete()
     db.query(Job).filter_by(room_id=room_id).delete()
     db.delete(room)
+    db.commit()
+    return {"status": "ok"}
+
+
+class ReorderRoomsRequest(BaseModel):
+    """Request body for reordering rooms."""
+    device_id: str
+    room_ids: List[str]  # 新しい順序でのRoom IDリスト
+
+
+@app.put("/rooms/reorder")
+def reorder_rooms(
+    req: ReorderRoomsRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Room の並び順を更新する。room_ids の順序で sort_order を設定。"""
+    # 全Roomを取得して所有権確認
+    rooms = db.query(Room).filter(Room.id.in_(req.room_ids)).all()
+    room_map = {r.id: r for r in rooms}
+
+    for room in rooms:
+        if room.device_id != req.device_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    # 並び順を更新
+    for idx, room_id in enumerate(req.room_ids):
+        if room_id in room_map:
+            room_map[room_id].sort_order = idx
+
     db.commit()
     return {"status": "ok"}
 

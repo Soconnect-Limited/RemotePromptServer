@@ -6,6 +6,7 @@ struct Room: Codable, Identifiable, Hashable {
     var workspacePath: String
     var icon: String
     let deviceId: String
+    var sortOrder: Int
     let createdAt: Date?
     let updatedAt: Date?
 
@@ -15,7 +16,40 @@ struct Room: Codable, Identifiable, Hashable {
         case workspacePath = "workspace_path"
         case icon
         case deviceId = "device_id"
+        case sortOrder = "sort_order"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        workspacePath = try container.decode(String.self, forKey: .workspacePath)
+        icon = try container.decode(String.self, forKey: .icon)
+        deviceId = try container.decode(String.self, forKey: .deviceId)
+        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+    }
+
+    init(
+        id: String,
+        name: String,
+        workspacePath: String,
+        icon: String,
+        deviceId: String,
+        sortOrder: Int = 0,
+        createdAt: Date?,
+        updatedAt: Date?
+    ) {
+        self.id = id
+        self.name = name
+        self.workspacePath = workspacePath
+        self.icon = icon
+        self.deviceId = deviceId
+        self.sortOrder = sortOrder
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
 }

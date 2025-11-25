@@ -33,6 +33,7 @@ class Room(Base):
     icon = Column(String(50), nullable=False, default="folder")
     device_id = Column(String(100), nullable=False)
     settings = Column(Text, nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)  # 並び順（小さいほど上）
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -46,6 +47,7 @@ class Room(Base):
             "workspace_path": self.workspace_path,
             "icon": self.icon,
             "device_id": self.device_id,
+            "sort_order": self.sort_order,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

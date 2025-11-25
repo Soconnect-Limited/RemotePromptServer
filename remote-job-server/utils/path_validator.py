@@ -5,6 +5,7 @@ from typing import List
 ALLOWED_BASE_PATHS: List[str] = [
     "/Users/macstudio/Projects",
     "/Users/macstudio/Documents",
+    "/Users/macstudio/Library/Mobile Documents",  # iCloud Drive
 ]
 
 FORBIDDEN_PATHS: List[str] = [

@@ -66,6 +66,8 @@ def _ensure_room_settings_column() -> None:
         columns = [row[1] for row in result.fetchall()]
         if "settings" not in columns:
             conn.execute(text("ALTER TABLE rooms ADD COLUMN settings TEXT"))
+        if "sort_order" not in columns:
+            conn.execute(text("ALTER TABLE rooms ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"))
 
 
 def _ensure_thread_columns() -> None:

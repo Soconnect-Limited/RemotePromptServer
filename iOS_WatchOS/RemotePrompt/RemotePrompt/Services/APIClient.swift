@@ -48,6 +48,7 @@ protocol APIClientProtocol {
     func createRoom(name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
     func updateRoom(roomId: String, name: String, workspacePath: String, deviceId: String, icon: String) async throws -> Room
     func deleteRoom(roomId: String, deviceId: String) async throws
+    func reorderRooms(deviceId: String, roomIds: [String]) async throws
     func fetchMessages(
         deviceId: String,
         roomId: String,
@@ -340,6 +341,33 @@ final class APIClient: APIClientProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+    }
+
+    func reorderRooms(deviceId: String, roomIds: [String]) async throws {
+        guard let url = URL(string: "\(Constants.baseURL)/rooms/reorder") else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload: [String: Any] = [
+            "device_id": deviceId,
+            "room_ids": roomIds
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {

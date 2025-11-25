@@ -14,6 +14,7 @@ actor PreviewAPIClient: APIClientProtocol {
             workspacePath: "/Users/preview/RemotePrompt",
             icon: "📁",
             deviceId: "preview-device",
+            sortOrder: 0,
             createdAt: date,
             updatedAt: date
         )
@@ -76,6 +77,7 @@ actor PreviewAPIClient: APIClientProtocol {
             workspacePath: workspacePath,
             icon: icon,
             deviceId: deviceId,
+            sortOrder: roomsStorage.count,
             createdAt: Date(),
             updatedAt: Date()
         )
@@ -100,6 +102,17 @@ actor PreviewAPIClient: APIClientProtocol {
         roomsStorage.removeAll { $0.id == roomId }
         roomRunnerIndex = roomRunnerIndex.filter { !$0.key.hasPrefix(roomId) }
         roomSettings.removeValue(forKey: roomId)
+    }
+
+    func reorderRooms(deviceId: String, roomIds: [String]) async throws {
+        // roomIdsの順序でroomsStorageを並び替え
+        var reordered: [Room] = []
+        for id in roomIds {
+            if let room = roomsStorage.first(where: { $0.id == id }) {
+                reordered.append(room)
+            }
+        }
+        roomsStorage = reordered
     }
 
     func fetchMessages(

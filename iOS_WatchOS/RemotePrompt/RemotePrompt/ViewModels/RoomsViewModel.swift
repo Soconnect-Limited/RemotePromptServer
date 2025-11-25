@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 @MainActor
 final class RoomsViewModel: ObservableObject {
@@ -83,6 +84,26 @@ final class RoomsViewModel: ObservableObject {
         }
     }
 
+    /// ドラッグ＆ドロップでの並べ替え
+    func moveRoom(from source: IndexSet, to destination: Int) {
+        rooms.move(fromOffsets: source, toOffset: destination)
+        // サーバーに並び順を保存
+        Task {
+            await saveRoomOrder()
+        }
+    }
+
+    /// 現在のrooms配列の順序をサーバーに保存
+    private func saveRoomOrder() async {
+        guard ensureAPIKeyConfigured() else { return }
+        let roomIds = rooms.map { $0.id }
+        do {
+            try await apiClient.reorderRooms(deviceId: deviceId, roomIds: roomIds)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func ensureAPIKeyConfigured() -> Bool {
         guard shouldValidateAPIKey else { return true }
         guard Constants.isAPIKeyConfigured else {
@@ -93,10 +114,7 @@ final class RoomsViewModel: ObservableObject {
     }
 
     private func sortRooms(_ rooms: [Room]) -> [Room] {
-        rooms.sorted { lhs, rhs in
-            let leftDate = lhs.updatedAt ?? lhs.createdAt ?? .distantPast
-            let rightDate = rhs.updatedAt ?? rhs.createdAt ?? .distantPast
-            return leftDate > rightDate
-        }
+        // sort_orderでソート（サーバーから返される順序を維持）
+        rooms.sorted { $0.sortOrder < $1.sortOrder }
     }
 }

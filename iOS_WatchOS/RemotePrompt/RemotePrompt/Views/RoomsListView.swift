@@ -52,9 +52,15 @@ struct RoomsListView: View {
                             }
                         }
                         .onDelete(perform: deleteRooms)
+                        .onMove(perform: moveRooms)
                     }
                     .accessibilityIdentifier("rooms.list")
                     .listStyle(.plain)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            EditButton()
+                        }
+                    }
                 }
             }
             .navigationTitle("Rooms")
@@ -102,6 +108,10 @@ struct RoomsListView: View {
                 _ = await viewModel.deleteRoom(room)
             }
         }
+    }
+
+    private func moveRooms(from source: IndexSet, to destination: Int) {
+        viewModel.moveRoom(from: source, to: destination)
     }
 }
 
