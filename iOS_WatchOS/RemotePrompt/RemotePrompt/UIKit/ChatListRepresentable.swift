@@ -553,6 +553,8 @@ struct ChatListRepresentable: UIViewRepresentable {
     /// 表示対象のメッセージ配列（最新順を想定）。
     var messages: [Message]
     var runner: String  // アバター表示用にrunner情報を追加
+    /// 過去ログ読み込みコールバック
+    var onLoadMore: (() async -> Void)?
 
     func makeUIView(context: Context) -> ChatListContainerView {
         let view = ChatListContainerView()
@@ -565,13 +567,16 @@ struct ChatListRepresentable: UIViewRepresentable {
         view.tableView.isPrefetchingEnabled = false
 
         context.coordinator.tableView = view.tableView
+        context.coordinator.containerView = view
         context.coordinator.runner = runner
+        context.coordinator.setupLoadMore(callback: onLoadMore)
         context.coordinator.reload(with: messages)
         return view
     }
 
     func updateUIView(_ uiView: ChatListContainerView, context: Context) {
         context.coordinator.runner = runner
+        context.coordinator.setupLoadMore(callback: onLoadMore)
         context.coordinator.reload(with: messages)
     }
 
@@ -582,10 +587,49 @@ struct ChatListRepresentable: UIViewRepresentable {
     // MARK: - Coordinator
     final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
         weak var tableView: UITableView?
+        weak var containerView: ChatListContainerView?
         private var messages: [Message] = []
         var runner: String = "claude"
+        /// 過去ログ読み込み中フラグ（スクロール位置維持用）
+        private var isLoadingOlderMessages = false
+        private var onLoadMoreCallback: (() async -> Void)?
+
+        /// 過去ログ読み込みコールバックを設定
+        func setupLoadMore(callback: (() async -> Void)?) {
+            onLoadMoreCallback = callback
+            // コールバックをContainerViewに接続
+            containerView?.onLoadMore = { [weak self] in
+                print("DEBUG: Pull-to-refresh triggered")
+                guard let self = self, let callback = self.onLoadMoreCallback else {
+                    print("DEBUG: No callback available")
+                    return
+                }
+                self.isLoadingOlderMessages = true
+                print("DEBUG: Starting load more task, isLoadingOlder set to TRUE")
+                Task {
+                    await callback()
+                    print("DEBUG: Load more callback completed, isLoadingOlder still TRUE")
+                    // Note: isLoadingOlderMessagesはreload()完了後にリセットされる
+                    // ここではendRefreshingのみ呼ぶ
+                    await MainActor.run {
+                        self.containerView?.endRefreshing()
+                        print("DEBUG: endRefreshing called")
+                    }
+                }
+            }
+        }
+
+        /// 過去ログ読み込み完了後にフラグをリセット
+        func finishLoadingOlderMessages() {
+            isLoadingOlderMessages = false
+            print("DEBUG: finishLoadingOlderMessages - isLoadingOlder set to FALSE")
+        }
 
         // MARK: Public API
+        /// 過去ログ読み込み時のアンカー情報を保持
+        private var savedAnchorMessageId: String?
+        private var savedAnchorOffset: CGFloat = 0
+
         func reload(with newMessages: [Message]) {
             guard let tableView else {
                 messages = newMessages
@@ -595,6 +639,54 @@ struct ChatListRepresentable: UIViewRepresentable {
             let oldCount = messages.count
             let newCount = newMessages.count
 
+            print("DEBUG: reload() - oldCount=\(oldCount), newCount=\(newCount), isLoadingOlderMessages=\(isLoadingOlderMessages)")
+
+            // 過去ログ読み込み中: 初回のreloadでアンカーを保存（まだ保存されていない場合のみ）
+            if isLoadingOlderMessages && savedAnchorMessageId == nil {
+                if let firstVisibleIndexPath = tableView.indexPathsForVisibleRows?.first,
+                   firstVisibleIndexPath.row < messages.count {
+                    savedAnchorMessageId = messages[firstVisibleIndexPath.row].id
+                    if let cell = tableView.cellForRow(at: firstVisibleIndexPath) {
+                        savedAnchorOffset = cell.frame.minY - tableView.contentOffset.y
+                    }
+                    print("DEBUG: reload() - Saved anchor: \(savedAnchorMessageId ?? "nil"), offset: \(savedAnchorOffset)")
+                }
+            }
+
+            // 過去ログ読み込み中はスクロール位置を維持
+            if isLoadingOlderMessages {
+                // データが実際に増加した場合のみ位置復元してフラグリセット
+                if newCount > oldCount, let anchorId = savedAnchorMessageId {
+                    messages = newMessages
+                    tableView.reloadData()
+
+                    if let newIndex = newMessages.firstIndex(where: { $0.id == anchorId }) {
+                        tableView.layoutIfNeeded()
+                        let targetIndexPath = IndexPath(row: newIndex, section: 0)
+                        if let cell = tableView.cellForRow(at: targetIndexPath) {
+                            let newOffset = cell.frame.minY - savedAnchorOffset
+                            tableView.setContentOffset(CGPoint(x: 0, y: newOffset), animated: false)
+                            print("DEBUG: reload() - Restored scroll position to index \(newIndex)")
+                        } else {
+                            tableView.scrollToRow(at: targetIndexPath, at: .top, animated: false)
+                            print("DEBUG: reload() - Scrolled to anchor index \(newIndex)")
+                        }
+                    }
+                    // データ増加後にフラグとアンカーをリセット
+                    isLoadingOlderMessages = false
+                    savedAnchorMessageId = nil
+                    savedAnchorOffset = 0
+                    print("DEBUG: reload() - Loading complete, flags reset")
+                } else {
+                    // データ未変更: メッセージ更新のみ、スクロールしない
+                    messages = newMessages
+                    tableView.reloadData()
+                    print("DEBUG: reload() - Data unchanged, waiting for actual data")
+                }
+                return
+            }
+
+            // 通常のリロード処理（過去ログ読み込み中でない場合）
             // 初回ロードまたは大幅な変更の場合は全体リロード
             if oldCount == 0 || abs(newCount - oldCount) > 10 {
                 messages = newMessages
@@ -607,18 +699,16 @@ struct ChatListRepresentable: UIViewRepresentable {
             var indexPathsToReload: [IndexPath] = []
             var indexPathsToInsert: [IndexPath] = []
 
-            // 既存メッセージの変更検出
             let minCount = min(oldCount, newCount)
             for i in 0..<minCount {
                 let oldMsg = messages[i]
                 let newMsg = newMessages[i]
-                // ID が同じでも content/status が変わっている場合は更新
                 if oldMsg.id == newMsg.id {
                     if oldMsg.content != newMsg.content || oldMsg.status != newMsg.status {
                         indexPathsToReload.append(IndexPath(row: i, section: 0))
                     }
                 } else {
-                    // ID が違う場合は全体リロード（順序変更）
+                    // ID が違う場合は全体リロード
                     messages = newMessages
                     tableView.reloadData()
                     scrollToBottomIfNeeded()
@@ -626,7 +716,6 @@ struct ChatListRepresentable: UIViewRepresentable {
                 }
             }
 
-            // 新規追加メッセージの検出
             if newCount > oldCount {
                 for i in oldCount..<newCount {
                     indexPathsToInsert.append(IndexPath(row: i, section: 0))
@@ -635,7 +724,6 @@ struct ChatListRepresentable: UIViewRepresentable {
 
             messages = newMessages
 
-            // バッチ更新（アニメーション無効化）
             UIView.performWithoutAnimation {
                 tableView.performBatchUpdates {
                     if !indexPathsToInsert.isEmpty {

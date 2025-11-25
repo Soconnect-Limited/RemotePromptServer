@@ -10,8 +10,14 @@ struct ChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatListRepresentable(messages: viewModel.messages, runner: viewModel.runnerName)
-                .background(Color(.systemBackground))
+            ChatListRepresentable(
+                messages: viewModel.messages,
+                runner: viewModel.runnerName,
+                onLoadMore: {
+                    await viewModel.loadMoreMessages()
+                }
+            )
+            .background(Color(.systemBackground))
 
             Divider()
 
@@ -22,9 +28,6 @@ struct ChatView: View {
                 isLoading: viewModel.isLoading,
                 isFocused: $isInputFocused
             )
-        }
-        .refreshable {
-            await viewModel.loadLatestMessages()
         }
         .background(Color(.systemBackground).ignoresSafeArea())
         .alert("エラー", isPresented: Binding(

@@ -90,7 +90,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     func loadMoreMessages() async {
+        print("DEBUG: loadMoreMessages() - START, canLoadMore=\(canLoadMoreHistory), isLoading=\(isLoadingMoreHistory), offset=\(historyOffset)")
         await fetchHistory(reset: false)
+        print("DEBUG: loadMoreMessages() - COMPLETED, messages count=\(messages.count)")
     }
 
     /// デバッグ用長文送信（UI貼り付け回避）
@@ -202,10 +204,9 @@ final class ChatViewModel: ObservableObject {
                 combinedMessages = newMessages + messages
             }
 
-            // UI負荷軽減のため最新 displayLimit 件に絞る
-            if combinedMessages.count > displayLimit {
-                combinedMessages = Array(combinedMessages.suffix(displayLimit))
-            }
+            // Note: displayLimitによる切り捨ては削除（過去ログ読み込み機能を有効にするため）
+            // メモリ管理はMessageStore.cacheLimitとMemoryPressureMonitorで行う
+            print("DEBUG: fetchHistory() - Final combinedMessages count: \(combinedMessages.count)")
 
             messageStore.replaceAll(combinedMessages)
             messages = messageStore.messages
