@@ -19,11 +19,14 @@ struct RemotePromptApp: App {
     }
 }
 
-class AppDelegate: NSObject, UIApplicationDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Set notification delegate for foreground notifications
+        UNUserNotificationCenter.current().delegate = self
+
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
@@ -41,6 +44,28 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
         return true
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    /// フォアグラウンドでも通知バナーを表示
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        print("📬 Received notification in foreground: \(notification.request.content.title)")
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// 通知タップ時の処理
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        print("📬 User tapped notification: \(response.notification.request.content.title)")
+        completionHandler()
     }
 
     func application(

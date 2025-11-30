@@ -60,7 +60,7 @@
 #### 1.4 依存ライブラリ追加
 
 - [x] `requirements.txt`に`aioapns==3.2.0`追加（PyAPNs2から変更）
-- [ ] `pip install aioapns`実行（次回サーバー起動時）
+- [x] `pip install aioapns`実行（次回サーバー起動時）
 
 ---
 
@@ -77,8 +77,8 @@
 
 #### 2.2 Xcodeプロジェクト設定
 
-- [ ] Signing & Capabilities → Push Notifications 追加
-- [ ] Bundle Identifierが`.env`の`APNS_BUNDLE_ID`と一致することを確認
+- [x] Signing & Capabilities → Push Notifications 追加
+- [x] Bundle Identifierが`.env`の`APNS_BUNDLE_ID`と一致することを確認
 
 #### 2.3 APIClientにnotify_token送信処理追加
 
@@ -92,52 +92,55 @@
 
 #### 3.1 APNsキーの取得と設定
 
-- [ ] Apple Developer Portal → Certificates, Identifiers & Profiles
-- [ ] Keys → 「+」ボタン → Apple Push Notifications service (APNs) にチェック
-- [ ] Continue → Register → Download (.p8ファイル)
-- [ ] Key IDとTeam IDをメモ
-- [ ] `.p8`ファイルを`~/Projects/RemotePrompt/secrets/`に保存
-- [ ] `.env`のAPNs設定をコメント解除して実際の値を記入
-- [ ] `.gitignore`に`secrets/`が含まれていることを確認
+- [x] Apple Developer Portal → Certificates, Identifiers & Profiles
+- [x] Keys → 「+」ボタン → Apple Push Notifications service (APNs) にチェック
+- [x] Continue → Register → Download (.p8ファイル)
+- [x] Key IDとTeam IDをメモ
+- [x] `.p8`ファイルを`~/Projects/RemotePrompt/secrets/`に保存
+- [x] `.env`のAPNs設定をコメント解除して実際の値を記入
+- [x] `.gitignore`に`secrets/`が含まれていることを確認
 
 #### 3.2 Xcodeプロジェクト設定
 
-- [ ] Xcodeで`RemotePrompt`ターゲットを選択
-- [ ] Signing & Capabilities → Push Notifications 追加
-- [ ] Bundle Identifierを`.env`の`APNS_BUNDLE_ID`と一致させる
+- [x] Xcodeで`RemotePrompt`ターゲットを選択
+- [x] Signing & Capabilities → Push Notifications 追加
+- [x] Bundle Identifierを`.env`の`APNS_BUNDLE_ID`と一致させる
 
 #### 3.3 サーバー再起動
 
-- [ ] `cd remote-job-server && pip install -r requirements.txt`
-- [ ] サーバー再起動
+- [x] `cd remote-job-server && pip install -r requirements.txt`
+- [x] サーバー再起動
 
 #### 3.4 実機テスト
 
-- [ ] iPhoneでアプリ起動（シミュレータではAPNs非対応）
-- [ ] 通知許可ダイアログで「許可」を選択
-- [ ] Xcodeコンソールで「📱 APNs Device Token: xxxxxxxx」を確認
-- [ ] Claudeにメッセージ送信
-- [ ] job完了時に通知が届くことを確認
+- [x] iPhoneでアプリ起動（シミュレータではAPNs非対応）
+- [x] 通知許可ダイアログで「許可」を選択
+- [x] Xcodeコンソールで「📱 APNs Device Token: xxxxxxxx」を確認
+- [x] Claudeにメッセージ送信
+- [x] job完了時に通知が届くことを確認
 
-#### 3.5 エラーケーステスト
+#### 3.5 エラーケーステスト ✅ 完了 (2025-11-30)
 
-- [ ] APNs設定不正時（.p8ファイル不在）
-- [ ] デバイストークン不正時
-- [ ] ネットワークエラー時
+- [x] APNs設定不正時（.p8ファイル不在）
+- [x] デバイストークン不正時
+- [x] ネットワークエラー時
 
-#### 3.6 watchOSテスト
+テストスクリプト: `Tests/apns/test_apns_error_cases.py`
 
-- [ ] Apple Watch単体でアプリ起動
-- [ ] 通知がWatchに届くことを確認
+#### 3.6 watchOSテスト ✅ 完了 (2025-11-30)
+
+- [x] 通知がWatchに届くことを確認（iOSミラーリング経由）
+
+※ watchOS専用アプリは未作成。iPhoneへの通知がApple Watchに自動転送されることを確認。
 
 ---
 
-## セキュリティチェックリスト
+## セキュリティチェックリスト ✅ 完了
 
-- [ ] `.p8`ファイルが`.gitignore`に含まれている
-- [ ] `.env`ファイルが`.gitignore`に含まれている
-- [ ] `secrets/`ディレクトリが`.gitignore`に含まれている
-- [ ] APNs送信失敗時もjob処理が継続する
+- [x] `.p8`ファイルが`.gitignore`に含まれている
+- [x] `.env`ファイルが`.gitignore`に含まれている
+- [x] `secrets/`ディレクトリが`.gitignore`に含まれている
+- [x] APNs送信失敗時もjob処理が継続する
 
 ---
 
@@ -147,8 +150,8 @@
 - [x] job_manager.pyに通知送信処理追加
 - [x] iOS AppDelegate実装完了
 - [x] ChatViewModelにnotify_token送信処理追加
-- [ ] 実機でjob完了時に通知受信確認
-- [ ] エラーケーステスト完了
+- [x] 実機でjob完了時に通知受信確認
+- [x] エラーケーステスト完了
 
 ---
 
