@@ -26,6 +26,7 @@ struct ChatView: View {
                 onSend: viewModel.sendMessage,
                 onCancel: viewModel.cancelInference,
                 isLoading: viewModel.isLoading,
+                isInferenceRunning: viewModel.isInferenceRunning,
                 isFocused: $isInputFocused
             )
         }

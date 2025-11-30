@@ -32,6 +32,8 @@ final class ChatViewModel: ObservableObject {
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
+    /// 推論中かどうか（SSE接続がある場合はtrue）
+    var isInferenceRunning: Bool { !sseConnections.isEmpty }
 
     init(
         runner: String = "claude",

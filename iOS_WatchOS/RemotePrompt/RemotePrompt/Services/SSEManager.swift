@@ -46,7 +46,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     override init() {
         super.init()
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 600  // 10分（長い推論時間に対応）
+        config.timeoutIntervalForRequest = 7200  // 2時間（長い推論時間に対応）
         config.httpAdditionalHeaders = [
             "Accept": "text/event-stream",
             "Cache-Control": "no-cache",
@@ -62,7 +62,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         // セッションが無効な場合は再生成（長時間接続後のフォールバック）
         if session == nil || !Constants.reuseSSESession {
             let config = URLSessionConfiguration.default
-            config.timeoutIntervalForRequest = 600
+            config.timeoutIntervalForRequest = 7200
             config.httpAdditionalHeaders = [
                 "Accept": "text/event-stream",
                 "Cache-Control": "no-cache",
@@ -90,7 +90,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
         request.httpMethod = "GET"
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue(Constants.apiKey, forHTTPHeaderField: "x-api-key")
-        request.timeoutInterval = 600.0
+        request.timeoutInterval = 7200.0
 
         task = session?.dataTask(with: request)
         print("DEBUG: SSEManager.connect() - Starting data task for job: \(jobId)")

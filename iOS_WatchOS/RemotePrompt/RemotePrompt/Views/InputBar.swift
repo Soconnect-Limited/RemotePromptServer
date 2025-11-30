@@ -5,6 +5,7 @@ struct InputBar: View {
     let onSend: () -> Void
     let onCancel: () -> Void
     let isLoading: Bool
+    let isInferenceRunning: Bool
     @FocusState.Binding var isFocused: Bool
 
     private func send() {
@@ -23,7 +24,7 @@ struct InputBar: View {
             if isFocused {
                 HStack {
                     // Cancel button (shown when inference is running)
-                    if isLoading {
+                    if isInferenceRunning {
                         Button {
                             onCancel()
                         } label: {
