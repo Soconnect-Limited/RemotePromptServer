@@ -199,6 +199,27 @@ actor PreviewAPIClient: APIClientProtocol {
         // Preview用なので何もしない
     }
 
+    /// v4.3.1: 既読API（runner指定オプション）
+    func markThreadAsRead(threadId: String, deviceId: String, runner: String?) async throws -> Thread {
+        // Preview用: runner指定がなければ全て既読、あれば該当runnerを削除
+        var unreadRunners = ["claude", "codex"]  // サンプルとして両方未読の状態
+        if let runner = runner {
+            unreadRunners.removeAll { $0 == runner }
+        } else {
+            unreadRunners = []
+        }
+        return Thread(
+            id: threadId,
+            roomId: "preview-room-id",
+            name: "Preview Thread",
+            deviceId: deviceId,
+            hasUnread: !unreadRunners.isEmpty,
+            unreadRunners: unreadRunners,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+    }
+
     private func key(for roomId: String, runner: String) -> String {
         "\(roomId)#\(runner)"
     }

@@ -65,6 +65,8 @@ protocol APIClientProtocol {
     func createThread(roomId: String, name: String, deviceId: String) async throws -> Thread
     func updateThread(threadId: String, name: String, deviceId: String) async throws -> Thread
     func deleteThread(threadId: String, deviceId: String) async throws
+    // v4.3.1: 既読API（runner指定オプション）
+    func markThreadAsRead(threadId: String, deviceId: String, runner: String?) async throws -> Thread
 }
 
 final class APIClient: APIClientProtocol {
@@ -546,5 +548,38 @@ final class APIClient: APIClientProtocol {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
         }
+    }
+
+    /// v4.3.1: スレッドを既読としてマークする（runner指定オプション）
+    func markThreadAsRead(threadId: String, deviceId: String, runner: String?) async throws -> Thread {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/threads/\(threadId)/read") else {
+            throw APIError.invalidURL
+        }
+        var queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+        if let runner = runner {
+            queryItems.append(URLQueryItem(name: "runner", value: runner))
+        }
+        components.queryItems = queryItems
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        return try decoder.decode(Thread.self, from: data)
     }
 }

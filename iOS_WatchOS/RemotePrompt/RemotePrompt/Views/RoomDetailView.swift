@@ -85,10 +85,28 @@ struct RoomDetailView: View {
                     // v4.1: Clear chatViewModel when switching threads
                     chatViewModel = nil
                 }
+                // v4.3.1: スレッド選択時に現在のrunnerを既読にする
+                Task { @MainActor in
+                    await threadListViewModel.markRunnerAsRead(
+                        threadId: thread.id,
+                        runner: selectedRunner.rawValue
+                    )
+                    updateSelectedThreadUnread(removeRunner: selectedRunner.rawValue)
+                }
             },
             viewModel: threadListViewModel
         )
         .navigationTitle(room.name)
+    }
+
+    // MARK: - Private Helpers
+
+    /// v4.3.1: 選択中スレッドのunreadRunnersからrunnerを削除
+    private func updateSelectedThreadUnread(removeRunner runner: String) {
+        guard var thread = selectedThread else { return }
+        thread.unreadRunners.removeAll { $0 == runner }
+        thread.hasUnread = !thread.unreadRunners.isEmpty
+        selectedThread = thread
     }
 
     private func chatViewContainer(for thread: Thread) -> some View {
@@ -121,20 +139,54 @@ struct RoomDetailView: View {
             // v4.1: Update runner dynamically without recreating ViewModel
             Task { @MainActor in
                 await chatViewModel?.updateRunner(newRunner.rawValue)
+                // v4.3.1: 選択されたrunnerを既読にする
+                if let thread = selectedThread {
+                    await threadListViewModel.markRunnerAsRead(
+                        threadId: thread.id,
+                        runner: newRunner.rawValue
+                    )
+                    // ローカルの状態も更新
+                    updateSelectedThreadUnread(removeRunner: newRunner.rawValue)
+                }
             }
         }
     }
 
     private var runnerPicker: some View {
-        Picker("Runner", selection: $selectedRunner) {
+        HStack(spacing: 0) {
             ForEach(RunnerTab.allCases) { tab in
-                Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                Button {
+                    selectedRunner = tab
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: tab.systemImage)
+                        Text(tab.title)
+                        // v4.3.1: runner別未読バッジ
+                        if let thread = selectedThread,
+                           thread.unreadRunners.contains(tab.rawValue) {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    .font(.subheadline)
+                    .fontWeight(selectedRunner == tab ? .semibold : .regular)
+                    .foregroundStyle(selectedRunner == tab ? .primary : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        selectedRunner == tab
+                            ? Color(.systemGray5)
+                            : Color.clear
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
             }
         }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.secondarySystemBackground))
     }
 
     @ToolbarContentBuilder

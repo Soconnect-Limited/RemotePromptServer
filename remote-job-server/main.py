@@ -108,6 +108,8 @@ class ThreadResponse(BaseModel):
     room_id: str
     name: str
     device_id: str
+    has_unread: bool = False
+    unread_runners: List[str] = []  # v4.3.1: runner別未読リスト
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -410,6 +412,44 @@ def delete_thread(
     db.commit()
     LOGGER.info("[NEW] Deleted thread %s", thread_id)
     return Response(status_code=204)
+
+
+@app.put("/threads/{thread_id}/read", response_model=ThreadResponse)
+def mark_thread_read(
+    thread_id: str,
+    device_id: str = Query(...),
+    runner: Optional[str] = Query(None),  # v4.3.1: 特定runnerを既読にする（なければ全て既読）
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> ThreadResponse:
+    """Mark a thread as read (clear unread flag for specific runner or all)."""
+    import json
+    thread = db.query(Thread).filter_by(id=thread_id).first()
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    ensure_room_owned(thread.room_id, device_id, db)
+
+    # v4.3.1: runner指定時はそのrunnerだけを既読に、なければ全て既読
+    if runner:
+        unread_list = []
+        if thread.unread_runners:
+            try:
+                unread_list = json.loads(thread.unread_runners)
+            except (json.JSONDecodeError, TypeError):
+                unread_list = []
+        if runner in unread_list:
+            unread_list.remove(runner)
+        thread.unread_runners = json.dumps(unread_list)
+        thread.has_unread = len(unread_list) > 0
+        LOGGER.info("[READ] Thread %s marked runner=%s as read (remaining=%s)", thread_id, runner, unread_list)
+    else:
+        thread.unread_runners = "[]"
+        thread.has_unread = False
+        LOGGER.info("[READ] Thread %s marked all as read", thread_id)
+
+    db.commit()
+    db.refresh(thread)
+    return ThreadResponse(**thread.to_dict())
 
 
 # ========== File Browser APIs ==========

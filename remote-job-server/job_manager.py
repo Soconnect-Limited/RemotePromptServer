@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 
 from database import SessionLocal
-from models import Job
+from models import Job, Thread
 from session_manager import SessionManager
 from apns_manager import APNsManager
 
@@ -115,6 +115,24 @@ class JobManager:
                 job.stderr = result.get("error", "")
 
             job.finished_at = utcnow()
+
+            # v4.3.1: スレッドにrunner別未読フラグを設定
+            if job.thread_id:
+                thread = db.query(Thread).filter_by(id=job.thread_id).first()
+                if thread:
+                    import json
+                    unread_list = []
+                    if thread.unread_runners:
+                        try:
+                            unread_list = json.loads(thread.unread_runners)
+                        except (json.JSONDecodeError, TypeError):
+                            unread_list = []
+                    if job.runner not in unread_list:
+                        unread_list.append(job.runner)
+                    thread.unread_runners = json.dumps(unread_list)
+                    thread.has_unread = True
+                    LOGGER.info("Set unread_runners=%s for thread %s", unread_list, job.thread_id)
+
             db.commit()
             self._broadcast_job_event(
                 job_id,
@@ -150,6 +168,24 @@ class JobManager:
                 job.exit_code = 1
                 job.stderr = "Internal error"
                 job.finished_at = utcnow()
+
+                # v4.3.1: スレッドにrunner別未読フラグを設定（エラー時も通知）
+                if job.thread_id:
+                    thread = db.query(Thread).filter_by(id=job.thread_id).first()
+                    if thread:
+                        import json
+                        unread_list = []
+                        if thread.unread_runners:
+                            try:
+                                unread_list = json.loads(thread.unread_runners)
+                            except (json.JSONDecodeError, TypeError):
+                                unread_list = []
+                        if job.runner not in unread_list:
+                            unread_list.append(job.runner)
+                        thread.unread_runners = json.dumps(unread_list)
+                        thread.has_unread = True
+                        LOGGER.info("Set unread_runners=%s for thread %s (error)", unread_list, job.thread_id)
+
                 db.commit()
                 self._broadcast_job_event(
                     job_id,

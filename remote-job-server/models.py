@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Integer,
@@ -61,6 +62,10 @@ class Thread(Base):
     name = Column(String(100), nullable=False, default="無題")
     # v4.2: runnerカラム削除 - Thread内で任意のrunnerを使用可能
     device_id = Column(String(100), nullable=False)
+    # v4.3: 未読フラグ - 推論完了時にtrue、スレッド表示時にfalse
+    has_unread = Column(Boolean, nullable=False, default=False)
+    # v4.3.1: runner別未読フラグ（JSON配列: ["claude", "codex"]など）
+    unread_runners = Column(Text, nullable=True, default="[]")
     created_at = Column(DateTime, nullable=False, default=utcnow)
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True)
 
@@ -75,12 +80,23 @@ class Thread(Base):
     )
 
     def to_dict(self) -> dict:
+        import json
+        unread_list = []
+        if self.unread_runners:
+            try:
+                unread_list = json.loads(self.unread_runners)
+            except (json.JSONDecodeError, TypeError):
+                unread_list = []
         return {
             "id": self.id,
             "room_id": self.room_id,
             "name": self.name,
             # v4.2: runnerフィールド削除
             "device_id": self.device_id,
+            # v4.3: 未読フラグ（後方互換性のため残す）
+            "has_unread": self.has_unread or len(unread_list) > 0,
+            # v4.3.1: runner別未読リスト
+            "unread_runners": unread_list,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

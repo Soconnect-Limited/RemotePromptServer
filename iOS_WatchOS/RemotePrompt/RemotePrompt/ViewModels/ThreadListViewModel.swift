@@ -111,4 +111,30 @@ final class ThreadListViewModel: ObservableObject {
 
         isLoading = false
     }
+
+    /// v4.3: スレッドを既読としてマーク（全runnerを既読）
+    func markThreadAsRead(threadId: String) async {
+        do {
+            let updatedThread = try await apiClient.markThreadAsRead(threadId: threadId, deviceId: deviceId, runner: nil)
+            if let index = threads.firstIndex(where: { $0.id == threadId }) {
+                threads[index] = updatedThread
+            }
+        } catch {
+            // 既読マークは失敗しても致命的ではないのでエラー表示しない
+            print("DEBUG: markThreadAsRead failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// v4.3.1: 特定のrunnerを既読としてマーク
+    func markRunnerAsRead(threadId: String, runner: String) async {
+        do {
+            let updatedThread = try await apiClient.markThreadAsRead(threadId: threadId, deviceId: deviceId, runner: runner)
+            if let index = threads.firstIndex(where: { $0.id == threadId }) {
+                threads[index] = updatedThread
+            }
+        } catch {
+            // 既読マークは失敗しても致命的ではないのでエラー表示しない
+            print("DEBUG: markRunnerAsRead failed: \(error.localizedDescription)")
+        }
+    }
 }

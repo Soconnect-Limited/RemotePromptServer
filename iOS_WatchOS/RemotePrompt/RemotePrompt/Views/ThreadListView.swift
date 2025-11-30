@@ -55,6 +55,12 @@ struct ThreadListView: View {
             } else {
                 List(viewModel.threads) { thread in
                     Button {
+                        // v4.3: スレッド選択時に既読APIを呼ぶ
+                        if thread.hasUnread {
+                            Task {
+                                await viewModel.markThreadAsRead(threadId: thread.id)
+                            }
+                        }
                         onThreadSelected(thread)
                     } label: {
                         ThreadRowView(thread: thread)
@@ -135,9 +141,17 @@ private struct ThreadRowView: View {
 
     var body: some View {
         HStack {
+            // v4.3: 未読インジケーター
+            if thread.hasUnread {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 10, height: 10)
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(thread.name)
                     .font(.headline)
+                    .fontWeight(thread.hasUnread ? .bold : .regular)
 
                 if let updatedAt = thread.updatedAt {
                     Text("最終会話: \(updatedAt, style: .date) \(updatedAt, style: .time)")
