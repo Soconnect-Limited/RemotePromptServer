@@ -60,16 +60,19 @@ final class ChatViewModel: ObservableObject {
         print("DEBUG: ChatViewModel init - roomId: \(roomId), threadId: \(threadId ?? "nil"), runner: \(runner)")
         print("DEBUG: ChatViewModel init - autoLoadMessages: \(autoLoadMessages), messages count: \(messages.count)")
 
-        // メモリ圧力監視（iOS13+）。警告で古いメッセージを削除、クリティカルでSSE切断
+        // メモリ圧力監視（iOS13+）。警告で古いメッセージを削減、クリティカルでSSE切断
         // Memory Leak Fix: [weak self] を使用して循環参照を防止
+        // Crash Fix: UITableView更新中のクラッシュ防止のため、clearAllではなくsafeReduceMessagesを使用
         if #available(iOS 13.0, *), !Self.memoryMonitorStarted {
             MemoryPressureMonitor.shared.start { [weak self] in
                 guard let self = self else { return }
-                self.messageStore.clearAll()
+                // 警告時: メッセージ数を半分に削減（古いものから削除）
+                self.safeReduceMessages()
             } onCritical: { [weak self] in
                 guard let self = self else { return }
                 self.cleanupAllConnections()
-                self.messageStore.clearAll()
+                // クリティカル時: メッセージを10件まで削減
+                self.safeReduceMessages(targetCount: 10)
             }
             Self.memoryMonitorStarted = true
         }
@@ -655,6 +658,35 @@ final class ChatViewModel: ObservableObject {
     private func cleanupAllConnections() {
         sseConnections.removeAll()
         sseCancellables.removeAll()
+    }
+
+    /// メモリプレッシャー時の安全なメッセージ削減
+    /// UITableViewのバッチ更新クラッシュを防ぐため、完全クリアではなく段階的削減を行う
+    /// - Parameter targetCount: 目標メッセージ数（デフォルト: 現在の半分）
+    private func safeReduceMessages(targetCount: Int? = nil) {
+        let currentCount = messages.count
+        let target = targetCount ?? max(currentCount / 2, 5)
+
+        guard currentCount > target else {
+            print("DEBUG: [MEMORY-PRESSURE] safeReduceMessages - Already at target count: \(currentCount) <= \(target)")
+            return
+        }
+
+        let removeCount = currentCount - target
+        print("DEBUG: [MEMORY-PRESSURE] safeReduceMessages - Reducing from \(currentCount) to \(target) (removing \(removeCount))")
+
+        // 古いメッセージから削除（配列の先頭から）
+        let reducedMessages = Array(messages.suffix(target))
+
+        // MessageStoreとmessagesを同時に更新（UITableViewが参照する前に完了）
+        messageStore.replaceAll(reducedMessages)
+        messages = reducedMessages
+
+        // ページング状態を調整
+        historyOffset = max(0, historyOffset - removeCount)
+        canLoadMoreHistory = true
+
+        print("DEBUG: [MEMORY-PRESSURE] safeReduceMessages - Completed, new count: \(messages.count)")
     }
 
     deinit {

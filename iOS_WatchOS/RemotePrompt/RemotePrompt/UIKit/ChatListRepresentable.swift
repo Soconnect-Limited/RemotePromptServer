@@ -687,17 +687,21 @@ struct ChatListRepresentable: UIViewRepresentable {
             }
 
             // 通常のリロード処理（過去ログ読み込み中でない場合）
-            // 初回ロードまたは大幅な変更の場合は全体リロード
-            if oldCount == 0 || abs(newCount - oldCount) > 10 {
+            // 初回ロード、大幅な変更、または完全クリアの場合は全体リロード
+            // Crash Fix: newCount == 0 も全体リロードで処理（バッチ更新クラッシュ防止）
+            if oldCount == 0 || newCount == 0 || abs(newCount - oldCount) > 10 {
                 messages = newMessages
                 tableView.reloadData()
-                scrollToBottomIfNeeded()
+                if newCount > 0 {
+                    scrollToBottomIfNeeded()
+                }
                 return
             }
 
             // 差分検出と部分更新
             var indexPathsToReload: [IndexPath] = []
             var indexPathsToInsert: [IndexPath] = []
+            var indexPathsToDelete: [IndexPath] = []
 
             let minCount = min(oldCount, newCount)
             for i in 0..<minCount {
@@ -717,8 +721,14 @@ struct ChatListRepresentable: UIViewRepresentable {
             }
 
             if newCount > oldCount {
+                // 行追加
                 for i in oldCount..<newCount {
                     indexPathsToInsert.append(IndexPath(row: i, section: 0))
+                }
+            } else if newCount < oldCount {
+                // 行削除（Crash Fix: メモリプレッシャーでのメッセージ削減対応）
+                for i in newCount..<oldCount {
+                    indexPathsToDelete.append(IndexPath(row: i, section: 0))
                 }
             }
 
@@ -726,6 +736,9 @@ struct ChatListRepresentable: UIViewRepresentable {
 
             UIView.performWithoutAnimation {
                 tableView.performBatchUpdates {
+                    if !indexPathsToDelete.isEmpty {
+                        tableView.deleteRows(at: indexPathsToDelete, with: .none)
+                    }
                     if !indexPathsToInsert.isEmpty {
                         tableView.insertRows(at: indexPathsToInsert, with: .none)
                     }
