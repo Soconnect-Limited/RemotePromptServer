@@ -133,6 +133,15 @@ class JobManager:
                     thread.has_unread = True
                     LOGGER.info("Set unread_runners=%s for thread %s", unread_list, job.thread_id)
 
+            # v4.3.2: コミット前にbadge_countを取得（この時点で未読フラグは設定済み）
+            # db.flush()で変更をDBに反映してからカウント
+            db.flush()
+            badge_count = db.query(Thread).join(Room).filter(
+                Room.device_id == job.device_id,
+                Thread.has_unread == True,  # noqa: E712
+            ).count()
+            LOGGER.info("🔔 Badge count for device %s: %d (before commit)", job.device_id, badge_count)
+
             db.commit()
             self._broadcast_job_event(
                 job_id,
@@ -146,15 +155,8 @@ class JobManager:
 
             # Send push notification with badge count
             if job.notify_token:
-                LOGGER.debug("🔔 Sending notification for token=%s", job.notify_token[:8])
+                LOGGER.info("🔔 Sending notification for token=%s with badge=%d", job.notify_token[:8], badge_count)
                 try:
-                    # v4.3.2: 未読スレッド数をbadgeに設定
-                    badge_count = db.query(Thread).join(Room).filter(
-                        Room.device_id == job.device_id,
-                        Thread.has_unread == True,  # noqa: E712
-                    ).count()
-                    LOGGER.debug("🔔 Badge count for device %s: %d", job.device_id, badge_count)
-
                     import asyncio
                     asyncio.run(
                         self.apns_manager.send_notification(
@@ -194,6 +196,14 @@ class JobManager:
                         thread.has_unread = True
                         LOGGER.info("Set unread_runners=%s for thread %s (error)", unread_list, job.thread_id)
 
+                # v4.3.2: コミット前にbadge_countを取得
+                db.flush()
+                badge_count = db.query(Thread).join(Room).filter(
+                    Room.device_id == job.device_id,
+                    Thread.has_unread == True,  # noqa: E712
+                ).count()
+                LOGGER.info("🔔 Badge count for device %s: %d (error, before commit)", job.device_id, badge_count)
+
                 db.commit()
                 self._broadcast_job_event(
                     job_id,
@@ -207,14 +217,8 @@ class JobManager:
 
                 # Send push notification with badge count
                 if job.notify_token:
-                    LOGGER.debug("🔔 Sending notification (error) for token=%s", job.notify_token[:8])
+                    LOGGER.info("🔔 Sending notification (error) for token=%s with badge=%d", job.notify_token[:8], badge_count)
                     try:
-                        # v4.3.2: 未読スレッド数をbadgeに設定
-                        badge_count = db.query(Thread).join(Room).filter(
-                            Room.device_id == job.device_id,
-                            Thread.has_unread == True,  # noqa: E712
-                        ).count()
-
                         import asyncio
                         asyncio.run(
                             self.apns_manager.send_notification(
