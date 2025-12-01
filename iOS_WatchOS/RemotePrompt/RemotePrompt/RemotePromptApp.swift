@@ -11,10 +11,19 @@ import UserNotifications
 @main
 struct RemotePromptApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // v4.3.2: フォアグラウンド復帰時にバッジを更新
+            if newPhase == .active {
+                Task { @MainActor in
+                    await BadgeManager.shared.updateBadge()
+                }
+            }
         }
     }
 }

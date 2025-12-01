@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 
 from database import SessionLocal
-from models import Job, Thread
+from models import Job, Thread, Room
 from session_manager import SessionManager
 from apns_manager import APNsManager
 
@@ -144,16 +144,24 @@ class JobManager:
                 close_stream=True,
             )
 
-            # Send push notification
+            # Send push notification with badge count
             if job.notify_token:
                 LOGGER.debug("🔔 Sending notification for token=%s", job.notify_token[:8])
                 try:
+                    # v4.3.2: 未読スレッド数をbadgeに設定
+                    badge_count = db.query(Thread).join(Room).filter(
+                        Room.device_id == job.device_id,
+                        Thread.has_unread == True,  # noqa: E712
+                    ).count()
+                    LOGGER.debug("🔔 Badge count for device %s: %d", job.device_id, badge_count)
+
                     import asyncio
                     asyncio.run(
                         self.apns_manager.send_notification(
                             device_token=job.notify_token,
                             title="ジョブ完了",
                             body=f"{job.runner} の実行が{'成功' if job.status == 'success' else '失敗'}しました",
+                            badge=badge_count,
                         )
                     )
                 except Exception as e:
@@ -197,16 +205,23 @@ class JobManager:
                     close_stream=True,
                 )
 
-                # Send push notification
+                # Send push notification with badge count
                 if job.notify_token:
                     LOGGER.debug("🔔 Sending notification (error) for token=%s", job.notify_token[:8])
                     try:
+                        # v4.3.2: 未読スレッド数をbadgeに設定
+                        badge_count = db.query(Thread).join(Room).filter(
+                            Room.device_id == job.device_id,
+                            Thread.has_unread == True,  # noqa: E712
+                        ).count()
+
                         import asyncio
                         asyncio.run(
                             self.apns_manager.send_notification(
                                 device_token=job.notify_token,
                                 title="ジョブ完了",
                                 body=f"{job.runner} の実行が失敗しました",
+                                badge=badge_count,
                             )
                         )
                     except Exception as e:

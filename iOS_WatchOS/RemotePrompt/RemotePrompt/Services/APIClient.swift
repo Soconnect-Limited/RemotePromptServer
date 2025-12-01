@@ -67,6 +67,8 @@ protocol APIClientProtocol {
     func deleteThread(threadId: String, deviceId: String) async throws
     // v4.3.1: 既読API（runner指定オプション）
     func markThreadAsRead(threadId: String, deviceId: String, runner: String?) async throws -> Thread
+    // v4.3.2: 未読数取得API
+    func getUnreadCount(deviceId: String) async throws -> Int
 }
 
 final class APIClient: APIClientProtocol {
@@ -581,5 +583,43 @@ final class APIClient: APIClientProtocol {
         }
 
         return try decoder.decode(Thread.self, from: data)
+    }
+
+    /// v4.3.2: 未読スレッド数を取得する
+    func getUnreadCount(deviceId: String) async throws -> Int {
+        guard var components = URLComponents(string: "\(Constants.baseURL)/unread_count") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
+
+        struct UnreadCountResponse: Codable {
+            let deviceId: String
+            let unreadCount: Int
+
+            enum CodingKeys: String, CodingKey {
+                case deviceId = "device_id"
+                case unreadCount = "unread_count"
+            }
+        }
+        let decoded = try decoder.decode(UnreadCountResponse.self, from: data)
+        return decoded.unreadCount
     }
 }

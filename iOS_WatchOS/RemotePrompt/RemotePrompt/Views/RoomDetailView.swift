@@ -135,6 +135,16 @@ struct RoomDetailView: View {
         }
         .navigationTitle(thread.name)
         .transition(.move(edge: .trailing))
+        // v4.3.2: チャット画面表示時に既読にする
+        .onAppear {
+            Task { @MainActor in
+                await threadListViewModel.markRunnerAsRead(
+                    threadId: thread.id,
+                    runner: selectedRunner.rawValue
+                )
+                updateSelectedThreadUnread(removeRunner: selectedRunner.rawValue)
+            }
+        }
         .onChange(of: selectedRunner) { _, newRunner in
             // v4.1: Update runner dynamically without recreating ViewModel
             Task { @MainActor in

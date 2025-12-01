@@ -119,6 +119,8 @@ final class ThreadListViewModel: ObservableObject {
             if let index = threads.firstIndex(where: { $0.id == threadId }) {
                 threads[index] = updatedThread
             }
+            // v4.3.2: バッジを更新
+            await BadgeManager.shared.updateBadge()
         } catch {
             // 既読マークは失敗しても致命的ではないのでエラー表示しない
             print("DEBUG: markThreadAsRead failed: \(error.localizedDescription)")
@@ -132,6 +134,8 @@ final class ThreadListViewModel: ObservableObject {
             if let index = threads.firstIndex(where: { $0.id == threadId }) {
                 threads[index] = updatedThread
             }
+            // v4.3.2: バッジを更新
+            await BadgeManager.shared.updateBadge()
         } catch {
             // 既読マークは失敗しても致命的ではないのでエラー表示しない
             print("DEBUG: markRunnerAsRead failed: \(error.localizedDescription)")

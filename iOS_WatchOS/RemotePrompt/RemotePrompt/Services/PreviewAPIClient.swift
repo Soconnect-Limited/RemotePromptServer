@@ -220,6 +220,12 @@ actor PreviewAPIClient: APIClientProtocol {
         )
     }
 
+    /// v4.3.2: 未読数取得API
+    func getUnreadCount(deviceId: String) async throws -> Int {
+        // Preview用: 常に0を返す
+        return 0
+    }
+
     private func key(for roomId: String, runner: String) -> String {
         "\(roomId)#\(runner)"
     }

@@ -174,7 +174,18 @@ def get_rooms(
 ) -> List[dict]:
     # sort_orderでソート（小さい順）、同じ場合はupdated_atで降順
     rooms = db.query(Room).filter_by(device_id=device_id).order_by(Room.sort_order.asc(), Room.updated_at.desc()).all()
-    return [room.to_dict() for room in rooms]
+
+    # v4.3.2: 各Roomの未読スレッド数を取得
+    result = []
+    for room in rooms:
+        room_dict = room.to_dict()
+        unread_count = db.query(Thread).filter(
+            Thread.room_id == room.id,
+            Thread.has_unread == True,  # noqa: E712
+        ).count()
+        room_dict["unread_count"] = unread_count
+        result.append(room_dict)
+    return result
 
 
 @app.post("/rooms")
@@ -582,6 +593,21 @@ def create_job(
             raise HTTPException(status_code=400, detail="thread_id is required when THREADS_COMPAT_MODE=false")
         thread = _get_or_create_default_thread(db, room, req.runner)
         thread_id = thread.id
+
+    # v4.3.2: ジョブ送信時、送信runnerの未読をクリア（自分で見ているので）
+    if thread:
+        unread_list = []
+        if thread.unread_runners:
+            try:
+                unread_list = json.loads(thread.unread_runners)
+            except (json.JSONDecodeError, TypeError):
+                unread_list = []
+        if req.runner in unread_list:
+            unread_list.remove(req.runner)
+            thread.unread_runners = json.dumps(unread_list)
+            thread.has_unread = len(unread_list) > 0
+            db.commit()
+            LOGGER.info("[JOB] Cleared unread for runner=%s on thread=%s", req.runner, thread_id)
     try:
         room_settings = json.loads(room.settings) if room.settings else None
     except json.JSONDecodeError:
@@ -729,6 +755,20 @@ def delete_session(
 
     db.commit()
     return {"status": "ok", "deleted": deleted}
+
+
+@app.get("/unread_count")
+def get_unread_count(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Get total unread thread count for a device."""
+    count = db.query(Thread).join(Room).filter(
+        Room.device_id == device_id,
+        Thread.has_unread == True,  # noqa: E712
+    ).count()
+    return {"device_id": device_id, "unread_count": count}
 
 
 @app.get("/health")
