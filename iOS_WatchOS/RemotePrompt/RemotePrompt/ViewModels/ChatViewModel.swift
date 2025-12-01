@@ -1,5 +1,8 @@
 import Combine
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class ChatViewModel: ObservableObject {
@@ -29,6 +32,7 @@ final class ChatViewModel: ObservableObject {
     private let historyPageSize = 10  // Phase 4: ページング取得サイズ（10件ずつ）
     private var historyOffset = 0
     private let displayLimit = 30  // Memory Leak Fix: 表示制限を30件に削減（メモリ使用量削減）
+    private var foregroundObserver: NSObjectProtocol?  // フォアグラウンド復帰監視
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
@@ -86,12 +90,73 @@ final class ChatViewModel: ObservableObject {
                 print("DEBUG: ChatViewModel init - autoLoadMessages Task completed")
             }
         }
+
+        // フォアグラウンド復帰時に進行中のジョブを再取得
+        #if canImport(UIKit)
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                await self?.refreshRunningJobs()
+            }
+        }
+        #endif
     }
 
     func loadLatestMessages() async {
         print("DEBUG: loadLatestMessages() - START")
         await fetchHistory(reset: true)
         print("DEBUG: loadLatestMessages() - COMPLETED")
+    }
+
+    /// フォアグラウンド復帰時に進行中・待機中のジョブの状態を再取得
+    /// バックグラウンド中にSSE接続が切れた場合でも最新状態を反映する
+    func refreshRunningJobs() async {
+        let runningMessages = messages.filter { $0.isRunning || $0.status == .queued }
+        guard !runningMessages.isEmpty else {
+            print("DEBUG: refreshRunningJobs() - No running jobs to refresh")
+            return
+        }
+
+        print("DEBUG: refreshRunningJobs() - Refreshing \(runningMessages.count) running/queued jobs")
+
+        for message in runningMessages {
+            guard let jobId = message.jobId else { continue }
+            print("DEBUG: refreshRunningJobs() - Checking job: \(jobId)")
+
+            do {
+                let job = try await apiClient.fetchJob(id: jobId)
+                print("DEBUG: refreshRunningJobs() - Job \(jobId) status: \(job.status)")
+                guard let index = messages.firstIndex(where: { $0.id == message.id }) else { continue }
+
+                var updated = messages[index]
+                let newStatus = mapStatus(from: job.status)
+
+                // ステータスが変わった場合のみ更新
+                if updated.status != newStatus || updated.content != (job.stdout ?? "") {
+                    updated.status = newStatus
+                    updated.content = job.stdout ?? updated.content
+                    updated.finishedAt = job.finishedAt
+                    updated.errorMessage = job.stderr
+                    messages[index] = updated
+                    messageStore.updateMessage(updated)
+                    print("DEBUG: refreshRunningJobs() - Updated job \(jobId) to status: \(newStatus)")
+                }
+
+                // まだ実行中ならSSE再接続
+                if updated.isRunning && sseConnections[jobId] == nil {
+                    print("DEBUG: refreshRunningJobs() - Reconnecting SSE for running job: \(jobId)")
+                    finalResultFetched.remove(jobId)
+                    terminalStatusReceived.remove(jobId)
+                    startSSEStreaming(jobId: jobId, messageId: updated.id)
+                }
+            } catch {
+                print("DEBUG: refreshRunningJobs() - Error fetching job \(jobId): \(error.localizedDescription)")
+            }
+        }
+        print("DEBUG: refreshRunningJobs() - Completed")
     }
 
     func loadMoreMessages() async {
@@ -718,6 +783,11 @@ final class ChatViewModel: ObservableObject {
         sseCancellables.removeAll()
         finalResultFetched.removeAll()
         terminalStatusReceived.removeAll()
+
+        // フォアグラウンド監視を解除
+        if let observer = foregroundObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         print("DEBUG: ChatViewModel deinit - Cleanup completed")
     }
 }

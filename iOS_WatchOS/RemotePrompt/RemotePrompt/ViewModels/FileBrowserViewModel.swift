@@ -28,8 +28,18 @@ final class FileBrowserViewModel: ObservableObject {
         showRetry = false
         do {
             let items = try await fileService.listFiles(roomId: roomId, path: path, deviceId: deviceId)
+            // ソート: ディレクトリ優先、その後変更日時降順（最新が上）
+            let sortedItems = items.sorted { lhs, rhs in
+                if lhs.type == .directory && rhs.type != .directory {
+                    return true
+                }
+                if lhs.type != .directory && rhs.type == .directory {
+                    return false
+                }
+                return lhs.modifiedAt > rhs.modifiedAt
+            }
             await MainActor.run {
-                self.fileItems = items
+                self.fileItems = sortedItems
                 self.currentPath = path
                 self.pathComponents = path.split(separator: "/").map(String.init)
                 self.isLoading = false
