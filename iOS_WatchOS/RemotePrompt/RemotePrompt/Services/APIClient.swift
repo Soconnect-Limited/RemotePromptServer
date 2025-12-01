@@ -424,12 +424,28 @@ final class APIClient: APIClientProtocol {
         return try decoder.decode([Job].self, from: data)
     }
 
+    /// デバイスIDを取得（Keychainに永続保存、アプリ再インストールでも保持）
     static func getDeviceId() -> String {
-        if let saved = UserDefaults.standard.string(forKey: "remote_prompt_device_id") {
+        let keychainKey = "device_id"
+        let userDefaultsKey = "remote_prompt_device_id"
+
+        // 1. Keychainから取得を試みる
+        if let saved = KeychainHelper.get(key: keychainKey) {
             return saved
         }
+
+        // 2. UserDefaultsからの移行（既存ユーザー対応）
+        if let legacy = UserDefaults.standard.string(forKey: userDefaultsKey) {
+            KeychainHelper.set(key: keychainKey, value: legacy)
+            // 移行後もUserDefaultsは残す（バックアップとして）
+            return legacy
+        }
+
+        // 3. 新規生成してKeychainに保存
         let newId = UUID().uuidString
-        UserDefaults.standard.set(newId, forKey: "remote_prompt_device_id")
+        KeychainHelper.set(key: keychainKey, value: newId)
+        // バックアップとしてUserDefaultsにも保存
+        UserDefaults.standard.set(newId, forKey: userDefaultsKey)
         return newId
     }
 

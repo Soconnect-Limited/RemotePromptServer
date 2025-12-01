@@ -36,6 +36,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set notification delegate for foreground notifications
         UNUserNotificationCenter.current().delegate = self
 
+        // v4.3.3: DeviceIdをログ出力
+        let deviceId = APIClient.getDeviceId()
+        print("📱 DeviceId: \(deviceId)")
+
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
