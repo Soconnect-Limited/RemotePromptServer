@@ -563,6 +563,11 @@ final class ChatViewModel: ObservableObject {
             messages[index] = message
             messageStore.updateMessage(message)
 
+            // v4.3.2: ジョブ完了時に既読にする（チャット画面を見ている間に受信した場合）
+            if let threadId = threadId {
+                await markAsReadAndUpdateBadge(threadId: threadId)
+            }
+
 #if DEBUG && MEMORY_METRICS
             MemoryMetrics.logRSS("after fetchFinalResult", extra: "job=\(jobId) contentLen=\(message.content.count)")
 #endif
@@ -575,6 +580,17 @@ final class ChatViewModel: ObservableObject {
         } catch {
             print("DEBUG: Unknown error: \(error)")
             errorMessage = "不明なエラー: \(error.localizedDescription)"
+        }
+    }
+
+    /// v4.3.2: 既読APIを呼んでバッジを更新
+    private func markAsReadAndUpdateBadge(threadId: String) async {
+        do {
+            _ = try await apiClient.markThreadAsRead(threadId: threadId, deviceId: deviceId, runner: runner)
+            await BadgeManager.shared.updateBadge()
+            print("DEBUG: Marked thread \(threadId) runner \(runner) as read")
+        } catch {
+            print("DEBUG: Failed to mark as read: \(error.localizedDescription)")
         }
     }
 
