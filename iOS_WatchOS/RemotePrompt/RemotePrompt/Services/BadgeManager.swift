@@ -1,5 +1,6 @@
 import UIKit
 import UserNotifications
+import Security
 
 /// 自己署名証明書を無条件で信頼するシンプルなデリゲート
 /// 注意: BadgeManager専用。セキュリティ的にはCertificatePinningDelegateを使うべきだが、
@@ -12,6 +13,9 @@ private final class SimpleTrustDelegate: NSObject, URLSessionDelegate {
     ) {
         if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
            let serverTrust = challenge.protectionSpace.serverTrust {
+            // ホスト名検証をスキップ: IPアドレスでもドメイン名でも接続可能にする
+            let policy = SecPolicyCreateBasicX509()
+            SecTrustSetPolicies(serverTrust, policy)
             let credential = URLCredential(trust: serverTrust)
             completionHandler(.useCredential, credential)
         } else {

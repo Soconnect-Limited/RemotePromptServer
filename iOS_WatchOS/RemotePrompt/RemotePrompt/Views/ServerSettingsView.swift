@@ -52,19 +52,19 @@ struct ServerSettingsView: View {
             } message: {
                 certificateChangedAlertMessage
             }
-            .confirmationDialog("証明書信頼をリセット", isPresented: $showResetConfirmation) {
+            .alert("証明書信頼をリセット", isPresented: $showResetConfirmation) {
+                Button("キャンセル", role: .cancel) {}
                 Button("リセット", role: .destructive) {
                     viewModel.resetCertificateTrust()
                 }
-                Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("次回接続時に証明書の再確認が必要になります。")
             }
-            .confirmationDialog("すべての設定をリセット", isPresented: $showResetAllConfirmation) {
+            .alert("すべての設定をリセット", isPresented: $showResetAllConfirmation) {
+                Button("キャンセル", role: .cancel) {}
                 Button("すべてリセット", role: .destructive) {
                     viewModel.resetAllSettings()
                 }
-                Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("サーバー接続情報がすべて削除されます。")
             }
@@ -167,10 +167,10 @@ struct ServerSettingsView: View {
 
     private var serverURLSection: some View {
         Section {
-            TextField("サーバー名", text: $viewModel.serverName)
+            TextField("例: My Server", text: $viewModel.serverName)
 
             VStack(alignment: .leading, spacing: 4) {
-                TextField("https://192.168.11.110:8443", text: $viewModel.serverURL)
+                TextField("例: https://192.168.1.100:8443", text: $viewModel.serverURL)
                     .textContentType(.URL)
                     .keyboardType(.URL)
                     .autocapitalization(.none)
@@ -196,7 +196,7 @@ struct ServerSettingsView: View {
             ForEach(viewModel.alternativeURLs.indices, id: \.self) { index in
                 HStack {
                     Text(viewModel.alternativeURLs[index])
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.primary) // 入力済みは白（ライトモードでは黒）
                     Spacer()
                     Button {
                         viewModel.removeAlternativeURL(at: index)
@@ -209,7 +209,7 @@ struct ServerSettingsView: View {
             }
 
             HStack {
-                TextField("https://100.100.30.35:8443", text: $newAlternativeURL)
+                TextField("例: https://100.64.0.1:8443", text: $newAlternativeURL)
                     .textContentType(.URL)
                     .keyboardType(.URL)
                     .autocapitalization(.none)
@@ -238,7 +238,7 @@ struct ServerSettingsView: View {
 
     private var apiKeySection: some View {
         Section {
-            SecureField("API Key", text: $viewModel.apiKey)
+            SecureField("例: your-secret-api-key", text: $viewModel.apiKey)
                 .textContentType(.password)
                 .autocapitalization(.none)
                 .autocorrectionDisabled()

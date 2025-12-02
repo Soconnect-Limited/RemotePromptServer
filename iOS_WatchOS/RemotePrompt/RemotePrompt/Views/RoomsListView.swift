@@ -140,8 +140,13 @@ struct RoomsListView: View {
                     }
                 }
                 Button("設定を開く") {
-                    showingCertificateError = false
-                    showingServerSettings = true
+                    // エラーメッセージもクリア（ルーム取得失敗アラートを抑制）
+                    viewModel.errorMessage = nil
+                    pendingCertificateFingerprint = nil
+                    // アラートが自動で閉じてからシートを開く
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showingServerSettings = true
+                    }
                 }
                 Button("キャンセル", role: .cancel) {
                     showingCertificateError = false

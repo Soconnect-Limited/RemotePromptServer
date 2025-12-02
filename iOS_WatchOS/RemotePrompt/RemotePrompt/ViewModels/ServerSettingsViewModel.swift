@@ -131,11 +131,15 @@ final class ServerSettingsViewModel: ObservableObject {
     func trustCertificate() {
         guard let info = pendingCertificateInfo ?? certificateInfo else { return }
 
-        // DERデータがあれば一緒に保存（将来の証明書比較に使用）
-        store.trustCertificate(fingerprint: info.fingerprint, certificateData: pendingCertificateData)
+        // 重要: 先にViewModel上の設定を保存してから証明書信頼を設定する
+        // これにより alternativeURLs 等の設定が失われない
+        // （store.trustCertificate は currentConfiguration を使って保存するため）
 
-        // 設定を保存
+        // 1. まずViewModelの設定を保存（alternativeURLs等を含む）
         saveConfiguration()
+
+        // 2. その後で証明書信頼を設定（フィンガープリントとisTrustedを更新）
+        store.trustCertificate(fingerprint: info.fingerprint, certificateData: pendingCertificateData)
 
         showCertificateAlert = false
         showCertificateChangedAlert = false
@@ -392,6 +396,11 @@ final class TestConnectionDelegate: NSObject, URLSessionDelegate {
         if let certData = CertificateValidator.extractCertificateData(from: serverTrust) {
             lastCertificateData = certData
         }
+
+        // ホスト名検証をスキップ: 接続テストではIPアドレスでもドメイン名でも許可
+        // BasicX509ポリシーでホスト名検証を無効化
+        let policy = SecPolicyCreateBasicX509()
+        SecTrustSetPolicies(serverTrust, policy)
 
         // 接続テストでは全ての証明書を許可（ユーザー確認前）
         let credential = URLCredential(trust: serverTrust)

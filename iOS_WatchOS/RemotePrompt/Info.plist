@@ -20,10 +20,10 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 
-	<!-- App Transport Security Settings for Local Network with Self-Signed Certificates -->
+	<!-- App Transport Security Settings -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- ローカルネットワークの自己署名証明書を許可 -->
+		<!-- ローカルネットワーク接続を許可（Bonjour検出用） -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>

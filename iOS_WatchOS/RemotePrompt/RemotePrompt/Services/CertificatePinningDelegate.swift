@@ -89,6 +89,9 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
         // バイパスモードの場合は無条件で信頼（接続テスト用）
         if bypassValidation {
             print("[CertificatePinningDelegate] Bypass mode - accepting certificate")
+            // ATS バイパス: BasicX509ポリシーで評価
+            let policy = SecPolicyCreateBasicX509()
+            SecTrustSetPolicies(serverTrust, policy)
             let credential = URLCredential(trust: serverTrust)
             completionHandler(.useCredential, credential)
             return
@@ -115,6 +118,9 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
                let certData = CertificateValidator.extractCertificateData(from: serverTrust) {
                 handler(receivedFingerprint, certData) { trusted in
                     if trusted {
+                        // ATS バイパス: BasicX509ポリシーで評価
+                        let policy = SecPolicyCreateBasicX509()
+                        SecTrustSetPolicies(serverTrust, policy)
                         let credential = URLCredential(trust: serverTrust)
                         completionHandler(.useCredential, credential)
                     } else {
@@ -125,6 +131,9 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
                 // コールバック未設定 → 自己署名証明書を一時的に受け入れる
                 // （初回接続時のみ。設定画面で正式に信頼を設定する）
                 print("[CertificatePinningDelegate] Temporarily accepting self-signed certificate")
+                // ATS バイパス: BasicX509ポリシーで評価
+                let policy = SecPolicyCreateBasicX509()
+                SecTrustSetPolicies(serverTrust, policy)
                 let credential = URLCredential(trust: serverTrust)
                 completionHandler(.useCredential, credential)
             }
@@ -136,6 +145,15 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
             // 一致 → 即座に接続許可
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
             print("[CertificatePinningDelegate] Certificate fingerprint matched in \(String(format: "%.3f", elapsed))s @ \(Date())")
+
+            // ホスト名検証をスキップ: フィンガープリントが一致していれば、
+            // IPアドレスでもドメイン名でも同じ証明書として信頼する
+            // これにより LAN(192.168.x.x) / Tailscale(100.x.x.x) / ドメイン名 すべてで接続可能
+            let policy = SecPolicyCreateBasicX509()
+            SecTrustSetPolicies(serverTrust, policy)
+
+            // フィンガープリントが一致していれば評価結果は無視して続行
+            // （ホスト名不一致エラーなどを無視）
             let credential = URLCredential(trust: serverTrust)
             completionHandler(.useCredential, credential)
         } else {
@@ -150,6 +168,9 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate {
             if let handler = onCertificateMismatchDetected {
                 handler(storedFingerprint, receivedFingerprint) { trustNew in
                     if trustNew {
+                        // ATS バイパス: BasicX509ポリシーで評価
+                        let policy = SecPolicyCreateBasicX509()
+                        SecTrustSetPolicies(serverTrust, policy)
                         let credential = URLCredential(trust: serverTrust)
                         completionHandler(.useCredential, credential)
                     } else {

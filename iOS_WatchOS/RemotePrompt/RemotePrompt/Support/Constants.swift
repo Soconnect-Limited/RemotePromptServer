@@ -44,6 +44,37 @@ enum Constants {
         ServerConfigurationStore.shared.currentConfiguration
     }
 
+    /// 自動フォールバックが有効かどうか
+    static var autoFallbackEnabled: Bool {
+        ServerConfigurationStore.shared.currentConfiguration?.autoFallback ?? false
+    }
+
+    /// 全ての有効なURL（メイン + 代替）を返す
+    /// autoFallbackが無効の場合はメインURLのみ
+    static var allURLs: [String] {
+        guard let config = ServerConfigurationStore.shared.currentConfiguration else {
+            let legacy = legacyConfiguration.baseURL
+            return legacy.isEmpty ? [] : [legacy]
+        }
+
+        var urls: [String] = []
+        if !config.url.isEmpty {
+            urls.append(sanitizeURL(config.url))
+        }
+
+        // autoFallbackが有効な場合のみ代替URLを追加
+        if config.autoFallback {
+            for altURL in config.alternativeURLs {
+                let sanitized = sanitizeURL(altURL)
+                if !sanitized.isEmpty && !urls.contains(sanitized) {
+                    urls.append(sanitized)
+                }
+            }
+        }
+
+        return urls
+    }
+
     /// URLの末尾スラッシュを除去
     private static func sanitizeURL(_ url: String) -> String {
         var result = url
