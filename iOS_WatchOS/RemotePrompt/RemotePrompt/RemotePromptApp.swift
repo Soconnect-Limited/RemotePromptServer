@@ -19,9 +19,13 @@ struct RemotePromptApp: App {
         }
         .onChange(of: scenePhase) { _, newPhase in
             // v4.3.2: フォアグラウンド復帰時にバッジを更新
+            // BadgeManagerは独自URLSessionを使用し、内部で2秒遅延してからルーム読み込みと競合しない
+            print("[RemotePromptApp] scenePhase changed to: \(newPhase) @ \(Date())")
             if newPhase == .active {
-                Task { @MainActor in
+                print("[RemotePromptApp] Starting badge update (detached) @ \(Date())")
+                Task.detached {
                     await BadgeManager.shared.updateBadge()
+                    print("[RemotePromptApp] Badge update completed @ \(Date())")
                 }
             }
         }

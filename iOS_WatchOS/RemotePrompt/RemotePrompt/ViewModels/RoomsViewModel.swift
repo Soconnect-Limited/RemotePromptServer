@@ -25,14 +25,38 @@ final class RoomsViewModel: ObservableObject {
     }
 
     func loadRooms() async {
-        guard ensureAPIKeyConfigured() else { return }
+        let startTime = CFAbsoluteTimeGetCurrent()
+        print("[RoomsViewModel] loadRooms START @ \(Date())")
+        guard ensureAPIKeyConfigured() else {
+            print("[RoomsViewModel] API key not configured")
+            return
+        }
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+            print("[RoomsViewModel] loadRooms TOTAL: \(String(format: "%.2f", elapsed))s")
+        }
 
         do {
+            let t1 = CFAbsoluteTimeGetCurrent()
+            print("[RoomsViewModel] calling fetchRooms...")
             let fetched = try await apiClient.fetchRooms(deviceId: deviceId)
-            rooms = sortRooms(fetched)
+            let t2 = CFAbsoluteTimeGetCurrent()
+            print("[RoomsViewModel] fetchRooms returned \(fetched.count) rooms in \(String(format: "%.2f", t2 - t1))s")
+
+            // 明示的にMainActorで更新（objectWillChangeを強制発火）
+            let sorted = sortRooms(fetched)
+            objectWillChange.send()
+            rooms = sorted
+            print("[RoomsViewModel] rooms assigned @ \(Date()), count=\(rooms.count)")
+
+            // 次のRunLoopで確認
+            DispatchQueue.main.async {
+                print("[RoomsViewModel] 🔄 Main queue callback after assignment @ \(Date())")
+            }
         } catch {
+            print("[RoomsViewModel] error: \(error)")
             errorMessage = error.localizedDescription
         }
     }

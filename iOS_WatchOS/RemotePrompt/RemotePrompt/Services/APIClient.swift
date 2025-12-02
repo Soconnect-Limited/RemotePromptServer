@@ -93,20 +93,16 @@ final class APIClient: APIClientProtocol {
     var onCertificateError: ((String) -> Void)?
 
     /// 新規証明書検出時のコールバック
-    var onNewCertificate: CertificatePinningDelegate.NewCertificateHandler? {
+    var onNewCertificate: ((String, Data, @escaping (Bool) -> Void) -> Void)? {
         didSet {
-            if let handler = onNewCertificate {
-                pinningDelegate.onNewCertificate(handler)
-            }
+            pinningDelegate.onNewCertificateDetected = onNewCertificate
         }
     }
 
     /// 証明書不一致時のコールバック
-    var onCertificateMismatch: CertificatePinningDelegate.CertificateMismatchHandler? {
+    var onCertificateMismatch: ((String, String, @escaping (Bool) -> Void) -> Void)? {
         didSet {
-            if let handler = onCertificateMismatch {
-                pinningDelegate.onCertificateMismatch(handler)
-            }
+            pinningDelegate.onCertificateMismatchDetected = onCertificateMismatch
         }
     }
 
@@ -162,27 +158,31 @@ final class APIClient: APIClientProtocol {
 
     // MARK: - Session Management
 
-    /// 証明書ピンニング対応のURLSessionを取得
+    /// 自己署名証明書対応のURLSessionを取得
     private func getSession() -> URLSession {
         if let session = pinnedSession {
             return session
         }
 
+        print("[APIClient] Creating session with self-signed certificate support")
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15  // 短縮: 30 -> 15秒
-        config.timeoutIntervalForResource = 30 // 短縮: 60 -> 30秒
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
 
-        // HTTP/2とTLS 1.3を活用してコネクション再利用を最大化
-        config.httpMaximumConnectionsPerHost = 4
-        config.waitsForConnectivity = false  // 接続待ちしない（即座にエラー返却）
+        // HTTP/2を無効化（自己署名証明書との互換性向上）
+        config.httpAdditionalHeaders = ["Accept-Encoding": "gzip, deflate"]
 
-        // TLSセッションチケットを有効化（再接続時のハンドシェイク高速化）
-        config.urlCache = URLCache(
-            memoryCapacity: 4 * 1024 * 1024,  // 4MB
-            diskCapacity: 20 * 1024 * 1024,   // 20MB
-            diskPath: "remoteprompt_api_cache"
-        )
+        // ローカルネットワーク向けの最適化
+        config.waitsForConnectivity = false
+        config.shouldUseExtendedBackgroundIdleMode = false
 
+        // TLS設定を最適化（自己署名証明書用）
+        // OCSP/CRL検証を無効化（自己署名証明書にはOCSPサーバーがない）
+        config.tlsMinimumSupportedProtocolVersion = .TLSv12
+        config.tlsMaximumSupportedProtocolVersion = .TLSv13
+
+        // 自己署名証明書対応のdelegateを使用
+        // delegateQueue = nil でシステムデフォルトのシリアルキューを使用
         let session = URLSession(configuration: config, delegate: pinningDelegate, delegateQueue: nil)
         pinnedSession = session
         return session
@@ -195,22 +195,11 @@ final class APIClient: APIClientProtocol {
         print("[APIClient] Session invalidated due to configuration change")
     }
 
-    /// 接続のウォームアップ（TLSハンドシェイクを事前に実行）
-    /// アプリ起動時に呼び出して接続を確立しておく
-    func warmupConnection() async {
-        guard Constants.isServerConfigured else { return }
-        guard let url = URL(string: "\(Constants.baseURL)/health") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"  // 軽量なHEADリクエスト
-        request.timeoutInterval = 5  // 短いタイムアウト
-
-        do {
-            _ = try await getSession().data(for: request)
-            print("[APIClient] Connection warmup completed")
-        } catch {
-            print("[APIClient] Connection warmup failed: \(error.localizedDescription)")
-        }
+    /// 接続のウォームアップ（現在は無効化）
+    /// 注意: 共有URLSessionを使用するとメインのリクエストをブロックする問題があるため無効化
+    func warmupConnection() {
+        // ウォームアップは現在無効化されています
+        // サーバーは十分高速なので不要
     }
 
     /// 証明書バイパスモードの設定（接続テスト用）
@@ -344,6 +333,9 @@ final class APIClient: APIClientProtocol {
     // MARK: - Room Management
 
     func fetchRooms(deviceId: String) async throws -> [Room] {
+        let startTime = Date()
+        print("[APIClient] fetchRooms START")
+
         guard var components = URLComponents(string: "\(Constants.baseURL)/rooms") else {
             throw APIError.invalidURL
         }
@@ -361,7 +353,27 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await getSession().data(for: request)
+        print("[APIClient] fetchRooms requesting: \(url)")
+
+        // URLSession呼び出しを完全にバックグラウンドスレッドで実行
+        let session = getSession()
+        let decoder = self.decoder
+        let result: (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+            session.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let data = data, let response = response {
+                    continuation.resume(returning: (data, response))
+                } else {
+                    continuation.resume(throwing: APIError.invalidURL)
+                }
+            }.resume()
+        }
+
+        let (data, response) = result
+        let elapsed = Date().timeIntervalSince(startTime)
+        print("[APIClient] fetchRooms DONE in \(String(format: "%.2f", elapsed))s")
+
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)

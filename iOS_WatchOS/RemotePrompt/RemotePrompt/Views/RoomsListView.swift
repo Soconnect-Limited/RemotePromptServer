@@ -1,10 +1,15 @@
 import SwiftUI
+import Combine
 
 struct RoomsListView: View {
     @StateObject private var viewModel: RoomsViewModel
     @State private var showingCreateRoom = false
     @State private var showingServerSettings = false
     @State private var hasLoadedOnce = false
+    @State private var showingCertificateError = false
+    @State private var certificateErrorMessage = ""
+    @State private var pendingCertificateFingerprint: String?
+    @State private var isEditMode = false
     private let detailAPIClient: APIClientProtocol
 
     init(viewModel: RoomsViewModel? = nil) {
@@ -28,6 +33,9 @@ struct RoomsListView: View {
     }
 
     var body: some View {
+        // デバッグ: bodyの再評価タイミング
+        let _ = print("[RoomsListView] body evaluated @ \(Date()), rooms.count=\(viewModel.rooms.count), hasLoadedOnce=\(hasLoadedOnce)")
+
         NavigationStack {
             List {
                 if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
@@ -58,43 +66,51 @@ struct RoomsListView: View {
                     }
                     .onDelete(perform: deleteRooms)
                     .onMove(perform: moveRooms)
+                    .onAppear {
+                        print("[RoomsListView] ✅ ROOMS VISIBLE @ \(Date())")
+                    }
                 }
             }
             .accessibilityIdentifier("rooms.list")
             .listStyle(.plain)
             .navigationTitle("Rooms")
+            .environment(\.editMode, .constant(isEditMode ? .active : .inactive))
             .navigationDestination(for: Room.self) { room in
                 RoomDetailView(room: room, apiClient: detailAPIClient)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    // カスタムEditボタン（標準EditButtonのAutoLayout警告を回避）
                     if !viewModel.rooms.isEmpty {
-                        EditButton()
+                        Button(isEditMode ? "完了" : "編集") {
+                            withAnimation {
+                                isEditMode.toggle()
+                            }
+                        }
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 16) {
-                        Button {
-                            showingServerSettings = true
-                        } label: {
-                            Image(systemName: "gear")
-                                .accessibilityIdentifier("rooms.settings.icon")
-                        }
-                        .accessibilityIdentifier("rooms.settings")
-
-                        Button {
-                            showingCreateRoom = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .accessibilityIdentifier("rooms.add.icon")
-                        }
-                        .accessibilityIdentifier("rooms.add")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingServerSettings = true
+                    } label: {
+                        Image(systemName: "gear")
                     }
+                    .accessibilityIdentifier("rooms.settings")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingCreateRoom = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityIdentifier("rooms.add")
                 }
             }
             .task {
+                print("[RoomsListView] .task START @ \(Date())")
                 await viewModel.loadRooms()
                 hasLoadedOnce = true
+                print("[RoomsListView] hasLoadedOnce = true @ \(Date())")
             }
             .refreshable {
                 await viewModel.loadRooms()
@@ -116,6 +132,64 @@ struct RoomsListView: View {
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
+            // 証明書エラー専用ダイアログ（即時表示）
+            .alert("証明書エラー", isPresented: $showingCertificateError) {
+                if let fingerprint = pendingCertificateFingerprint {
+                    Button("新しい証明書を信頼する") {
+                        trustNewCertificate(fingerprint: fingerprint)
+                    }
+                }
+                Button("設定を開く") {
+                    showingCertificateError = false
+                    showingServerSettings = true
+                }
+                Button("キャンセル", role: .cancel) {
+                    showingCertificateError = false
+                    pendingCertificateFingerprint = nil
+                }
+            } message: {
+                Text(certificateErrorMessage)
+            }
+            // 証明書ミスマッチ通知を購読
+            .onReceive(NotificationCenter.default.publisher(for: CertificatePinningDelegate.certificateMismatchNotification)) { notification in
+                handleCertificateMismatch(notification)
+            }
+        }
+    }
+
+    // MARK: - Certificate Error Handling
+
+    private func handleCertificateMismatch(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let storedFingerprint = userInfo["storedFingerprint"] as? String,
+              let receivedFingerprint = userInfo["receivedFingerprint"] as? String else {
+            return
+        }
+
+        // ローディング中なら即座にエラーダイアログを表示
+        print("[RoomsListView] Certificate mismatch detected - showing dialog immediately")
+
+        certificateErrorMessage = """
+        サーバー証明書が変更されました。
+
+        保存済み: \(storedFingerprint.prefix(16))...
+        受信: \(receivedFingerprint.prefix(16))...
+
+        これが予期された変更であれば、新しい証明書を信頼してください。
+        """
+        pendingCertificateFingerprint = receivedFingerprint
+        showingCertificateError = true
+    }
+
+    private func trustNewCertificate(fingerprint: String) {
+        ServerConfigurationStore.shared.trustCertificate(fingerprint: fingerprint)
+        CertificatePinningDelegate.shared.clearError()
+        APIClient.shared.invalidateSession()
+        pendingCertificateFingerprint = nil
+
+        // リロード
+        Task {
+            await viewModel.loadRooms()
         }
     }
 

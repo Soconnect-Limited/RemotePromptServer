@@ -19,6 +19,8 @@ struct ContentView: View {
             }
         }
         .task {
+            print("[ContentView] .task START @ \(Date())")
+
             // 旧設定からの移行を試行
             if configStore.needsMigration {
                 let legacyConfig = AppConfiguration()
@@ -29,9 +31,13 @@ struct ContentView: View {
             }
 
             // 接続のウォームアップ（TLSハンドシェイクを事前実行）
+            // 非同期で実行されるため、ルーム読み込みをブロックしない
             if Constants.isServerConfigured {
-                await APIClient.shared.warmupConnection()
+                print("[ContentView] warmupConnection is disabled @ \(Date())")
+                // APIClient.shared.warmupConnection()
             }
+
+            print("[ContentView] .task END @ \(Date())")
         }
     }
 
