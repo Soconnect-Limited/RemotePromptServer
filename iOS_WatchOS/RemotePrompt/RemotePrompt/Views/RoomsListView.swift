@@ -3,6 +3,7 @@ import SwiftUI
 struct RoomsListView: View {
     @StateObject private var viewModel: RoomsViewModel
     @State private var showingCreateRoom = false
+    @State private var showingServerSettings = false
     @State private var hasLoadedOnce = false
     private let detailAPIClient: APIClientProtocol
 
@@ -28,10 +29,14 @@ struct RoomsListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            List {
                 if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
-                    ProgressView("ルームを読み込み中...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    HStack {
+                        Spacer()
+                        ProgressView("ルームを読み込み中...")
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
                 } else if viewModel.rooms.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "folder.badge.plus")
@@ -43,23 +48,24 @@ struct RoomsListView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .listRowBackground(Color.clear)
                 } else {
-                    List {
-                        ForEach(viewModel.rooms) { room in
-                            NavigationLink(value: room) {
-                                RoomRowView(room: room)
-                            }
+                    ForEach(viewModel.rooms) { room in
+                        NavigationLink(value: room) {
+                            RoomRowView(room: room)
                         }
-                        .onDelete(perform: deleteRooms)
-                        .onMove(perform: moveRooms)
                     }
-                    .accessibilityIdentifier("rooms.list")
-                    .listStyle(.plain)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            EditButton()
-                        }
+                    .onDelete(perform: deleteRooms)
+                    .onMove(perform: moveRooms)
+                }
+            }
+            .accessibilityIdentifier("rooms.list")
+            .listStyle(.plain)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !viewModel.rooms.isEmpty {
+                        EditButton()
                     }
                 }
             }
@@ -69,13 +75,23 @@ struct RoomsListView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingCreateRoom = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .accessibilityIdentifier("rooms.add.icon")
+                    HStack(spacing: 16) {
+                        Button {
+                            showingServerSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                                .accessibilityIdentifier("rooms.settings.icon")
+                        }
+                        .accessibilityIdentifier("rooms.settings")
+
+                        Button {
+                            showingCreateRoom = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .accessibilityIdentifier("rooms.add.icon")
+                        }
+                        .accessibilityIdentifier("rooms.add")
                     }
-                    .accessibilityIdentifier("rooms.add")
                 }
             }
             .task {
@@ -88,6 +104,11 @@ struct RoomsListView: View {
             .sheet(isPresented: $showingCreateRoom) {
                 CreateRoomView(viewModel: viewModel)
                     .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showingServerSettings) {
+                ServerSettingsView()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert("エラー", isPresented: Binding(
                 get: { viewModel.errorMessage != nil },

@@ -1,6 +1,7 @@
 """FastAPI application exposing the Remote Job Server API."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 import json
 import logging
@@ -22,7 +23,20 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 
-from config import setup_logging, settings
+from config import setup_logging, settings, get_ssl_paths, is_certificate_fallback_warning
+from cert_generator import (
+    ensure_certificate_exists,
+    get_certificate_fingerprint,
+    get_certificate_info,
+    regenerate_certificate,
+    revoke_certificate,
+    print_certificate_banner,
+)
+from bonjour_publisher import (
+    start_bonjour_service_async,
+    stop_bonjour_service_async,
+    update_bonjour_fingerprint,
+)
 from database import SessionLocal, init_db
 from job_manager import JobManager
 from models import Device, DeviceSession, Job, Room, Thread, utcnow
@@ -46,10 +60,80 @@ setup_logging()
 
 LOGGER = logging.getLogger(__name__)
 
+# Global state for SSL mode tracking
+_current_ssl_mode: str = "unknown"
+_current_cert_fingerprint: str = ""
+_pending_cert_restart: bool = False
+_pending_cert_fingerprint: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
+    global _current_ssl_mode, _current_cert_fingerprint
+    global _pending_cert_restart, _pending_cert_fingerprint
+
     init_db()
+
+    # Initialize SSL certificate
+    try:
+        cert_path, key_path, mode_used = get_ssl_paths()
+        _current_ssl_mode = mode_used
+
+        # For self-signed mode, ensure certificate exists
+        if mode_used == "self_signed" and settings.ssl_auto_generate:
+            cert_path, key_path, fingerprint = ensure_certificate_exists(
+                hostname=settings.server_hostname,
+                san_ips=settings.get_san_ips_list(),
+            )
+            _current_cert_fingerprint = fingerprint
+        else:
+            _current_cert_fingerprint = get_certificate_fingerprint(cert_path)
+
+        # Reset pending state on startup (new certificate is now active)
+        _pending_cert_restart = False
+        _pending_cert_fingerprint = ""
+
+        LOGGER.info(
+            "[SSL] Using %s certificate: %s",
+            mode_used,
+            cert_path,
+        )
+
+        # Print banner for self-signed certificates
+        if mode_used == "self_signed":
+            server_url = f"https://{settings.server_hostname}:{settings.server_port}"
+            print_certificate_banner(cert_path, server_url)
+
+    except RuntimeError as e:
+        LOGGER.error("[SSL] Failed to initialize certificates: %s", e)
+        raise
+
+    # Start Bonjour service for local network discovery
+    if settings.bonjour_enabled:
+        try:
+            # hostname=None で socket.gethostname() を自動使用
+            # server_hostname は SSL/TLS 証明書用であり、Bonjour には不適切
+            await start_bonjour_service_async(
+                port=settings.server_port,
+                hostname=None,  # 自動取得
+                server_name=settings.bonjour_service_name,
+                fingerprint=_current_cert_fingerprint,
+                ssl_mode=_current_ssl_mode,
+            )
+            LOGGER.info("[Bonjour] Service published: _remoteprompt._tcp")
+        except Exception as e:
+            LOGGER.warning("[Bonjour] Failed to start service: %s", e)
+            # Bonjour failure is not fatal, continue startup
+
     yield
+
+    # Cleanup: Stop Bonjour service
+    if settings.bonjour_enabled:
+        try:
+            await stop_bonjour_service_async()
+            LOGGER.info("[Bonjour] Service stopped")
+        except Exception as e:
+            LOGGER.warning("[Bonjour] Error stopping service: %s", e)
 
 
 app = FastAPI(title="Remote Job Server", lifespan=lifespan)
@@ -773,4 +857,228 @@ def get_unread_count(
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    """Health check endpoint with certificate status."""
+    result = {
+        "status": "ok",
+        "ssl_mode": _current_ssl_mode,
+        "certificate_fallback_warning": is_certificate_fallback_warning(),
+        "certificate_fingerprint": _current_cert_fingerprint,
+    }
+    if _pending_cert_restart:
+        result["pending_restart"] = True
+        result["pending_fingerprint"] = _pending_cert_fingerprint
+    return result
+
+
+# ========== Certificate Management APIs ==========
+
+# Rate limiting state for certificate API
+_cert_api_access_log: dict = {}  # IP -> list of timestamps
+_cert_regenerate_last_time: dict = {}  # IP -> last regenerate timestamp
+
+
+def _check_cert_rate_limit(request: Request, limit: int = 10, window: int = 60) -> None:
+    """Check rate limit for certificate API (10 requests/minute/IP)."""
+    from time import time
+    client_ip = request.client.host if request.client else "unknown"
+    now = time()
+
+    if client_ip not in _cert_api_access_log:
+        _cert_api_access_log[client_ip] = []
+
+    # Clean old entries
+    _cert_api_access_log[client_ip] = [
+        t for t in _cert_api_access_log[client_ip] if now - t < window
+    ]
+
+    if len(_cert_api_access_log[client_ip]) >= limit:
+        LOGGER.warning("[AUDIT] Rate limit exceeded for /server/certificate from %s", client_ip)
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
+
+    _cert_api_access_log[client_ip].append(now)
+
+
+def _check_regenerate_rate_limit(request: Request) -> None:
+    """Check rate limit for certificate regeneration (1 request/hour/IP)."""
+    from time import time
+    client_ip = request.client.host if request.client else "unknown"
+    now = time()
+
+    if client_ip in _cert_regenerate_last_time:
+        elapsed = now - _cert_regenerate_last_time[client_ip]
+        if elapsed < 3600:  # 1 hour
+            remaining = int(3600 - elapsed)
+            LOGGER.warning(
+                "[AUDIT] Regenerate rate limit for %s, %d seconds remaining",
+                client_ip, remaining
+            )
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Try again in {remaining} seconds."
+            )
+
+
+@app.get("/server/certificate")
+def get_server_certificate(request: Request) -> dict:
+    """Get server certificate information (no auth required for initial connection).
+
+    Rate limited to 10 requests/minute/IP to prevent DoS.
+
+    Note: Returns the certificate currently in use by TLS handshake, not the file on disk.
+    After regeneration, this will still return the old certificate until server restart.
+    """
+    _check_cert_rate_limit(request)
+
+    client_ip = request.client.host if request.client else "unknown"
+    LOGGER.info("[AUDIT] Certificate info requested from %s", client_ip)
+
+    # Return the certificate actually in use (loaded at startup), not the file on disk
+    # This ensures consistency between API response and TLS handshake
+    return {
+        "fingerprint": _current_cert_fingerprint,
+        "ssl_mode": _current_ssl_mode,
+        "is_self_signed": _current_ssl_mode == "self_signed",
+        "pending_restart": _pending_cert_restart,
+        "pending_fingerprint": _pending_cert_fingerprint if _pending_cert_restart else None,
+    }
+
+
+class RegenerateCertificateRequest(BaseModel):
+    reason: str = "scheduled_rotation"  # or "compromised"
+
+
+@app.post("/server/certificate/regenerate")
+async def regenerate_server_certificate(
+    req: RegenerateCertificateRequest,
+    request: Request,
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Regenerate server certificate (admin only).
+
+    Security constraints:
+    - Requires API Key authentication
+    - Rate limited to 1 request/hour/IP
+    - Audit logged
+
+    Note: The new certificate will only be used after server restart.
+    Until then, /server/certificate and /health will show the old fingerprint
+    but indicate pending_restart=True with the new fingerprint.
+    """
+    global _pending_cert_restart, _pending_cert_fingerprint
+
+    from time import time
+    from datetime import datetime, timezone
+
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Rate limit check
+    _check_regenerate_rate_limit(request)
+
+    # Only allow for self-signed mode
+    if _current_ssl_mode != "self_signed":
+        raise HTTPException(
+            status_code=400,
+            detail="Certificate regeneration only available in self_signed mode"
+        )
+
+    # Audit log
+    LOGGER.warning(
+        "[AUDIT] Certificate regenerated: reason=%s, ip=%s, timestamp=%s",
+        req.reason,
+        client_ip,
+        datetime.now(timezone.utc).isoformat(),
+    )
+
+    try:
+        cert_path, key_path, old_fingerprint, new_fingerprint = regenerate_certificate(
+            hostname=settings.server_hostname,
+            san_ips=settings.get_san_ips_list(),
+        )
+
+        # Update rate limit timestamp
+        _cert_regenerate_last_time[client_ip] = time()
+
+        # Mark pending restart state (do NOT update _current_cert_fingerprint)
+        # The current TLS context still uses the old certificate until restart
+        _pending_cert_restart = True
+        _pending_cert_fingerprint = new_fingerprint
+
+        # Update Bonjour TXT record with new fingerprint
+        # Note: This updates the advertised fingerprint immediately, but the actual
+        # TLS certificate won't change until server restart
+        if settings.bonjour_enabled:
+            update_bonjour_fingerprint(new_fingerprint)
+            LOGGER.info("Bonjour TXT fingerprint updated to new certificate")
+
+        # Broadcast SSE notification with proper SSE format
+        event_data = {
+            "old_fingerprint": old_fingerprint,
+            "new_fingerprint": new_fingerprint,
+            "reason": req.reason,
+            "effective_after_restart": True,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        await sse_manager.broadcast_event("certificate_changed", event_data)
+
+        return {
+            "old_fingerprint": old_fingerprint,
+            "new_fingerprint": new_fingerprint,
+            "regenerated_at": datetime.now(timezone.utc).isoformat(),
+            "restart_required": True,
+            "current_in_use": old_fingerprint,
+        }
+
+    except Exception as e:
+        LOGGER.error("Failed to regenerate certificate: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to regenerate certificate: {e}")
+
+
+@app.get("/events", dependencies=[Depends(verify_api_key)])
+async def global_events_stream(request: Request) -> StreamingResponse:
+    """Global SSE endpoint for certificate and system events.
+
+    Subscribes to global events like:
+    - certificate_changed
+    - certificate_revoked
+    - certificate_mode_changed
+
+    Requires API Key authentication.
+    """
+    async def event_generator():
+        queue: asyncio.Queue = asyncio.Queue()
+        sse_manager._global_subscribers.add(queue)
+        LOGGER.info("[SSE-GLOBAL] New subscriber connected")
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    LOGGER.info("[SSE-GLOBAL] Client disconnected")
+                    break
+
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    if payload is None:
+                        break
+
+                    # Send with proper SSE format including event name
+                    event_name = payload.get("event", "message")
+                    data = payload.get("data", payload)
+                    yield f"event: {event_name}\ndata: {json.dumps(data)}\n\n"
+                    LOGGER.debug("[SSE-GLOBAL] Sent event: %s", event_name)
+
+                except asyncio.TimeoutError:
+                    # Send heartbeat
+                    yield ":ping\n\n"
+
+        finally:
+            sse_manager._global_subscribers.discard(queue)
+            LOGGER.info("[SSE-GLOBAL] Subscriber disconnected")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

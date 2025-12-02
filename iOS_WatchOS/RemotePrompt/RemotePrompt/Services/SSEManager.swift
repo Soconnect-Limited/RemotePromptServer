@@ -1,14 +1,24 @@
 import Combine
 import Foundation
+import Security
 
 #if canImport(UIKit)
 import UIKit
 #endif
 
-final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
+final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLSessionTaskDelegate {
     @Published var jobStatus: String = "queued"
     @Published var isConnected = false
     @Published var errorMessage: String?
+
+    /// 証明書変更イベント受信時のコールバック
+    var onCertificateChanged: ((CertificateChangedEvent) -> Void)?
+
+    /// 証明書失効イベント受信時のコールバック
+    var onCertificateRevoked: ((CertificateRevokedEvent) -> Void)?
+
+    /// 証明書モード変更イベント受信時のコールバック
+    var onCertificateModeChanged: ((CertificateModeChangedEvent) -> Void)?
 
     enum SSEState: String {
         case idle
@@ -43,8 +53,30 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
     private let MAX_BUFFER_SIZE = 1_048_576  // 1MB
 
+    // MARK: - Certificate Pinning
+    private let pinningDelegate = CertificatePinningDelegate.shared
+    private var cancellables = Set<AnyCancellable>()
+
     override init() {
         super.init()
+        createSession()
+        print("DEBUG: SSEManager.init() - Created URLSession with \(Constants.useMainDelegateQueue ? "main" : "bg") delegateQueue")
+
+        // 設定変更を監視してセッション再生成
+        NotificationCenter.default.publisher(for: .serverConfigurationChanged)
+            .sink { [weak self] _ in
+                self?.recreateSession()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .certificateTrustChanged)
+            .sink { [weak self] _ in
+                self?.recreateSession()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func createSession() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 7200  // 2時間（長い推論時間に対応）
         config.httpAdditionalHeaders = [
@@ -53,7 +85,12 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
             "Accept-Encoding": "identity",
         ]
         session = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
-        print("DEBUG: SSEManager.init() - Created URLSession with \(Constants.useMainDelegateQueue ? "main" : "bg") delegateQueue")
+    }
+
+    private func recreateSession() {
+        session?.invalidateAndCancel()
+        createSession()
+        print("DEBUG: SSEManager - Session recreated due to configuration change")
     }
 
     func connect(jobId: String) {
@@ -164,6 +201,12 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
 
         for index in 0..<(events.count - 1) {
             let eventBlock = events[index]
+
+            // 証明書関連イベントをチェック
+            if eventBlock.contains("event:") {
+                parseCertificateEvent(from: eventBlock)
+            }
+
             let dataPayload = eventBlock
                 .split(separator: "\n")
                 .compactMap { line -> String? in
@@ -241,6 +284,90 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate {
     ) {
         sseState = .responseReceived
         completionHandler(.allow)
+    }
+
+    // MARK: - URLSessionDelegate (Certificate Pinning)
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        // CertificatePinningDelegateに委譲
+        pinningDelegate.urlSession(session, didReceive: challenge, completionHandler: completionHandler)
+    }
+
+    // MARK: - Certificate Event Parsing
+
+    /// SSEイベントから証明書関連イベントをパース
+    private func parseCertificateEvent(from eventBlock: String) {
+        // イベント名を取得
+        var eventName: String?
+        var dataPayload: String = ""
+
+        for line in eventBlock.split(separator: "\n") {
+            let lineStr = String(line)
+            if lineStr.hasPrefix("event:") {
+                eventName = String(lineStr.dropFirst("event:".count)).trimmingCharacters(in: .whitespaces)
+            } else if lineStr.hasPrefix("data:") {
+                let data = String(lineStr.dropFirst("data:".count))
+                if data.first == " " {
+                    dataPayload += String(data.dropFirst())
+                } else {
+                    dataPayload += data
+                }
+            }
+        }
+
+        guard let eventName = eventName, !dataPayload.isEmpty,
+              let jsonData = dataPayload.data(using: .utf8) else {
+            return
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        switch eventName {
+        case "certificate_changed":
+            if let event = try? decoder.decode(CertificateChangedEvent.self, from: jsonData) {
+                print("[SSEManager] Received certificate_changed event")
+                DispatchQueue.main.async {
+                    self.onCertificateChanged?(event)
+                    // 信頼状態をリセット
+                    if var config = ServerConfigurationStore.shared.currentConfiguration {
+                        config.isTrusted = false
+                        ServerConfigurationStore.shared.save(config)
+                    }
+                }
+            }
+
+        case "certificate_revoked":
+            if let event = try? decoder.decode(CertificateRevokedEvent.self, from: jsonData) {
+                print("[SSEManager] Received certificate_revoked event")
+                DispatchQueue.main.async {
+                    self.onCertificateRevoked?(event)
+                    // 証明書をクリアして接続切断
+                    ServerConfigurationStore.shared.clearTrustedCertificate()
+                    self.disconnect()
+                }
+            }
+
+        case "certificate_mode_changed":
+            if let event = try? decoder.decode(CertificateModeChangedEvent.self, from: jsonData) {
+                print("[SSEManager] Received certificate_mode_changed event")
+                DispatchQueue.main.async {
+                    self.onCertificateModeChanged?(event)
+                    // 信頼状態をリセット
+                    if var config = ServerConfigurationStore.shared.currentConfiguration {
+                        config.isTrusted = false
+                        ServerConfigurationStore.shared.save(config)
+                    }
+                }
+            }
+
+        default:
+            break
+        }
     }
 }
 

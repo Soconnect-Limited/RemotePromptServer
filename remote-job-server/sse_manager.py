@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from time import time
 from typing import AsyncGenerator, Dict, Optional, Set
 
 LOGGER = logging.getLogger(__name__)
@@ -15,6 +16,10 @@ class SSEManager:
     def __init__(self) -> None:
         self._connections: Dict[str, Set[asyncio.Queue]] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        # Global event subscribers (for certificate events, etc.)
+        self._global_subscribers: Set[asyncio.Queue] = set()
+        # Rate limiting for broadcast events (event_name -> last_broadcast_time)
+        self._event_rate_limits: Dict[str, float] = {}
 
     @property
     def loop(self) -> Optional[asyncio.AbstractEventLoop]:
@@ -68,6 +73,74 @@ class SSEManager:
         connections = self._connections.pop(job_id, set())
         for queue in connections:
             await queue.put(None)
+
+    async def broadcast_event(
+        self,
+        event_name: str,
+        payload: dict,
+        rate_limit_seconds: int = 300,
+    ) -> int:
+        """Broadcast an event to all active SSE connections.
+
+        Used for certificate change notifications and other global events.
+
+        Args:
+            event_name: Name of the event (for rate limiting and SSE event field)
+            payload: Event data payload to broadcast
+            rate_limit_seconds: Minimum seconds between same events (default: 5 minutes)
+
+        Returns:
+            Number of connections that received the event
+
+        Note: The payload is wrapped with an 'event' field for proper SSE formatting.
+        Global subscribers (/events endpoint) format it as:
+            event: {event_name}
+            data: {json payload}
+        """
+        now = time()
+
+        # Check rate limit
+        last_broadcast = self._event_rate_limits.get(event_name, 0)
+        if now - last_broadcast < rate_limit_seconds:
+            LOGGER.warning(
+                "[SSE-RATE-LIMIT] Event %s rate limited, last broadcast %d seconds ago",
+                event_name,
+                int(now - last_broadcast),
+            )
+            return 0
+
+        self._event_rate_limits[event_name] = now
+
+        # Wrap payload with event name for proper SSE handling
+        wrapped_payload = {
+            "event": event_name,
+            "data": payload,
+        }
+
+        # Broadcast to all job subscribers (for backwards compatibility)
+        sent_count = 0
+        for job_id, connections in self._connections.items():
+            for queue in list(connections):
+                try:
+                    await queue.put(wrapped_payload)
+                    sent_count += 1
+                except Exception as e:
+                    LOGGER.warning("Failed to send event to queue: %s", e)
+
+        # Broadcast to global subscribers (/events endpoint)
+        for queue in list(self._global_subscribers):
+            try:
+                await queue.put(wrapped_payload)
+                sent_count += 1
+            except Exception as e:
+                LOGGER.warning("Failed to send event to global subscriber: %s", e)
+
+        LOGGER.info(
+            "[SSE-BROADCAST] Event %s sent to %d connections",
+            event_name,
+            sent_count,
+        )
+        return sent_count
 
 
 sse_manager = SSEManager()

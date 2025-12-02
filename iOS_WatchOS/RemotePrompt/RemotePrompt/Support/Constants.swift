@@ -1,24 +1,56 @@
 import Foundation
 
 enum Constants {
-    private static let configuration = AppConfiguration()
+    private static let legacyConfiguration = AppConfiguration()
 
     /// Base URL for the RemotePrompt server (without trailing slash).
+    /// ServerConfigurationStoreを優先し、未設定の場合は旧設定にフォールバック
     static var baseURL: String {
-        configuration.baseURL
+        if let config = ServerConfigurationStore.shared.currentConfiguration,
+           !config.url.isEmpty {
+            return sanitizeURL(config.url)
+        }
+        return legacyConfiguration.baseURL
     }
 
-    /// API Key sent via `x-api-key` header, optional for local development.
+    /// API Key sent via `x-api-key` header.
+    /// ServerConfigurationStoreを優先し、未設定の場合は旧設定にフォールバック
     static var apiKey: String? {
-        configuration.apiKey
+        if let config = ServerConfigurationStore.shared.currentConfiguration,
+           !config.apiKey.isEmpty {
+            return config.apiKey
+        }
+        return legacyConfiguration.apiKey
     }
 
     static var isAPIKeyConfigured: Bool {
-        configuration.isAPIKeyConfigured
+        if let config = ServerConfigurationStore.shared.currentConfiguration {
+            return !config.apiKey.isEmpty
+        }
+        return legacyConfiguration.isAPIKeyConfigured
+    }
+
+    /// サーバーが設定済みかどうか
+    static var isServerConfigured: Bool {
+        ServerConfigurationStore.shared.currentConfiguration != nil || !legacyConfiguration.baseURL.isEmpty
     }
 
     static var missingAPIKeyMessage: String {
-        "APIキーが未設定です。RemotePromptConfig.plistのRemotePromptAPIKey、Info.plist、または REMOTE_PROMPT_API_KEY 環境変数を設定してください。"
+        "APIキーが未設定です。サーバー設定画面からAPIキーを設定してください。"
+    }
+
+    /// 現在のサーバー設定
+    static var currentServerConfiguration: ServerConfiguration? {
+        ServerConfigurationStore.shared.currentConfiguration
+    }
+
+    /// URLの末尾スラッシュを除去
+    private static func sanitizeURL(_ url: String) -> String {
+        var result = url
+        while result.last == "/" {
+            result.removeLast()
+        }
+        return result
     }
 
     // Debug/behavior toggles (defaults follow spec unless上書き)

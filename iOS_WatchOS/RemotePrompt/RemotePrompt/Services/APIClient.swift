@@ -1,9 +1,12 @@
 import Foundation
+import Combine
 
 enum APIError: Error, LocalizedError {
     case invalidURL
     case httpError(Int)
     case missingAPIKey
+    case certificateError(String)
+    case serverNotConfigured
 
     var errorDescription: String? {
         switch self {
@@ -12,7 +15,11 @@ enum APIError: Error, LocalizedError {
         case .httpError(let code):
             return "サーバーエラー(\(code))"
         case .missingAPIKey:
-            return "APIキーが未設定です。RemotePromptConfig.plistを確認してください。"
+            return "APIキーが未設定です。サーバー設定を確認してください。"
+        case .certificateError(let message):
+            return "証明書エラー: \(message)"
+        case .serverNotConfigured:
+            return "サーバーが設定されていません。設定画面からサーバーを追加してください。"
         }
     }
 }
@@ -77,6 +84,32 @@ final class APIClient: APIClientProtocol {
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
+    // MARK: - Certificate Pinning Session
+    private var pinnedSession: URLSession?
+    private let pinningDelegate = CertificatePinningDelegate.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    /// 証明書エラー発生時のコールバック
+    var onCertificateError: ((String) -> Void)?
+
+    /// 新規証明書検出時のコールバック
+    var onNewCertificate: CertificatePinningDelegate.NewCertificateHandler? {
+        didSet {
+            if let handler = onNewCertificate {
+                pinningDelegate.onNewCertificate(handler)
+            }
+        }
+    }
+
+    /// 証明書不一致時のコールバック
+    var onCertificateMismatch: CertificatePinningDelegate.CertificateMismatchHandler? {
+        didSet {
+            if let handler = onCertificateMismatch {
+                pinningDelegate.onCertificateMismatch(handler)
+            }
+        }
+    }
+
     private init() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
@@ -112,6 +145,48 @@ final class APIClient: APIClientProtocol {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         self.encoder = encoder
+
+        // 設定変更を監視してセッション再生成
+        NotificationCenter.default.publisher(for: .serverConfigurationChanged)
+            .sink { [weak self] _ in
+                self?.invalidateSession()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .certificateTrustChanged)
+            .sink { [weak self] _ in
+                self?.invalidateSession()
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Session Management
+
+    /// 証明書ピンニング対応のURLSessionを取得
+    private func getSession() -> URLSession {
+        if let session = pinnedSession {
+            return session
+        }
+
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+
+        let session = URLSession(configuration: config, delegate: pinningDelegate, delegateQueue: nil)
+        pinnedSession = session
+        return session
+    }
+
+    /// セッションを無効化（設定変更時に呼び出し）
+    func invalidateSession() {
+        pinnedSession?.invalidateAndCancel()
+        pinnedSession = nil
+        print("[APIClient] Session invalidated due to configuration change")
+    }
+
+    /// 証明書バイパスモードの設定（接続テスト用）
+    func setBypassValidation(_ bypass: Bool) {
+        pinningDelegate.bypassValidation = bypass
     }
 
     func fetchJob(id: String) async throws -> Job {
@@ -127,7 +202,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -163,7 +238,7 @@ final class APIClient: APIClientProtocol {
         )
         request.httpBody = try encoder.encode(payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -184,7 +259,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -220,7 +295,7 @@ final class APIClient: APIClientProtocol {
             request.httpBody = Data("null".utf8)
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -257,7 +332,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -288,7 +363,7 @@ final class APIClient: APIClientProtocol {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -319,7 +394,7 @@ final class APIClient: APIClientProtocol {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -346,7 +421,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "DELETE"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -373,7 +448,7 @@ final class APIClient: APIClientProtocol {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -415,7 +490,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -471,7 +546,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -503,7 +578,7 @@ final class APIClient: APIClientProtocol {
         let payload = CreateThreadRequest(name: name)
         request.httpBody = try encoder.encode(payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -534,7 +609,7 @@ final class APIClient: APIClientProtocol {
         let payload = UpdateThreadRequest(name: name)
         request.httpBody = try encoder.encode(payload)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -561,7 +636,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "DELETE"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -592,7 +667,7 @@ final class APIClient: APIClientProtocol {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)
@@ -620,7 +695,7 @@ final class APIClient: APIClientProtocol {
         request.httpMethod = "GET"
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await getSession().data(for: request)
         guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? -1
             throw APIError.httpError(code)

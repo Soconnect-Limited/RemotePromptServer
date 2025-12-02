@@ -5,12 +5,13 @@
 //  Created by MacStudio on 2025/11/18.
 //
 
-import Testing
+import XCTest
+@testable import RemotePrompt
 
-struct RemotePromptTests {
+final class RemotePromptTests: XCTestCase {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    func testExample() {
+        // Basic test placeholder
+        XCTAssertTrue(true)
     }
-
 }

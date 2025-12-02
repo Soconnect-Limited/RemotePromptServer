@@ -7,3 +7,4 @@ python-dotenv==1.0.0
 httpx==0.26.0
 pyjwt==2.10.1
 cryptography==46.0.3
+zeroconf>=0.80.0

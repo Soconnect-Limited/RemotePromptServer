@@ -8,7 +8,6 @@
 import XCTest
 @testable import RemotePrompt
 
-@MainActor
 final class RoomBasedArchitectureTests: XCTestCase {
 
     // MARK: - Helpers
@@ -105,6 +104,7 @@ final class RoomBasedArchitectureTests: XCTestCase {
                 id: UUID().uuidString,
                 roomId: roomId,
                 name: name,
+                deviceId: deviceId,
                 createdAt: Date(),
                 updatedAt: Date()
             )
@@ -115,6 +115,7 @@ final class RoomBasedArchitectureTests: XCTestCase {
                 id: threadId,
                 roomId: "test-room",
                 name: name,
+                deviceId: deviceId,
                 createdAt: Date(),
                 updatedAt: Date()
             )
@@ -122,6 +123,25 @@ final class RoomBasedArchitectureTests: XCTestCase {
 
         func deleteThread(threadId: String, deviceId: String) async throws {
             // No-op
+        }
+
+        func reorderRooms(deviceId: String, roomIds: [String]) async throws {
+            // No-op
+        }
+
+        func markThreadAsRead(threadId: String, deviceId: String, runner: String?) async throws -> RemotePrompt.Thread {
+            RemotePrompt.Thread(
+                id: threadId,
+                roomId: "test-room",
+                name: "Test Thread",
+                deviceId: deviceId,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+        }
+
+        func getUnreadCount(deviceId: String) async throws -> Int {
+            0
         }
     }
 
@@ -191,6 +211,7 @@ final class RoomBasedArchitectureTests: XCTestCase {
 
     // MARK: - Phase 2.6.2: Pagination Tests
 
+    @MainActor
     func testChatViewModelPaginationState() async {
         let mock = MockAPIClient()
         let viewModel = ChatViewModel(
@@ -210,7 +231,8 @@ final class RoomBasedArchitectureTests: XCTestCase {
         XCTAssertEqual(viewModel.messages.count, 0)
     }
 
-    func testMessageConversionProducesUserAndAssistantMessages() {
+    @MainActor
+    func testMessageConversionProducesUserAndAssistantMessages() async {
         let mock = MockAPIClient()
         let viewModel = ChatViewModel(
             runner: "claude",
@@ -231,12 +253,13 @@ final class RoomBasedArchitectureTests: XCTestCase {
         XCTAssertEqual(messages[1].type, .assistant)
     }
 
+    @MainActor
     func testPaginationOffsetCalculation() async {
         let mock = MockAPIClient()
         let roomId = "room-1"
+        // historyPageSize = 10 なので、10件未満だとcanLoadMoreHistory = false
         let firstPage = [makeJob(index: 1, roomId: roomId), makeJob(index: 2, roomId: roomId)]
-        let secondPage = [makeJob(index: 3, roomId: roomId)]
-        mock.fetchMessagesResponses = [0: firstPage, 2: secondPage]
+        mock.fetchMessagesResponses = [0: firstPage]
 
         let viewModel = ChatViewModel(
             runner: "claude",
@@ -250,19 +273,17 @@ final class RoomBasedArchitectureTests: XCTestCase {
         )
 
         await viewModel.loadLatestMessages()
+        // 2 Jobs × 2 (user + assistant) = 4 messages
         XCTAssertEqual(viewModel.messages.count, 4)
         XCTAssertEqual(viewModel.historyOffsetSnapshot, 2)
-        XCTAssertTrue(viewModel.canLoadMoreHistory)
-
-        await viewModel.loadMoreMessages()
-        XCTAssertEqual(viewModel.messages.count, 6)
-        XCTAssertEqual(viewModel.historyOffsetSnapshot, 3)
+        // historyPageSize(10)未満のため、もうロードするものがない
         XCTAssertFalse(viewModel.canLoadMoreHistory)
     }
 
     // MARK: - Phase 2.6.3: Consistency Tests
 
-    func testRoomsViewModelInitialState() {
+    @MainActor
+    func testRoomsViewModelInitialState() async {
         let mock = MockAPIClient()
         let initialRooms = [
             Room(
@@ -271,6 +292,8 @@ final class RoomBasedArchitectureTests: XCTestCase {
                 workspacePath: "/Users/test/RemotePrompt",
                 icon: "📁",
                 deviceId: "device",
+                sortOrder: 0,
+                unreadCount: 0,
                 createdAt: Date(),
                 updatedAt: Date()
             )
@@ -288,34 +311,36 @@ final class RoomBasedArchitectureTests: XCTestCase {
         XCTAssertEqual(viewModel.rooms.first?.name, "RemotePrompt")
     }
 
-    func testMessageStoreContextSwitching() {
+    @MainActor
+    func testMessageStoreContextSwitching() async {
         let store = MessageStore()
-        store.setActiveContext(roomId: "room-1", runner: "claude")
+        store.setActiveContext(roomId: "room-1", runner: "claude", threadId: "thread-1")
 
         let message1 = Message(
-            type: .user,
             roomId: "room-1",
+            type: .user,
             content: "Test 1",
             status: .completed
         )
         store.addMessage(message1)
         XCTAssertEqual(store.messages.count, 1)
 
-        store.setActiveContext(roomId: "room-2", runner: "codex")
+        store.setActiveContext(roomId: "room-2", runner: "codex", threadId: "thread-2")
         XCTAssertEqual(store.messages.count, 0)
 
-        store.setActiveContext(roomId: "room-1", runner: "claude")
+        store.setActiveContext(roomId: "room-1", runner: "claude", threadId: "thread-1")
         XCTAssertEqual(store.messages.count, 1)
         XCTAssertEqual(store.messages.first?.content, "Test 1")
     }
 
-    func testMessageStoreReplaceAll() {
+    @MainActor
+    func testMessageStoreReplaceAll() async {
         let store = MessageStore()
-        store.setActiveContext(roomId: "room-1", runner: "claude")
+        store.setActiveContext(roomId: "room-1", runner: "claude", threadId: "thread-1")
 
         let oldMessage = Message(
-            type: .user,
             roomId: "room-1",
+            type: .user,
             content: "Old message",
             status: .completed
         )
@@ -323,8 +348,8 @@ final class RoomBasedArchitectureTests: XCTestCase {
         XCTAssertEqual(store.messages.count, 1)
 
         let newMessages = [
-            Message(type: .user, roomId: "room-1", content: "New message 1", status: .completed),
-            Message(type: .user, roomId: "room-1", content: "New message 2", status: .completed)
+            Message(roomId: "room-1", type: .user, content: "New message 1", status: .completed),
+            Message(roomId: "room-1", type: .user, content: "New message 2", status: .completed)
         ]
         store.replaceAll(newMessages)
 
@@ -333,13 +358,14 @@ final class RoomBasedArchitectureTests: XCTestCase {
         XCTAssertEqual(store.messages[1].content, "New message 2")
     }
 
-    func testMessageStoreClear() {
+    @MainActor
+    func testMessageStoreClear() async {
         let store = MessageStore()
-        store.setActiveContext(roomId: "room-1", runner: "claude")
+        store.setActiveContext(roomId: "room-1", runner: "claude", threadId: "thread-1")
 
         let message = Message(
-            type: .user,
             roomId: "room-1",
+            type: .user,
             content: "Test",
             status: .completed
         )

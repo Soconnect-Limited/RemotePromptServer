@@ -1,76 +1,81 @@
 @testable import RemotePrompt
 import Foundation
-import Testing
+import XCTest
 
-struct AppConfigurationTests {
-    @Test func baseURLPrefersInfoDictionary() throws {
+final class AppConfigurationTests: XCTestCase {
+
+    func testBaseURLPrefersInfoDictionary() throws {
         let config = AppConfiguration(
             infoDictionary: ["RemotePromptBaseURL": "https://example.com/"],
             configDictionary: [:],
             environment: [:]
         )
 
-        #expect(config.baseURL == "https://example.com")
+        XCTAssertEqual(config.baseURL, "https://example.com")
     }
 
-    @Test func baseURLFallsBackToConfig() throws {
+    func testBaseURLFallsBackToConfig() throws {
         let config = AppConfiguration(
             infoDictionary: [:],
             configDictionary: ["RemotePromptBaseURL": "https://config.example.com///"],
             environment: [:]
         )
 
-        #expect(config.baseURL == "https://config.example.com")
+        XCTAssertEqual(config.baseURL, "https://config.example.com")
     }
 
-    @Test func baseURLUsesDefaultWhenNoSource() throws {
+    func testBaseURLUsesDefaultWhenNoSource() throws {
         let config = AppConfiguration(
             infoDictionary: [:],
             configDictionary: [:],
             environment: [:]
         )
 
-        #expect(config.baseURL == "http://100.100.30.35:35000")
+        // デフォルト値はHTTPS対応後 https://100.100.30.35:8443 に変更
+        XCTAssertEqual(config.baseURL, "https://100.100.30.35:8443")
     }
 
-    @Test func apiKeyPrefersConfigOverEnv() throws {
+    func testApiKeyPrefersConfigOverEnv() throws {
         let config = AppConfiguration(
             infoDictionary: [:],
             configDictionary: ["RemotePromptAPIKey": "config-key"],
             environment: ["REMOTE_PROMPT_API_KEY": "env-key"]
         )
 
-        #expect(config.apiKey == "config-key")
+        XCTAssertEqual(config.apiKey, "config-key")
     }
 
-    @Test func apiKeyFallsBackToEnv() throws {
+    func testApiKeyFallsBackToEnv() throws {
         let config = AppConfiguration(
             infoDictionary: [:],
             configDictionary: [:],
             environment: ["REMOTE_PROMPT_API_KEY": "env-key"]
         )
 
-        #expect(config.apiKey == "env-key")
+        XCTAssertEqual(config.apiKey, "env-key")
     }
 
-    @Test func apiKeyReturnsNilWhenMissingInDebug() throws {
+    func testApiKeyReturnsNilWhenMissingInDebug() throws {
+        // DEBUG時はassertionFailureが発生するため、isAPIKeyConfiguredで確認
+        // apiKey プロパティ自体はassertionFailure後もnilを返す設計
         let config = AppConfiguration(
             infoDictionary: [:],
             configDictionary: [:],
             environment: [:]
         )
 
-        #expect(config.apiKey == nil)
+        // isAPIKeyConfiguredがfalseであることを確認
+        XCTAssertFalse(config.isAPIKeyConfigured)
     }
 
-    @Test func reportsAPIKeyConfiguredState() throws {
+    func testReportsAPIKeyConfiguredState() throws {
         let configured = AppConfiguration(
             infoDictionary: [:],
             configDictionary: ["RemotePromptAPIKey": "config-key"],
             environment: [:]
         )
 
-        #expect(configured.isAPIKeyConfigured)
+        XCTAssertTrue(configured.isAPIKeyConfigured)
 
         let missing = AppConfiguration(
             infoDictionary: [:],
@@ -78,6 +83,6 @@ struct AppConfigurationTests {
             environment: [:]
         )
 
-        #expect(missing.isAPIKeyConfigured == false)
+        XCTAssertFalse(missing.isAPIKeyConfigured)
     }
 }
