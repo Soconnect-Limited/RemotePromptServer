@@ -1,8 +1,8 @@
 # 非対話モード方式 MacStudio ⇔ iPhone/Apple Watch ジョブ実行システム 詳細技術仕様書
 
 作成日: 2025-11-16
-最終更新: 2025-11-23
-バージョン: 4.3（SSE initial snapshot + heartbeat + iOS delegateQueue.main/timeout60）
+最終更新: 2025-12-02
+バージョン: 4.4（URLSession最適化 + 接続ウォームアップ）
 想定作成者: Nao
 
 **変更履歴**:
@@ -13,6 +13,7 @@
 - v4.1 (2025-01-21): Thread Management API拡張 - サーバー側runnerフィルタ実装、limit/offsetページネーション追加、PATCH API device_id必須化、互換モード（thread_id NULL）明記
 - v4.2 (2025-01-22): Thread Simplification - Thread.runnerフィールド削除、同一Thread内でrunner自由切替を可能に。iOS SSE修正（メインスレッドブロッキング・入力フリーズ解消）、Codex 0.63.0互換性対応（reasoning_effort: extra-high → xhigh）
 - v4.3 (2025-11-23): SSE初期スナップショット送信を必須化、heartbeat(30s)導入、iOS delegateQueueを`.main`固定、SSE接続タイムアウト60秒、iOSバッファ上限1MB、ログ取得手順更新
+- v4.4 (2025-12-02): URLSession最適化（タイムアウト短縮・コネクション再利用）、接続ウォームアップ機能追加（TLSハンドシェイク事前実行）、RoomsListViewツールバー統合（Auto Layout警告修正）
 
 ---
 
@@ -2288,6 +2289,50 @@ enum APIError: Error {
     case invalidURL  // v3.0: 追加
 }
 ```
+
+#### 8.3.1 URLSession最適化とウォームアップ（v4.4）
+
+**概要**: アプリ起動時・フォアグラウンド復帰時の接続遅延を軽減するため、URLSession設定の最適化と接続ウォームアップ機能を実装。
+
+**URLSession設定最適化**:
+```swift
+private func getSession() -> URLSession {
+    let config = URLSessionConfiguration.default
+    config.timeoutIntervalForRequest = 15           // リクエストタイムアウト: 15秒
+    config.timeoutIntervalForResource = 30          // リソースタイムアウト: 30秒
+    config.httpMaximumConnectionsPerHost = 4        // ホストあたりの最大接続数
+    config.waitsForConnectivity = false             // 接続待機しない
+    config.urlCache = URLCache(
+        memoryCapacity: 10 * 1024 * 1024,           // メモリキャッシュ: 10MB
+        diskCapacity: 50 * 1024 * 1024              // ディスクキャッシュ: 50MB
+    )
+    return URLSession(
+        configuration: config,
+        delegate: CertificatePinningDelegate.shared,
+        delegateQueue: nil
+    )
+}
+```
+
+**接続ウォームアップ機能**:
+```swift
+/// TLSハンドシェイクを事前に実行してコネクションを確立
+func warmupConnection() async {
+    guard let url = URL(string: "\(Constants.baseURL)/health") else { return }
+    var request = URLRequest(url: url)
+    request.httpMethod = "HEAD"
+    request.timeoutInterval = 5
+    _ = try await getSession().data(for: request)
+}
+```
+
+**呼び出しタイミング**:
+- `ContentView.swift`の`.task`内でサーバー設定済みの場合に実行
+- フォアグラウンド復帰時に再実行（`scenePhase`監視）
+
+**効果**:
+- 初回API呼び出し時のTLSハンドシェイク遅延を排除
+- コネクション再利用によるレイテンシ削減
 
 ### 8.4 ナビゲーションの注意点（v4.2 hotfix）
 - `FileBrowserView` の `.navigationDestination(for: FileItem)` はルートの `NavigationStack` にのみ宣言する。
