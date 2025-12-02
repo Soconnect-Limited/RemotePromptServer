@@ -18,7 +18,7 @@ struct ContentView: View {
                 ProgressView("読み込み中...")
             }
         }
-        .onAppear {
+        .task {
             // 旧設定からの移行を試行
             if configStore.needsMigration {
                 let legacyConfig = AppConfiguration()
@@ -26,6 +26,11 @@ struct ContentView: View {
                     from: legacyConfig.baseURL,
                     oldAPIKey: legacyConfig.apiKey
                 )
+            }
+
+            // 接続のウォームアップ（TLSハンドシェイクを事前実行）
+            if Constants.isServerConfigured {
+                await APIClient.shared.warmupConnection()
             }
         }
     }

@@ -169,8 +169,19 @@ final class APIClient: APIClientProtocol {
         }
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest = 15  // 短縮: 30 -> 15秒
+        config.timeoutIntervalForResource = 30 // 短縮: 60 -> 30秒
+
+        // HTTP/2とTLS 1.3を活用してコネクション再利用を最大化
+        config.httpMaximumConnectionsPerHost = 4
+        config.waitsForConnectivity = false  // 接続待ちしない（即座にエラー返却）
+
+        // TLSセッションチケットを有効化（再接続時のハンドシェイク高速化）
+        config.urlCache = URLCache(
+            memoryCapacity: 4 * 1024 * 1024,  // 4MB
+            diskCapacity: 20 * 1024 * 1024,   // 20MB
+            diskPath: "remoteprompt_api_cache"
+        )
 
         let session = URLSession(configuration: config, delegate: pinningDelegate, delegateQueue: nil)
         pinnedSession = session
@@ -182,6 +193,24 @@ final class APIClient: APIClientProtocol {
         pinnedSession?.invalidateAndCancel()
         pinnedSession = nil
         print("[APIClient] Session invalidated due to configuration change")
+    }
+
+    /// 接続のウォームアップ（TLSハンドシェイクを事前に実行）
+    /// アプリ起動時に呼び出して接続を確立しておく
+    func warmupConnection() async {
+        guard Constants.isServerConfigured else { return }
+        guard let url = URL(string: "\(Constants.baseURL)/health") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"  // 軽量なHEADリクエスト
+        request.timeoutInterval = 5  // 短いタイムアウト
+
+        do {
+            _ = try await getSession().data(for: request)
+            print("[APIClient] Connection warmup completed")
+        } catch {
+            print("[APIClient] Connection warmup failed: \(error.localizedDescription)")
+        }
     }
 
     /// 証明書バイパスモードの設定（接続テスト用）

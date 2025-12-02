@@ -62,18 +62,16 @@ struct RoomsListView: View {
             }
             .accessibilityIdentifier("rooms.list")
             .listStyle(.plain)
+            .navigationTitle("Rooms")
+            .navigationDestination(for: Room.self) { room in
+                RoomDetailView(room: room, apiClient: detailAPIClient)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !viewModel.rooms.isEmpty {
                         EditButton()
                     }
                 }
-            }
-            .navigationTitle("Rooms")
-            .navigationDestination(for: Room.self) { room in
-                RoomDetailView(room: room, apiClient: detailAPIClient)
-            }
-            .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     HStack(spacing: 16) {
                         Button {
