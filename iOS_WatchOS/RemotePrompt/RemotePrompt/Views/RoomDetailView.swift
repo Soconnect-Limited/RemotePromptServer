@@ -10,7 +10,7 @@ struct RoomDetailView: View {
     @State private var selectedRunner: AIProvider = .claude
     @State private var showFileBrowser = false
     @State private var showRoomSettings = false
-    @State private var chatViewModel: ChatViewModel?  // v4.1: Persistent ViewModel for runner switching
+    @State private var chatViewModels: [String: ChatViewModel] = [:]  // v4.4: runner別に独立したViewModel  // v4.1: Persistent ViewModel for runner switching
 
     /// 有効なAIプロバイダー（設定順序でソート）
     private var enabledProviders: [AIProviderConfiguration] {
@@ -75,8 +75,8 @@ struct RoomDetailView: View {
                 withAnimation(.easeInOut) {
                     selectedThread = thread
                     // v4.2: Thread.runner削除により、selectedRunnerは変更しない（ユーザー選択を維持）
-                    // v4.1: Clear chatViewModel when switching threads
-                    chatViewModel = nil
+                    // v4.4: スレッド切り替え時は全runner用ViewModelをクリア
+                    chatViewModels.removeAll()
                 }
                 // v4.3.1: スレッド選択時に現在のrunnerを既読にする
                 Task { @MainActor in
@@ -106,25 +106,9 @@ struct RoomDetailView: View {
         VStack(spacing: 0) {
             runnerPicker
 
-            // v4.1: Use persistent ChatViewModel with dynamic runner switching
-            Group {
-                if let viewModel = chatViewModel {
-                    ChatView(viewModel: viewModel)
-                        .background(Color(.systemBackground))
-                } else {
-                    Color.clear
-                        .onAppear {
-                            chatViewModel = ChatViewModel(
-                                runner: selectedRunner.rawValue,
-                                roomId: room.id,
-                                threadId: thread.id,
-                                apiClient: apiClient,
-                                enableStreaming: enableStreaming,
-                                validateAPIKey: !AppEnvironment.isUITesting
-                            )
-                        }
-                }
-            }
+            // v4.4: runner別に独立したChatViewModelを使用（入力欄の分離）
+            ChatView(viewModel: getOrCreateViewModel(for: thread))
+                .background(Color(.systemBackground))
         }
         .navigationTitle(thread.name)
         .transition(.move(edge: .trailing))
@@ -139,9 +123,8 @@ struct RoomDetailView: View {
             }
         }
         .onChange(of: selectedRunner) { _, newRunner in
-            // v4.1: Update runner dynamically without recreating ViewModel
+            // v4.4: runner切り替え時は別のViewModelに切り替え（入力欄が独立）
             Task { @MainActor in
-                await chatViewModel?.updateRunner(newRunner.rawValue)
                 // v4.3.1: 選択されたrunnerを既読にする
                 if let thread = selectedThread {
                     await threadListViewModel.markRunnerAsRead(
@@ -153,6 +136,24 @@ struct RoomDetailView: View {
                 }
             }
         }
+    }
+
+    /// v4.4: runner別のChatViewModelを取得または生成
+    private func getOrCreateViewModel(for thread: Thread) -> ChatViewModel {
+        let runnerKey = selectedRunner.rawValue
+        if let existing = chatViewModels[runnerKey] {
+            return existing
+        }
+        let newViewModel = ChatViewModel(
+            runner: runnerKey,
+            roomId: room.id,
+            threadId: thread.id,
+            apiClient: apiClient,
+            enableStreaming: enableStreaming,
+            validateAPIKey: !AppEnvironment.isUITesting
+        )
+        chatViewModels[runnerKey] = newViewModel
+        return newViewModel
     }
 
     private var runnerPicker: some View {

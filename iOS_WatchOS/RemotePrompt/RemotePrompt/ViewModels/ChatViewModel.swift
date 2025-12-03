@@ -33,6 +33,7 @@ final class ChatViewModel: ObservableObject {
     private var historyOffset = 0
     private let displayLimit = 30  // Memory Leak Fix: 表示制限を30件に削減（メモリ使用量削減）
     private var foregroundObserver: NSObjectProtocol?  // フォアグラウンド復帰監視
+    private var inputTextCancellable: AnyCancellable?  // v4.4: 入力テキスト変更監視
 
     var historyOffsetSnapshot: Int { historyOffset }
     var runnerName: String { runner }
@@ -63,8 +64,22 @@ final class ChatViewModel: ObservableObject {
         // v4.2: 3次元キー対応（threadId必須）
         messageStore.setActiveContext(roomId: roomId, runner: runner, threadId: threadId ?? "default-thread")
         messages = messageStore.messages
+
+        // v4.4: 下書きを復元
+        if let tid = threadId {
+            inputText = DraftStore.shared.loadDraft(threadId: tid, runner: runner)
+        }
+
         print("DEBUG: ChatViewModel init - roomId: \(roomId), threadId: \(threadId ?? "nil"), runner: \(runner)")
         print("DEBUG: ChatViewModel init - autoLoadMessages: \(autoLoadMessages), messages count: \(messages.count)")
+
+        // v4.4: 入力テキスト変更を監視して下書き保存
+        inputTextCancellable = $inputText
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .sink { [weak self] newText in
+                guard let self = self, let tid = self.threadId else { return }
+                DraftStore.shared.saveDraft(newText, threadId: tid, runner: self.runner)
+            }
 
         // メモリ圧力監視（iOS13+）。警告で古いメッセージを削減、クリティカルでSSE切断
         // Memory Leak Fix: [weak self] を使用して循環参照を防止
@@ -892,6 +907,10 @@ final class ChatViewModel: ObservableObject {
         if let observer = foregroundObserver {
             NotificationCenter.default.removeObserver(observer)
         }
+
+        // v4.4: 入力テキスト監視を解除
+        inputTextCancellable?.cancel()
+
         print("DEBUG: ChatViewModel deinit - Cleanup completed")
     }
 }
