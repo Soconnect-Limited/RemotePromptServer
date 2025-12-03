@@ -740,6 +740,35 @@ final class ChatViewModel: ObservableObject {
         print("DEBUG: cancelInference() - All jobs cancelled")
     }
 
+    /// 特定のメッセージの推論をキャンセル
+    func cancelMessage(_ message: Message) {
+        guard let jobId = message.jobId else {
+            print("DEBUG: cancelMessage() - No jobId for message \(message.id)")
+            return
+        }
+
+        print("DEBUG: cancelMessage() - Cancelling job: \(jobId)")
+
+        // SSE接続を切断
+        if let manager = sseConnections[jobId] {
+            manager.disconnect()
+        }
+
+        // メッセージをキャンセル状態に更新
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            var cancelledMessage = messages[index]
+            cancelledMessage.status = .failed
+            cancelledMessage.errorMessage = "ユーザーによりキャンセルされました"
+            cancelledMessage.finishedAt = Date()
+            messages[index] = cancelledMessage
+            messageStore.updateMessage(cancelledMessage)
+        }
+
+        // 接続をクリーンアップ
+        cleanupConnection(for: jobId)
+        print("DEBUG: cancelMessage() - Job \(jobId) cancelled")
+    }
+
     private func cleanupAllConnections() {
         sseConnections.removeAll()
         sseCancellables.removeAll()

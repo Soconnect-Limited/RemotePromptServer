@@ -15,6 +15,9 @@ struct ChatView: View {
                 runner: viewModel.runnerName,
                 onLoadMore: {
                     await viewModel.loadMoreMessages()
+                },
+                onCancelMessage: { message in
+                    viewModel.cancelMessage(message)
                 }
             )
             .background(Color(.systemBackground))

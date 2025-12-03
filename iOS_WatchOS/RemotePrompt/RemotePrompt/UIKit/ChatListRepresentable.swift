@@ -555,6 +555,8 @@ struct ChatListRepresentable: UIViewRepresentable {
     var runner: String  // アバター表示用にrunner情報を追加
     /// 過去ログ読み込みコールバック
     var onLoadMore: (() async -> Void)?
+    /// メッセージキャンセルコールバック
+    var onCancelMessage: ((Message) -> Void)?
 
     func makeUIView(context: Context) -> ChatListContainerView {
         let view = ChatListContainerView()
@@ -570,6 +572,7 @@ struct ChatListRepresentable: UIViewRepresentable {
         context.coordinator.containerView = view
         context.coordinator.runner = runner
         context.coordinator.setupLoadMore(callback: onLoadMore)
+        context.coordinator.onCancelMessage = onCancelMessage
         context.coordinator.reload(with: messages)
         return view
     }
@@ -577,6 +580,7 @@ struct ChatListRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: ChatListContainerView, context: Context) {
         context.coordinator.runner = runner
         context.coordinator.setupLoadMore(callback: onLoadMore)
+        context.coordinator.onCancelMessage = onCancelMessage
         context.coordinator.reload(with: messages)
     }
 
@@ -593,6 +597,8 @@ struct ChatListRepresentable: UIViewRepresentable {
         /// 過去ログ読み込み中フラグ（スクロール位置維持用）
         private var isLoadingOlderMessages = false
         private var onLoadMoreCallback: (() async -> Void)?
+        /// メッセージキャンセルコールバック
+        var onCancelMessage: ((Message) -> Void)?
 
         /// 過去ログ読み込みコールバックを設定
         func setupLoadMore(callback: (() async -> Void)?) {
@@ -796,6 +802,27 @@ struct ChatListRepresentable: UIViewRepresentable {
 
         func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
             UITableView.automaticDimension
+        }
+
+        // MARK: Context Menu (Long Press)
+        func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+            let message = messages[indexPath.row]
+
+            // 実行中のアシスタントメッセージのみコンテキストメニューを表示
+            guard message.type == .assistant && message.isRunning else {
+                return nil
+            }
+
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                let cancelAction = UIAction(
+                    title: "応答をキャンセル",
+                    image: UIImage(systemName: "xmark.circle"),
+                    attributes: .destructive
+                ) { _ in
+                    self?.onCancelMessage?(message)
+                }
+                return UIMenu(title: "", children: [cancelAction])
+            }
         }
     }
 }
