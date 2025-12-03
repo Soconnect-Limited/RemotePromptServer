@@ -13,6 +13,7 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
     var autoFallback: Bool
     var lastConnected: Date?
     let createdAt: Date
+    var aiProviders: [AIProviderConfiguration]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,6 +26,7 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
         case autoFallback = "auto_fallback"
         case lastConnected = "last_connected"
         case createdAt = "created_at"
+        case aiProviders = "ai_providers"
     }
 
     init(
@@ -37,7 +39,8 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
         isTrusted: Bool = false,
         autoFallback: Bool = false,
         lastConnected: Date? = nil,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        aiProviders: [AIProviderConfiguration] = AIProviderConfiguration.defaultConfigurations()
     ) {
         self.id = id
         self.name = name
@@ -49,6 +52,39 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
         self.autoFallback = autoFallback
         self.lastConnected = lastConnected
         self.createdAt = createdAt
+        self.aiProviders = aiProviders
+    }
+
+    // MARK: - Custom Decoder for Backward Compatibility
+
+    /// カスタムデコーダ: ai_providersがない既存データでもデコード可能にする
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        url = try container.decode(String.self, forKey: .url)
+        alternativeURLs = try container.decodeIfPresent([String].self, forKey: .alternativeURLs) ?? []
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+        certificateFingerprint = try container.decodeIfPresent(String.self, forKey: .certificateFingerprint)
+        isTrusted = try container.decodeIfPresent(Bool.self, forKey: .isTrusted) ?? false
+        autoFallback = try container.decodeIfPresent(Bool.self, forKey: .autoFallback) ?? false
+        lastConnected = try container.decodeIfPresent(Date.self, forKey: .lastConnected)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+
+        // ai_providersは省略可能（後方互換性）
+        aiProviders = try container.decodeIfPresent([AIProviderConfiguration].self, forKey: .aiProviders)
+            ?? AIProviderConfiguration.defaultConfigurations()
+    }
+
+    /// 有効なAIプロバイダーをソート順で取得
+    var enabledAIProviders: [AIProviderConfiguration] {
+        aiProviders.enabledProviders
+    }
+
+    /// 指定プロバイダーのBashパスを取得
+    func bashPath(for provider: AIProvider) -> String? {
+        aiProviders.configuration(for: provider)?.bashPath ?? provider.defaultBashCommand
     }
 
     /// URLバリデーション（https://必須）

@@ -2,34 +2,21 @@ import SwiftUI
 
 /// Room詳細画面（Thread一覧 → Chat表示）
 struct RoomDetailView: View {
-    private enum RunnerTab: String, CaseIterable, Identifiable {
-        case claude
-        case codex
-
-        var id: String { rawValue }
-        var title: String {
-            switch self {
-            case .claude: return "Claude Code"
-            case .codex: return "Codex"
-            }
-        }
-        var systemImage: String {
-            switch self {
-            case .claude: return "bubble.left"
-            case .codex: return "chevron.left.forwardslash.chevron.right"
-            }
-        }
-    }
-
     let room: Room
     private let apiClient: APIClientProtocol
     private let enableStreaming: Bool
     @StateObject private var threadListViewModel: ThreadListViewModel
     @State private var selectedThread: Thread?
-    @State private var selectedRunner: RunnerTab = .claude
+    @State private var selectedRunner: AIProvider = .claude
     @State private var showFileBrowser = false
     @State private var showRoomSettings = false
     @State private var chatViewModel: ChatViewModel?  // v4.1: Persistent ViewModel for runner switching
+
+    /// 有効なAIプロバイダー（設定順序でソート）
+    private var enabledProviders: [AIProviderConfiguration] {
+        ServerConfigurationStore.shared.currentConfiguration?.enabledAIProviders
+            ?? AIProviderConfiguration.defaultConfigurations().filter { $0.isEnabled }
+    }
 
     init(
         room: Room,
@@ -68,6 +55,12 @@ struct RoomDetailView: View {
         .sheet(isPresented: $showRoomSettings) {
             if selectedThread != nil {
                 RoomSettingsView(room: room, runner: selectedRunner.rawValue)
+            }
+        }
+        .onAppear {
+            // 有効なプロバイダーの最初のものを選択
+            if let firstEnabled = enabledProviders.first {
+                selectedRunner = firstEnabled.provider
             }
         }
     }
@@ -164,28 +157,28 @@ struct RoomDetailView: View {
 
     private var runnerPicker: some View {
         HStack(spacing: 0) {
-            ForEach(RunnerTab.allCases) { tab in
+            ForEach(enabledProviders) { config in
                 Button {
-                    selectedRunner = tab
+                    selectedRunner = config.provider
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: tab.systemImage)
-                        Text(tab.title)
+                        Image(systemName: config.provider.systemImage)
+                        Text(config.provider.displayName)
                         // v4.3.1: runner別未読バッジ
                         if let thread = selectedThread,
-                           thread.unreadRunners.contains(tab.rawValue) {
+                           thread.unreadRunners.contains(config.provider.rawValue) {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 8, height: 8)
                         }
                     }
                     .font(.subheadline)
-                    .fontWeight(selectedRunner == tab ? .semibold : .regular)
-                    .foregroundStyle(selectedRunner == tab ? .primary : .secondary)
+                    .fontWeight(selectedRunner == config.provider ? .semibold : .regular)
+                    .foregroundStyle(selectedRunner == config.provider ? .primary : .secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(
-                        selectedRunner == tab
+                        selectedRunner == config.provider
                             ? Color(.systemGray5)
                             : Color.clear
                     )

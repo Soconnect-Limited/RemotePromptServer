@@ -1,8 +1,8 @@
 # 非対話モード方式 MacStudio ⇔ iPhone/Apple Watch ジョブ実行システム 詳細技術仕様書
 
 作成日: 2025-11-16
-最終更新: 2025-12-02
-バージョン: 4.4（URLSession最適化 + 接続ウォームアップ）
+最終更新: 2025-12-03
+バージョン: 4.5（AIプロバイダー設定機能）
 想定作成者: Nao
 
 **変更履歴**:
@@ -14,6 +14,7 @@
 - v4.2 (2025-01-22): Thread Simplification - Thread.runnerフィールド削除、同一Thread内でrunner自由切替を可能に。iOS SSE修正（メインスレッドブロッキング・入力フリーズ解消）、Codex 0.63.0互換性対応（reasoning_effort: extra-high → xhigh）
 - v4.3 (2025-11-23): SSE初期スナップショット送信を必須化、heartbeat(30s)導入、iOS delegateQueueを`.main`固定、SSE接続タイムアウト60秒、iOSバッファ上限1MB、ログ取得手順更新
 - v4.4 (2025-12-02): URLSession最適化（タイムアウト短縮・コネクション再利用）、接続ウォームアップ機能追加（TLSハンドシェイク事前実行）、RoomsListViewツールバー統合（Auto Layout警告修正）
+- v4.5 (2025-12-03): AIプロバイダー設定機能 - Claude Code/Codex/Geminiの3種類対応、プロバイダー有効化・順序変更・Bashパス設定をサポート
 
 ---
 
@@ -4163,6 +4164,94 @@ private var reasoningEffortOptions: [String] {
 - ✅ Codex 0.63.0でextra-high設定時にxhighへ自動変換
 - ✅ gpt-5.1-codex-maxのみUIでextra-highを選択可能
 - ✅ 他モデルではextra-highを非表示
+
+---
+
+## 16. v4.5 変更点詳細（2025-12-03）
+
+### 16.1 AIプロバイダー設定機能
+
+#### 概要
+サーバー設定画面にAIプロバイダー（Claude Code, Codex, Gemini）の選択・設定機能を追加。ユーザーがプロバイダーの有効化/無効化、表示順序の変更、Gemini用のBashパス設定を行えるようになった。
+
+#### 新規ファイル
+
+**AIProvider.swift**
+```swift
+/// AIプロバイダー定義
+enum AIProvider: String, Codable, CaseIterable, Identifiable {
+    case claude
+    case codex
+    case gemini
+
+    var id: String { rawValue }
+    var displayName: String { ... }
+    var systemImage: String { ... }
+    var defaultBashCommand: String? { ... }
+}
+
+/// AIプロバイダー個別設定
+struct AIProviderConfiguration: Codable, Identifiable, Equatable, Hashable {
+    let provider: AIProvider
+    var isEnabled: Bool
+    var bashPath: String?  // カスタムBashパス（Gemini用など）
+    var sortOrder: Int
+}
+```
+
+#### ServerConfiguration拡張
+
+```swift
+struct ServerConfiguration {
+    // 既存プロパティ...
+    var aiProviders: [AIProviderConfiguration]
+
+    /// 有効なAIプロバイダーをソート順で取得
+    var enabledAIProviders: [AIProviderConfiguration]
+
+    /// 指定プロバイダーのBashパスを取得
+    func bashPath(for provider: AIProvider) -> String?
+}
+```
+
+#### UI実装
+
+**サーバー設定画面（ServerSettingsView.swift）**
+- AI設定セクションを追加
+- プロバイダーごとの有効化トグル
+- ドラッグ＆ドロップによる表示順序変更（EditButton連携）
+- Gemini有効時のBashパス入力フィールド
+
+**チャット画面（RoomDetailView.swift）**
+- RunnerTab enumを削除、AIProviderを直接使用
+- enabledProvidersから動的にタブを生成
+- 設定された順序でタブを表示
+
+#### データ永続化
+
+AIプロバイダー設定はServerConfiguration内に含まれ、既存の永続化機構（UserDefaults + Keychain）で保存される。
+
+```json
+{
+  "ai_providers": [
+    {"provider": "claude", "is_enabled": true, "bash_path": "claude", "sort_order": 0},
+    {"provider": "gemini", "is_enabled": true, "bash_path": "/usr/local/bin/gemini", "sort_order": 1},
+    {"provider": "codex", "is_enabled": false, "bash_path": "codex", "sort_order": 2}
+  ]
+}
+```
+
+#### 後方互換性
+
+- `aiProviders`が空または未設定の場合、デフォルト設定（Claude/Codex有効、Gemini無効）を自動生成
+- 既存のclaude/codex runner指定はそのまま動作
+
+#### 期待される効果
+- ✅ Claude Code / Codex / Geminiの3種類のAIプロバイダーをサポート
+- ✅ プロバイダーごとの有効化/無効化設定
+- ✅ ドラッグによる表示順序のカスタマイズ
+- ✅ Gemini用のBashパス設定（カスタムインストールパス対応）
+- ✅ チャット画面のタブが設定順序を反映
 
 ---
 

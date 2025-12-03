@@ -12,6 +12,7 @@ final class ServerSettingsViewModel: ObservableObject {
     @Published var apiKey: String = ""
     @Published var serverName: String = "My Server"
     @Published var autoFallback: Bool = false
+    @Published var aiProviders: [AIProviderConfiguration] = AIProviderConfiguration.defaultConfigurations()
 
     @Published var connectionStatus: ConnectionStatus = .idle
     @Published var connectedURL: String?
@@ -55,6 +56,9 @@ final class ServerSettingsViewModel: ObservableObject {
         apiKey = config.apiKey
         serverName = config.name
         autoFallback = config.autoFallback
+        aiProviders = config.aiProviders.isEmpty
+            ? AIProviderConfiguration.defaultConfigurations()
+            : config.aiProviders.sorted
 
         if config.isTrusted, let fingerprint = config.certificateFingerprint {
             // 簡易的なCertificateInfo作成（詳細はサーバーから取得）
@@ -173,10 +177,31 @@ final class ServerSettingsViewModel: ObservableObject {
             isTrusted: store.currentConfiguration?.isTrusted ?? false,
             autoFallback: autoFallback,
             lastConnected: store.currentConfiguration?.lastConnected,
-            createdAt: store.currentConfiguration?.createdAt ?? Date()
+            createdAt: store.currentConfiguration?.createdAt ?? Date(),
+            aiProviders: aiProviders
         )
 
         store.save(config)
+    }
+
+    // MARK: - AI Provider Management
+
+    /// AIプロバイダーの有効/無効を切り替え
+    func toggleAIProvider(_ provider: AIProvider) {
+        guard let index = aiProviders.firstIndex(where: { $0.provider == provider }) else { return }
+        aiProviders[index].isEnabled.toggle()
+    }
+
+    /// AIプロバイダーのBashパスを更新
+    func updateAIProviderBashPath(_ provider: AIProvider, path: String) {
+        guard let index = aiProviders.firstIndex(where: { $0.provider == provider }) else { return }
+        aiProviders[index].bashPath = path.isEmpty ? nil : path
+    }
+
+    /// AIプロバイダーを移動（ドラッグ並べ替え用）
+    func moveAIProvider(from source: IndexSet, to destination: Int) {
+        aiProviders.move(fromOffsets: source, toOffset: destination)
+        aiProviders.updateSortOrder()
     }
 
     /// 証明書信頼をリセット
@@ -194,6 +219,7 @@ final class ServerSettingsViewModel: ObservableObject {
         apiKey = ""
         serverName = "My Server"
         autoFallback = false
+        aiProviders = AIProviderConfiguration.defaultConfigurations()
         connectionStatus = .idle
         connectedURL = nil
         certificateInfo = nil
