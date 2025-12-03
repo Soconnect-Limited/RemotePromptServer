@@ -636,15 +636,17 @@ final class ChatViewModel: ObservableObject {
 #if DEBUG && MEMORY_METRICS
             MemoryMetrics.logRSS("after fetchFinalResult", extra: "job=\(jobId) contentLen=\(message.content.count)")
 #endif
-        } catch let decodingError as DecodingError {
-            print("DEBUG: Decoding error: \(decodingError)")
-            errorMessage = "データ解析エラー: \(decodingError.localizedDescription)"
-        } catch let apiError as APIError {
-            print("DEBUG: API error: \(apiError)")
-            errorMessage = apiError.localizedDescription
         } catch {
-            print("DEBUG: Unknown error: \(error)")
-            errorMessage = "不明なエラー: \(error.localizedDescription)"
+            print("DEBUG: fetchFinalResult error: \(error)")
+            // アシスタントメッセージを失敗状態に更新
+            if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                var message = messages[index]
+                message.status = .failed
+                message.errorMessage = error.localizedDescription
+                messages[index] = message
+                messageStore.updateMessage(message)
+            }
+            errorMessage = error.localizedDescription
         }
     }
 
