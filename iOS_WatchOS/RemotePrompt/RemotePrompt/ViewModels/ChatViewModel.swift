@@ -24,7 +24,7 @@ final class ChatViewModel: ObservableObject {
     private var sseCancellables: [String: Set<AnyCancellable>] = [:]
     private var finalResultFetched: Set<String> = []  // ジョブごとの最終取得ガード（@MainActor 保護）
     private var terminalStatusReceived: Set<String> = []  // success/failed を受信済みのジョブ
-    private static var memoryMonitorStarted = false
+    // Memory Leak Fix v2: 静的フラグを削除（MemoryPressureMonitorが複数コールバックを管理）
     private var runner: String  // v4.1: Changed from `let` to `var` for dynamic runner switching
     private let roomId: String  // v3.0: Room ID
     private let threadId: String?  // v4.0: Thread ID (optional for backward compatibility)
@@ -68,8 +68,9 @@ final class ChatViewModel: ObservableObject {
 
         // メモリ圧力監視（iOS13+）。警告で古いメッセージを削減、クリティカルでSSE切断
         // Memory Leak Fix: [weak self] を使用して循環参照を防止
-        // Crash Fix: UITableView更新中のクラッシュ防止のため、clearAllではなくsafeReduceMessagesを使用
-        if #available(iOS 13.0, *), !Self.memoryMonitorStarted {
+        // Memory Leak Fix v2: 静的フラグを削除し、各ViewModelが独自にコールバックを登録
+        // MemoryPressureMonitorは内部で複数コールバックを管理
+        if #available(iOS 13.0, *) {
             MemoryPressureMonitor.shared.start { [weak self] in
                 guard let self = self else { return }
                 // 警告時: メッセージ数を半分に削減（古いものから削除）
@@ -80,7 +81,6 @@ final class ChatViewModel: ObservableObject {
                 // クリティカル時: メッセージを10件まで削減
                 self.safeReduceMessages(targetCount: 10)
             }
-            Self.memoryMonitorStarted = true
         }
         if autoLoadMessages {
             Task {

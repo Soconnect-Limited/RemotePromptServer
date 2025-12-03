@@ -17,6 +17,48 @@ enum MessageContentSegment {
     case codeBlock(code: String, language: String?)
 }
 
+// MARK: - Parsed Message Cache
+/// メモリリーク対策: パース済みメッセージのキャッシュ（NSCacheで自動メモリ管理）
+final class ParsedMessageCache {
+    static let shared = ParsedMessageCache()
+    
+    private let cache = NSCache<NSString, ParsedMessageEntry>()
+    
+    private init() {
+        // メモリ警告時に自動クリア
+        cache.countLimit = 50  // 最大50件
+        cache.totalCostLimit = 10 * 1024 * 1024  // 10MB上限
+    }
+    
+    func get(for messageId: String, contentHash: Int) -> [MessageContentSegment]? {
+        guard let entry = cache.object(forKey: messageId as NSString),
+              entry.contentHash == contentHash else {
+            return nil
+        }
+        return entry.segments
+    }
+    
+    func set(_ segments: [MessageContentSegment], for messageId: String, contentHash: Int) {
+        let entry = ParsedMessageEntry(segments: segments, contentHash: contentHash)
+        // コスト = セグメント数 * 10KB（概算）
+        cache.setObject(entry, forKey: messageId as NSString, cost: segments.count * 10240)
+    }
+    
+    func clear() {
+        cache.removeAllObjects()
+    }
+}
+
+final class ParsedMessageEntry {
+    let segments: [MessageContentSegment]
+    let contentHash: Int
+    
+    init(segments: [MessageContentSegment], contentHash: Int) {
+        self.segments = segments
+        self.contentHash = contentHash
+    }
+}
+
 // MARK: - Message Parser
 struct MessageParser {
     static func parse(_ markdown: String, isUser: Bool) -> [MessageContentSegment] {
@@ -862,6 +904,11 @@ final class ChatMessageCell: UITableViewCell {
 
     // Phase B-13: UIStackView for mixed text and code block views
     private let contentStackView = UIStackView()
+    
+    // Memory Leak Fix: ビュープール（再利用可能なビューを保持）
+    private var reusableTextViews: [UITextView] = []
+    private var reusableCodeBlockViews: [CodeBlockView] = []
+    private static let maxPoolSize = 5  // プールの最大サイズ
 
     // 推論中インジケーター
     private let loadingStackView = UIStackView()
@@ -1046,11 +1093,8 @@ final class ChatMessageCell: UITableViewCell {
         bubbleTrailingConstraint?.isActive = true
         textView.linkTextAttributes = [.foregroundColor: UIColor.systemBlue]
 
-        // Phase B-13: contentStackViewをクリア
-        for view in contentStackView.arrangedSubviews {
-            contentStackView.removeArrangedSubview(view)
-            view.removeFromSuperview()
-        }
+        // Memory Leak Fix: contentStackViewのビューをプールに回収してからクリア
+        recycleViewsToPool()
 
         // 推論中の場合はインジケーターを表示
         if isLoading {
@@ -1070,22 +1114,31 @@ final class ChatMessageCell: UITableViewCell {
             let shouldTruncate = markdown.count > truncateThreshold && !isExpanded
 
             let displayContent = shouldTruncate ? String(markdown.prefix(truncateThreshold)) : markdown
-            var segments = MessageParser.parse(displayContent, isUser: isUser)
-
-            // セグメント数チェック（DoS防止）
-            if segments.count > 20 {
-                print("[Phase B-13] ⚠️ Segment count \(segments.count) exceeds limit 20, truncating")
-                segments = Array(segments.prefix(20))
+            
+            // Memory Leak Fix: パース結果をキャッシュから取得（または新規パース）
+            let contentHash = displayContent.hashValue ^ (isUser ? 1 : 0)
+            var segments: [MessageContentSegment]
+            
+            if let cached = ParsedMessageCache.shared.get(for: message.id, contentHash: contentHash) {
+                segments = cached
+            } else {
+                segments = MessageParser.parse(displayContent, isUser: isUser)
+                // セグメント数チェック（DoS防止）
+                if segments.count > 20 {
+                    print("[Phase B-13] ⚠️ Segment count \(segments.count) exceeds limit 20, truncating")
+                    segments = Array(segments.prefix(20))
+                }
+                ParsedMessageCache.shared.set(segments, for: message.id, contentHash: contentHash)
             }
 
-            // segmentsをループ処理してcontentStackViewに追加
+            // segmentsをループ処理してcontentStackViewに追加（プールから再利用）
             for segment in segments {
                 switch segment {
                 case .text(let attributedString):
-                    let textView = createTextView(with: attributedString, isUser: isUser)
+                    let textView = dequeueTextView(with: attributedString, isUser: isUser)
                     contentStackView.addArrangedSubview(textView)
                 case .codeBlock(let code, let language):
-                    let codeBlockView = createCodeBlockView(code: code, language: language)
+                    let codeBlockView = dequeueCodeBlockView(code: code, language: language)
                     contentStackView.addArrangedSubview(codeBlockView)
                 }
             }
@@ -1096,7 +1149,7 @@ final class ChatMessageCell: UITableViewCell {
                     .font: UIFont.preferredFont(forTextStyle: .body),
                     .foregroundColor: isUser ? UIColor.white : UIColor.label
                 ])
-                let ellipsisView = createTextView(with: ellipsisText, isUser: isUser)
+                let ellipsisView = dequeueTextView(with: ellipsisText, isUser: isUser)
                 contentStackView.addArrangedSubview(ellipsisView)
             }
 
@@ -1140,24 +1193,68 @@ final class ChatMessageCell: UITableViewCell {
         codeBlockView.configure(code: code, language: language)
         return codeBlockView
     }
+    
+    // MARK: - Memory Leak Fix: View Pool Methods
+    
+    /// プールからTextViewを取得または新規作成
+    private func dequeueTextView(with attributedString: NSAttributedString, isUser: Bool) -> UITextView {
+        let textView: UITextView
+        if let reused = reusableTextViews.popLast() {
+            textView = reused
+            textView.attributedText = attributedString
+        } else {
+            textView = createTextView(with: attributedString, isUser: isUser)
+        }
+        return textView
+    }
+    
+    /// プールからCodeBlockViewを取得または新規作成
+    private func dequeueCodeBlockView(code: String, language: String?) -> CodeBlockView {
+        let codeBlockView: CodeBlockView
+        if let reused = reusableCodeBlockViews.popLast() {
+            codeBlockView = reused
+            codeBlockView.configure(code: code, language: language)
+        } else {
+            codeBlockView = createCodeBlockView(code: code, language: language)
+        }
+        return codeBlockView
+    }
+    
+    /// contentStackViewのビューをプールに回収
+    private func recycleViewsToPool() {
+        for view in contentStackView.arrangedSubviews {
+            contentStackView.removeArrangedSubview(view)
+            view.removeFromSuperview()
+            
+            // プールサイズ制限内なら回収
+            if let textView = view as? UITextView {
+                if reusableTextViews.count < Self.maxPoolSize {
+                    textView.text = nil
+                    textView.attributedText = nil
+                    reusableTextViews.append(textView)
+                }
+            } else if let codeBlockView = view as? CodeBlockView {
+                if reusableCodeBlockViews.count < Self.maxPoolSize {
+                    reusableCodeBlockViews.append(codeBlockView)
+                }
+            }
+        }
+    }
 
     // Phase 4: 展開/折りたたみトグル（UIStackViewベース）
     @objc private func toggleExpand() {
         isExpanded.toggle()
         expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
 
-        // contentStackViewをクリアして再構築
-        for view in contentStackView.arrangedSubviews {
-            contentStackView.removeArrangedSubview(view)
-            view.removeFromSuperview()
-        }
+        // Memory Leak Fix: ビューをプールに回収してからクリア
+        recycleViewsToPool()
 
         // 表示内容を決定
         let shouldTruncate = fullContent.count > truncateThreshold && !isExpanded
         let displayContent = shouldTruncate ? String(fullContent.prefix(truncateThreshold)) : fullContent
         let isUser = bubbleView.backgroundColor == UIColor.systemGray5
 
-        // セグメント化して表示
+        // セグメント化して表示（プールから再利用）
         var segments = MessageParser.parse(displayContent, isUser: isUser)
         if segments.count > 20 {
             segments = Array(segments.prefix(20))
@@ -1166,10 +1263,10 @@ final class ChatMessageCell: UITableViewCell {
         for segment in segments {
             switch segment {
             case .text(let attributedString):
-                let textView = createTextView(with: attributedString, isUser: isUser)
+                let textView = dequeueTextView(with: attributedString, isUser: isUser)
                 contentStackView.addArrangedSubview(textView)
             case .codeBlock(let code, let language):
-                let codeBlockView = createCodeBlockView(code: code, language: language)
+                let codeBlockView = dequeueCodeBlockView(code: code, language: language)
                 contentStackView.addArrangedSubview(codeBlockView)
             }
         }
@@ -1180,7 +1277,7 @@ final class ChatMessageCell: UITableViewCell {
                 .font: UIFont.preferredFont(forTextStyle: .body),
                 .foregroundColor: isUser ? UIColor.white : UIColor.label
             ])
-            let ellipsisView = createTextView(with: ellipsisText, isUser: isUser)
+            let ellipsisView = dequeueTextView(with: ellipsisText, isUser: isUser)
             contentStackView.addArrangedSubview(ellipsisView)
         }
 
@@ -1197,17 +1294,8 @@ final class ChatMessageCell: UITableViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
 
-        // Phase 5: contentStackViewのサブビューをクリア
-        // Memory Leak Fix: CodeBlockView等の複雑なビューを完全に解放
-        for view in contentStackView.arrangedSubviews {
-            contentStackView.removeArrangedSubview(view)
-            // サブビューの階層も再帰的にクリア
-            if let codeBlockView = view as? CodeBlockView {
-                // CodeBlockViewの内部コンポーネントを明示的に解放
-                codeBlockView.subviews.forEach { $0.removeFromSuperview() }
-            }
-            view.removeFromSuperview()
-        }
+        // Memory Leak Fix: ビューをプールに回収（完全削除ではなく再利用）
+        recycleViewsToPool()
 
         // 既存のtextViewはクリアのみ（削除しない）
         // IMPORTANT: isHiddenはリセットしない（configure()の最初で必ず設定されるため不要）
@@ -1227,5 +1315,11 @@ final class ChatMessageCell: UITableViewCell {
 
         // 制約をリセット（textViewBottomConstraintは再設定時に制御される）
         textViewBottomConstraint?.isActive = false
+    }
+    
+    /// Memory Leak Fix: セルが画面外に出た時にプールをクリア（メモリ解放）
+    deinit {
+        reusableTextViews.removeAll()
+        reusableCodeBlockViews.removeAll()
     }
 }
