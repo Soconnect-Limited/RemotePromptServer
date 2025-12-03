@@ -3,9 +3,7 @@ import SwiftUI
 struct InputBar: View {
     @Binding var text: String
     let onSend: () -> Void
-    let onCancel: () -> Void
     let isLoading: Bool
-    let isInferenceRunning: Bool
     @FocusState.Binding var isFocused: Bool
 
     private func send() {
@@ -23,23 +21,6 @@ struct InputBar: View {
             // Keyboard toolbar (shown when keyboard is visible)
             if isFocused {
                 HStack {
-                    // Cancel button (shown when inference is running)
-                    if isInferenceRunning {
-                        Button {
-                            onCancel()
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "stop.circle.fill")
-                                    .font(.body)
-                                Text("推論キャンセル")
-                                    .font(.callout)
-                            }
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                        }
-                    }
-
                     Spacer()
 
                     // Keyboard dismiss button

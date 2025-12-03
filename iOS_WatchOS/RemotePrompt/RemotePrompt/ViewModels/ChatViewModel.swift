@@ -611,10 +611,37 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func fetchFinalResult(jobId: String, messageId: String) async {
+        // SSE切断後、ジョブがまだrunningの場合はSSE再接続でリカバリー
+        await fetchFinalResultWithRetry(jobId: jobId, messageId: messageId, retryCount: 0)
+    }
+
+    private func fetchFinalResultWithRetry(jobId: String, messageId: String, retryCount: Int) async {
+        let maxRetries = 3
+        let retryInterval: UInt64 = 2_000_000_000 // 2秒
+
         do {
-            print("DEBUG: Fetching final result for job \(jobId)")
+            print("DEBUG: Fetching final result for job \(jobId) (retry: \(retryCount))")
             let job = try await apiClient.fetchJob(id: jobId)
             print("DEBUG: Successfully fetched job, status: \(job.status)")
+
+            // ジョブがまだrunning状態の場合、SSEに再接続してストリーミングを再開
+            if job.status == "running" {
+                if retryCount < maxRetries {
+                    print("DEBUG: Job still running, reconnecting SSE (retry \(retryCount + 1)/\(maxRetries))")
+                    // フラグをリセットして再接続を許可
+                    finalResultFetched.remove(jobId)
+                    terminalStatusReceived.remove(jobId)
+                    // SSE再接続
+                    startSSEStreaming(jobId: jobId, messageId: messageId)
+                    return
+                } else {
+                    print("DEBUG: Max retries reached, will poll for completion")
+                    // 最大リトライ後はポーリングで待機
+                    await pollForCompletion(jobId: jobId, messageId: messageId)
+                    return
+                }
+            }
+
             guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
 
             var message = messages[index]
@@ -647,6 +674,52 @@ final class ChatViewModel: ObservableObject {
                 messageStore.updateMessage(message)
             }
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// ジョブ完了までポーリングで待機（SSE再接続が繰り返し失敗した場合のフォールバック）
+    private func pollForCompletion(jobId: String, messageId: String) async {
+        let maxPolls = 60 // 最大5分（5秒 × 60回）
+        let pollInterval: UInt64 = 5_000_000_000 // 5秒
+
+        for i in 0..<maxPolls {
+            do {
+                try await Task.sleep(nanoseconds: pollInterval)
+                print("DEBUG: Polling for job completion \(jobId) (\(i + 1)/\(maxPolls))")
+
+                let job = try await apiClient.fetchJob(id: jobId)
+
+                if job.status == "success" || job.status == "failed" {
+                    print("DEBUG: Job completed via polling: \(job.status)")
+                    guard let index = messages.firstIndex(where: { $0.id == messageId }) else { return }
+
+                    var message = messages[index]
+                    message.content = job.stdout ?? message.content
+                    message.status = job.status == "success" ? .completed : .failed
+                    message.finishedAt = job.finishedAt
+                    message.errorMessage = job.stderr
+
+                    messages[index] = message
+                    messageStore.updateMessage(message)
+
+                    if let threadId = threadId {
+                        await markAsReadAndUpdateBadge(threadId: threadId)
+                    }
+                    return
+                }
+            } catch {
+                print("DEBUG: Poll error: \(error)")
+            }
+        }
+
+        // タイムアウト: 失敗として処理
+        print("DEBUG: Polling timeout for job \(jobId)")
+        if let index = messages.firstIndex(where: { $0.id == messageId }) {
+            var message = messages[index]
+            message.status = .failed
+            message.errorMessage = "応答待機がタイムアウトしました"
+            messages[index] = message
+            messageStore.updateMessage(message)
         }
     }
 

@@ -757,12 +757,36 @@ struct ChatListRepresentable: UIViewRepresentable {
             }
         }
 
+        /// 推論完了時にメッセージ先頭へスクロールするためのフラグ
+        private var lastKnownRunningJobId: String?
+
         private func scrollToBottomIfNeeded() {
             guard let tableView else { return }
             guard !messages.isEmpty else { return }
             let last = IndexPath(row: messages.count - 1, section: 0)
-            // アニメーション無効化（ユーザー要望: 滑らかな遷移、アニメーション不要）
-            tableView.scrollToRow(at: last, at: .bottom, animated: false)
+            let lastMessage = messages[messages.count - 1]
+
+            // アシスタントメッセージの推論完了時のみ先頭（上部）にスクロール
+            // 条件: 前回running状態だったジョブが完了した場合
+            if lastMessage.type == .assistant {
+                if lastMessage.isRunning {
+                    // 推論中: ジョブIDを記録して下にスクロール
+                    lastKnownRunningJobId = lastMessage.jobId
+                    tableView.scrollToRow(at: last, at: .bottom, animated: false)
+                } else if !lastMessage.content.isEmpty,
+                          let jobId = lastMessage.jobId,
+                          jobId == lastKnownRunningJobId {
+                    // 推論完了: 記録していたジョブが完了したら先頭にスクロール
+                    lastKnownRunningJobId = nil
+                    tableView.scrollToRow(at: last, at: .top, animated: false)
+                } else {
+                    // その他（履歴読み込み等）: 下にスクロール
+                    tableView.scrollToRow(at: last, at: .bottom, animated: false)
+                }
+            } else {
+                // ユーザーメッセージ: 下にスクロール
+                tableView.scrollToRow(at: last, at: .bottom, animated: false)
+            }
         }
 
         // MARK: UITableViewDataSource
