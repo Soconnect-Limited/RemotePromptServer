@@ -67,26 +67,14 @@ nonisolated final class BadgeManager: Sendable {
 
     /// 独自のURLSessionで未読数を取得（メインAPIClientと競合しない）
     private nonisolated func fetchUnreadCountDirectly() async throws -> Int {
-        let baseURL = Constants.baseURL
-        guard !baseURL.isEmpty,
-              var components = URLComponents(string: "\(baseURL)/unread_count") else {
-            throw NSError(domain: "BadgeManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
-        }
-
-        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
-
-        guard let url = components.url else {
-            throw NSError(domain: "BadgeManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else {
+            throw NSError(domain: "BadgeManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No server configured"])
         }
 
         guard let apiKey = Constants.apiKey else {
             throw NSError(domain: "BadgeManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing API key"])
         }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.timeoutInterval = 10 // バッジ更新は短いタイムアウトで十分
 
         // 独自の軽量セッション（証明書ピンニングなし、自己署名証明書を許可）
         let config = URLSessionConfiguration.default
@@ -97,25 +85,46 @@ nonisolated final class BadgeManager: Sendable {
         let delegate = SimpleTrustDelegate()
         let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
 
-        let (data, response) = try await session.data(for: request)
+        var lastError: Error = NSError(domain: "BadgeManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
 
-        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw NSError(domain: "BadgeManager", code: code, userInfo: [NSLocalizedDescriptionKey: "HTTP error \(code)"])
-        }
+        for baseURL in allURLs {
+            do {
+                var components = URLComponents(string: "\(baseURL)/unread_count")
+                components?.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
 
-        struct UnreadCountResponse: Codable {
-            let deviceId: String
-            let unreadCount: Int
+                guard let url = components?.url else { continue }
 
-            enum CodingKeys: String, CodingKey {
-                case deviceId = "device_id"
-                case unreadCount = "unread_count"
+                var request = URLRequest(url: url)
+                request.httpMethod = "GET"
+                request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+                request.timeoutInterval = 10
+
+                let (data, response) = try await session.data(for: request)
+
+                guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+                    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                    throw NSError(domain: "BadgeManager", code: code, userInfo: [NSLocalizedDescriptionKey: "HTTP error \(code)"])
+                }
+
+                struct UnreadCountResponse: Codable {
+                    let deviceId: String
+                    let unreadCount: Int
+
+                    enum CodingKeys: String, CodingKey {
+                        case deviceId = "device_id"
+                        case unreadCount = "unread_count"
+                    }
+                }
+
+                let decoded = try JSONDecoder().decode(UnreadCountResponse.self, from: data)
+                return decoded.unreadCount
+            } catch {
+                lastError = error
+                print("[BadgeManager] fetchUnreadCount failed for \(baseURL): \(error.localizedDescription)")
+                continue
             }
         }
-
-        let decoded = try JSONDecoder().decode(UnreadCountResponse.self, from: data)
-        return decoded.unreadCount
+        throw lastError
     }
 
     /// バッジを直接設定（0で非表示）

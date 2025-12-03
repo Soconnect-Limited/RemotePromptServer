@@ -1,12 +1,15 @@
 import Foundation
 
 final class FileService {
-    private let session: URLSession
     private let decoder: JSONDecoder
     private let maxFileSize: Int64 = 500_000 // 500KB
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    /// APIClientと同じセッションを使用（証明書ピンニング対応）
+    private var session: URLSession {
+        APIClient.shared.sharedSession
+    }
+
+    init() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         self.decoder = decoder
@@ -15,66 +18,97 @@ final class FileService {
     // MARK: - Public APIs
 
     func listFiles(roomId: String, path: String, deviceId: String) async throws -> [FileItem] {
-        var components = URLComponents(string: "\(Constants.baseURL)/rooms/\(roomId)/files")
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: deviceId),
-            // クエリは URLComponents 側で自動エンコードされるため手動エンコード不要
-            URLQueryItem(name: "path", value: path),
-        ]
-        guard let url = components?.url else { throw APIError.invalidURL }
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
 
-        var request = try makeRequest(url: url, method: "GET")
-        do {
-            let (data, response) = try await session.data(for: request)
-            try handleHTTPResponse(response, data: data)
-            return try decoder.decode([FileItem].self, from: data)
-        } catch let error as FileError {
-            throw error
-        } catch let urlError as URLError {
-            throw FileError.networkError(urlError)
+        var lastError: Error = APIError.invalidURL
+
+        for baseURL in allURLs {
+            do {
+                var components = URLComponents(string: "\(baseURL)/rooms/\(roomId)/files")
+                components?.queryItems = [
+                    URLQueryItem(name: "device_id", value: deviceId),
+                    URLQueryItem(name: "path", value: path),
+                ]
+                guard let url = components?.url else { continue }
+
+                var request = try makeRequest(url: url, method: "GET")
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                return try decoder.decode([FileItem].self, from: data)
+            } catch let error as FileError {
+                throw error  // FileErrorは即座にスロー（サーバーからの明確なエラー）
+            } catch {
+                lastError = error
+                print("[FileService] listFiles failed for \(baseURL): \(error.localizedDescription)")
+                continue  // 次のURLを試す
+            }
         }
+        throw lastError
     }
 
     func readFile(roomId: String, path: String, deviceId: String) async throws -> String {
-        let encodedPath = encodePathSegment(path)
-        guard let url = URL(string: "\(Constants.baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
-            throw APIError.invalidURL
-        }
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
 
-        var request = try makeRequest(url: url, method: "GET")
-        do {
-            let (data, response) = try await session.data(for: request)
-            try handleHTTPResponse(response, data: data)
-            guard let text = String(data: data, encoding: .utf8) else {
-                throw FileError.serverError(500, "Invalid text encoding")
+        let encodedPath = encodePathSegment(path)
+        var lastError: Error = APIError.invalidURL
+
+        for baseURL in allURLs {
+            do {
+                guard let url = URL(string: "\(baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
+                    continue
+                }
+
+                var request = try makeRequest(url: url, method: "GET")
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                guard let text = String(data: data, encoding: .utf8) else {
+                    throw FileError.serverError(500, "Invalid text encoding")
+                }
+                return text
+            } catch let error as FileError {
+                throw error
+            } catch {
+                lastError = error
+                print("[FileService] readFile failed for \(baseURL): \(error.localizedDescription)")
+                continue
             }
-            return text
-        } catch let error as FileError {
-            throw error
-        } catch let urlError as URLError {
-            throw FileError.networkError(urlError)
         }
+        throw lastError
     }
 
     func saveFile(roomId: String, path: String, content: String, deviceId: String) async throws {
         try validateFileSize(content)
+
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
+
         let encodedPath = encodePathSegment(path)
-        guard let url = URL(string: "\(Constants.baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
-            throw APIError.invalidURL
-        }
+        var lastError: Error = APIError.invalidURL
 
-        var request = try makeRequest(url: url, method: "PUT")
-        request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.httpBody = content.data(using: .utf8)
+        for baseURL in allURLs {
+            do {
+                guard let url = URL(string: "\(baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
+                    continue
+                }
 
-        do {
-            let (data, response) = try await session.data(for: request)
-            try handleHTTPResponse(response, data: data)
-        } catch let error as FileError {
-            throw error
-        } catch let urlError as URLError {
-            throw FileError.networkError(urlError)
+                var request = try makeRequest(url: url, method: "PUT")
+                request.setValue("text/plain; charset=utf-8", forHTTPHeaderField: "Content-Type")
+                request.httpBody = content.data(using: .utf8)
+
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                return
+            } catch let error as FileError {
+                throw error
+            } catch {
+                lastError = error
+                print("[FileService] saveFile failed for \(baseURL): \(error.localizedDescription)")
+                continue
+            }
         }
+        throw lastError
     }
 
     func validateFileSize(_ content: String) throws {

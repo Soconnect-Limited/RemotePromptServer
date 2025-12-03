@@ -181,6 +181,13 @@ class CreateRoomRequest(BaseModel):
     icon: str = "folder"
 
 
+class UpdateRoomRequest(BaseModel):
+    device_id: str
+    name: str
+    workspace_path: str
+    icon: str = "folder"
+
+
 class JobSummary(BaseModel):
     id: str
     runner: str
@@ -320,6 +327,34 @@ def delete_room(
     db.delete(room)
     db.commit()
     return {"status": "ok"}
+
+
+@app.put("/rooms/{room_id}")
+def update_room(
+    room_id: str,
+    req: UpdateRoomRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """ルームの名前、ワークスペースパス、アイコンを更新する。"""
+    room = db.query(Room).filter_by(id=room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if room.device_id != req.device_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        validated_path = validate_workspace_path(req.workspace_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    room.name = req.name
+    room.workspace_path = validated_path
+    room.icon = req.icon
+    room.updated_at = utcnow()
+    db.commit()
+    db.refresh(room)
+    return room.to_dict()
 
 
 class ReorderRoomsRequest(BaseModel):

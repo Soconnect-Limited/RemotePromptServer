@@ -188,6 +188,11 @@ final class APIClient: APIClientProtocol {
         return session
     }
 
+    /// 他のサービスからも使用可能な共有セッション
+    var sharedSession: URLSession {
+        getSession()
+    }
+
     /// セッションを無効化（設定変更時に呼び出し）
     func invalidateSession() {
         pinnedSession?.invalidateAndCancel()

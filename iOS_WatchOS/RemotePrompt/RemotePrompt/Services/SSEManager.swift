@@ -93,8 +93,25 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
         print("DEBUG: SSEManager - Session recreated due to configuration change")
     }
 
+    /// 現在の接続先URLインデックス（フォールバック用）
+    private var currentURLIndex = 0
+
     func connect(jobId: String) {
         self.jobId = jobId
+        currentURLIndex = 0
+        connectToNextURL(jobId: jobId)
+    }
+
+    private func connectToNextURL(jobId: String) {
+        let allURLs = Constants.allURLs
+        guard currentURLIndex < allURLs.count else {
+            DispatchQueue.main.async {
+                self.errorMessage = "全てのサーバーに接続できませんでした"
+            }
+            return
+        }
+
+        let baseURL = allURLs[currentURLIndex]
 
         // セッションが無効な場合は再生成（長時間接続後のフォールバック）
         if session == nil || !Constants.reuseSSESession {
@@ -114,12 +131,15 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
         task = nil
         buffer.removeAll()
 
-        print("DEBUG: SSEManager.connect() - Reusing existing URLSession for job: \(jobId)")
+        if currentURLIndex > 0 {
+            print("DEBUG: SSEManager.connect() - Fallback to: \(baseURL)")
+        } else {
+            print("DEBUG: SSEManager.connect() - Connecting to: \(baseURL)")
+        }
 
-        guard let url = URL(string: "\(Constants.baseURL)/jobs/\(jobId)/stream") else {
-            DispatchQueue.main.async {
-                self.errorMessage = "無効なSSE URL"
-            }
+        guard let url = URL(string: "\(baseURL)/jobs/\(jobId)/stream") else {
+            currentURLIndex += 1
+            connectToNextURL(jobId: jobId)
             return
         }
 
@@ -256,6 +276,27 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
             self.session = nil  // 次回connect()で再生成
         }
 
+        // 接続エラー時にフォールバックを試す
+        if let error = error as NSError?,
+           error.domain == NSURLErrorDomain,
+           let jobId = self.jobId {
+            // ネットワークエラーの場合、次のURLを試す
+            let fallbackCodes = [
+                NSURLErrorNotConnectedToInternet,
+                NSURLErrorCannotFindHost,
+                NSURLErrorCannotConnectToHost,
+                NSURLErrorTimedOut,
+                NSURLErrorNetworkConnectionLost,
+                NSURLErrorSecureConnectionFailed,
+            ]
+            if fallbackCodes.contains(error.code) && currentURLIndex + 1 < Constants.allURLs.count {
+                print("DEBUG: SSE connection failed, trying fallback URL...")
+                currentURLIndex += 1
+                connectToNextURL(jobId: jobId)
+                return
+            }
+        }
+
         // バックグラウンドスレッドから実行されるため、メインスレッドで更新
         DispatchQueue.main.async {
             self.isConnected = false
@@ -296,6 +337,15 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
         // CertificatePinningDelegateに委譲
         pinningDelegate.urlSession(session, didReceive: challenge, completionHandler: completionHandler)
     }
+
+    // MARK: - Certificate Event Notifications
+
+    /// 証明書変更通知
+    static let certificateChangedNotification = Notification.Name("SSECertificateChanged")
+    /// 証明書失効通知
+    static let certificateRevokedNotification = Notification.Name("SSECertificateRevoked")
+    /// 証明書モード変更通知
+    static let certificateModeChangedNotification = Notification.Name("SSECertificateModeChanged")
 
     // MARK: - Certificate Event Parsing
 
@@ -338,6 +388,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
                         config.isTrusted = false
                         ServerConfigurationStore.shared.save(config)
                     }
+                    // NotificationCenterで通知
+                    NotificationCenter.default.post(
+                        name: SSEManager.certificateChangedNotification,
+                        object: event
+                    )
                 }
             }
 
@@ -349,6 +404,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
                     // 証明書をクリアして接続切断
                     ServerConfigurationStore.shared.clearTrustedCertificate()
                     self.disconnect()
+                    // NotificationCenterで通知
+                    NotificationCenter.default.post(
+                        name: SSEManager.certificateRevokedNotification,
+                        object: event
+                    )
                 }
             }
 
@@ -362,6 +422,11 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
                         config.isTrusted = false
                         ServerConfigurationStore.shared.save(config)
                     }
+                    // NotificationCenterで通知
+                    NotificationCenter.default.post(
+                        name: SSEManager.certificateModeChangedNotification,
+                        object: event
+                    )
                 }
             }
 
