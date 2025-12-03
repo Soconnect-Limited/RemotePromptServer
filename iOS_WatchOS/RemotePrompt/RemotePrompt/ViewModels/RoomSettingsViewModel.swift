@@ -43,10 +43,15 @@ final class RoomSettingsViewModel: ObservableObject {
 
             // 編集中のrunner設定のみ更新、他のrunnerはそのまま
             let mergedSettings: RoomSettings
-            if runner == "claude" {
-                mergedSettings = RoomSettings(claude: settings.claude, codex: currentSettings.codex)
-            } else {
-                mergedSettings = RoomSettings(claude: currentSettings.claude, codex: settings.codex)
+            switch runner {
+            case "claude":
+                mergedSettings = RoomSettings(claude: settings.claude, codex: currentSettings.codex, gemini: currentSettings.gemini)
+            case "codex":
+                mergedSettings = RoomSettings(claude: currentSettings.claude, codex: settings.codex, gemini: currentSettings.gemini)
+            case "gemini":
+                mergedSettings = RoomSettings(claude: currentSettings.claude, codex: currentSettings.codex, gemini: settings.gemini)
+            default:
+                mergedSettings = settings
             }
 
             _ = try await apiClient.updateRoomSettings(roomId: room.id, deviceId: deviceId, settings: mergedSettings)

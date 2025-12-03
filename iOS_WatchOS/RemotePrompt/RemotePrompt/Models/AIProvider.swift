@@ -27,21 +27,12 @@ enum AIProvider: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    /// デフォルトのBashコマンド/パス
-    var defaultBashCommand: String? {
-        switch self {
-        case .claude: return "claude"
-        case .codex: return "codex"
-        case .gemini: return nil  // ユーザー設定必須
-        }
-    }
 }
 
 /// AIプロバイダー個別設定
 struct AIProviderConfiguration: Codable, Identifiable, Equatable, Hashable {
     let provider: AIProvider
     var isEnabled: Bool
-    var bashPath: String?  // カスタムBashパス（Gemini用など）
     var sortOrder: Int
 
     var id: String { provider.id }
@@ -49,7 +40,6 @@ struct AIProviderConfiguration: Codable, Identifiable, Equatable, Hashable {
     enum CodingKeys: String, CodingKey {
         case provider
         case isEnabled = "is_enabled"
-        case bashPath = "bash_path"
         case sortOrder = "sort_order"
     }
 
@@ -58,19 +48,10 @@ struct AIProviderConfiguration: Codable, Identifiable, Equatable, Hashable {
         AIProvider.allCases.enumerated().map { index, provider in
             AIProviderConfiguration(
                 provider: provider,
-                isEnabled: provider != .gemini,  // Geminiはデフォルト無効（パス設定必要）
-                bashPath: provider.defaultBashCommand,
+                isEnabled: true,  // 全プロバイダーをデフォルト有効
                 sortOrder: index
             )
         }
-    }
-
-    /// Bashパスが有効かどうか
-    var hasValidBashPath: Bool {
-        guard let path = bashPath, !path.isEmpty else {
-            return provider.defaultBashCommand != nil
-        }
-        return true
     }
 }
 

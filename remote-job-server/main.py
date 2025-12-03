@@ -148,7 +148,7 @@ app.add_middleware(
 
 session_manager = SessionManager()
 job_manager = JobManager(session_manager=session_manager, sse_manager=sse_manager)
-ALLOWED_RUNNERS = {"claude", "codex"}
+ALLOWED_RUNNERS = {"claude", "codex", "gemini"}
 MAX_SETTINGS_BYTES = 10_240  # 10KB
 
 

@@ -192,12 +192,6 @@ final class ServerSettingsViewModel: ObservableObject {
         aiProviders[index].isEnabled.toggle()
     }
 
-    /// AIプロバイダーのBashパスを更新
-    func updateAIProviderBashPath(_ provider: AIProvider, path: String) {
-        guard let index = aiProviders.firstIndex(where: { $0.provider == provider }) else { return }
-        aiProviders[index].bashPath = path.isEmpty ? nil : path
-    }
-
     /// AIプロバイダーを移動（ドラッグ並べ替え用）
     func moveAIProvider(from source: IndexSet, to destination: Int) {
         aiProviders.move(fromOffsets: source, toOffset: destination)

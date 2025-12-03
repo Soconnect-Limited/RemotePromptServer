@@ -21,6 +21,15 @@ struct RoomSettingsView: View {
         }
     }
 
+    private var runnerDisplayName: String {
+        switch runner {
+        case "claude": return "Claude設定"
+        case "codex": return "Codex設定"
+        case "gemini": return "Gemini設定"
+        default: return "\(runner)設定"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -35,7 +44,7 @@ struct RoomSettingsView: View {
                         ToolsEditor(tools: $viewModel.settings.claude.tools)
                         CustomFlagsEditor(flags: $viewModel.settings.claude.customFlags)
                     }
-                } else {
+                } else if runner == "codex" {
                     Section("Codex") {
                         Picker("Model", selection: $viewModel.settings.codex.model) {
                             ForEach(["gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"], id: \.self) { Text($0) }
@@ -51,9 +60,21 @@ struct RoomSettingsView: View {
                         }
                         CustomFlagsEditor(flags: $viewModel.settings.codex.customFlags)
                     }
+                } else if runner == "gemini" {
+                    Section("Gemini") {
+                        Picker("Model", selection: $viewModel.settings.gemini.model) {
+                            ForEach(["gemini-3.0-pro", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"], id: \.self) { Text($0) }
+                        }
+                        Toggle("Sandbox", isOn: $viewModel.settings.gemini.sandbox)
+                        Toggle("YOLO Mode", isOn: $viewModel.settings.gemini.yolo)
+                        Picker("Approval", selection: $viewModel.settings.gemini.approvalMode) {
+                            ForEach(["default", "auto_edit", "yolo"], id: \.self) { Text($0) }
+                        }
+                        CustomFlagsEditor(flags: $viewModel.settings.gemini.customFlags)
+                    }
                 }
             }
-            .navigationTitle("\(runner == "claude" ? "Claude" : "Codex")設定")
+            .navigationTitle(runnerDisplayName)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }

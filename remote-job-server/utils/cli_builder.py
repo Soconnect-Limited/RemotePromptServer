@@ -44,3 +44,23 @@ def build_codex_command(settings: Optional[Dict] = None) -> List[str]:
             cmd.extend(cfg["custom_flags"])
 
     return cmd
+
+
+def build_gemini_command(settings: Optional[Dict] = None) -> List[str]:
+    """Build Gemini CLI command."""
+    cmd: List[str] = ["gemini", "-o", "text"]
+
+    if settings and "gemini" in settings:
+        cfg = settings["gemini"]
+        if "model" in cfg:
+            cmd.extend(["-m", cfg["model"]])
+        if "sandbox" in cfg and cfg["sandbox"]:
+            cmd.append("-s")
+        if "yolo" in cfg and cfg["yolo"]:
+            cmd.append("-y")
+        if "approval_mode" in cfg:
+            cmd.extend(["--approval-mode", cfg["approval_mode"]])
+        if "custom_flags" in cfg:
+            cmd.extend(cfg["custom_flags"])
+
+    return cmd

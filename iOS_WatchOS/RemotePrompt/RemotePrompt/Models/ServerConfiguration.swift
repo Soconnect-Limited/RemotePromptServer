@@ -82,11 +82,6 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
         aiProviders.enabledProviders
     }
 
-    /// 指定プロバイダーのBashパスを取得
-    func bashPath(for provider: AIProvider) -> String? {
-        aiProviders.configuration(for: provider)?.bashPath ?? provider.defaultBashCommand
-    }
-
     /// URLバリデーション（https://必須）
     var isValidURL: Bool {
         guard let parsed = URL(string: url),

@@ -259,9 +259,6 @@ struct ServerSettingsView: View {
                     config: config,
                     onToggle: {
                         viewModel.toggleAIProvider(config.provider)
-                    },
-                    onBashPathChange: { newPath in
-                        viewModel.updateAIProviderBashPath(config.provider, path: newPath)
                     }
                 )
             }
@@ -476,62 +473,24 @@ struct ServerSettingsView: View {
 private struct AIProviderRow: View {
     let config: AIProviderConfiguration
     let onToggle: () -> Void
-    let onBashPathChange: (String) -> Void
-
-    @State private var bashPath: String = ""
-    @State private var isExpanded: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: config.provider.systemImage)
-                    .foregroundColor(config.isEnabled ? .accentColor : .secondary)
-                    .frame(width: 24)
+        HStack {
+            Image(systemName: config.provider.systemImage)
+                .foregroundColor(config.isEnabled ? .accentColor : .secondary)
+                .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(config.provider.displayName)
-                        .foregroundColor(config.isEnabled ? .primary : .secondary)
+            Text(config.provider.displayName)
+                .foregroundColor(config.isEnabled ? .primary : .secondary)
 
-                    if config.provider == .gemini && config.isEnabled {
-                        Text(config.bashPath ?? "パス未設定")
-                            .font(.caption)
-                            .foregroundColor(config.hasValidBashPath ? .secondary : .orange)
-                    }
-                }
+            Spacer()
 
-                Spacer()
-
-                Toggle("", isOn: Binding(
-                    get: { config.isEnabled },
-                    set: { _ in onToggle() }
-                ))
-                .labelsHidden()
-            }
-
-            // Gemini用のBashパス設定（展開時のみ）
-            if config.provider == .gemini && config.isEnabled {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Bashパス")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    TextField("例: /usr/local/bin/gemini", text: $bashPath)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                        .autocapitalization(.none)
-                        .autocorrectionDisabled()
-                        .onChange(of: bashPath) { _, newValue in
-                            onBashPathChange(newValue)
-                        }
-                }
-                .padding(.leading, 32)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+            Toggle("", isOn: Binding(
+                get: { config.isEnabled },
+                set: { _ in onToggle() }
+            ))
+            .labelsHidden()
         }
-        .onAppear {
-            bashPath = config.bashPath ?? ""
-        }
-        .animation(.easeInOut(duration: 0.2), value: config.isEnabled)
     }
 }
 
