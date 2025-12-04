@@ -7,10 +7,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, TYPE_CHECKING
 
+import httpx
+
 from database import SessionLocal
 from models import Job, Thread, Room
 from session_manager import SessionManager
-from apns_manager import APNsManager
+from config import settings
 
 if TYPE_CHECKING:  # pragma: no cover
     from sse_manager import SSEManager
@@ -32,7 +34,7 @@ class JobManager:
     ) -> None:
         self.session_manager = session_manager or SessionManager()
         self.sse_manager = sse_manager
-        self.apns_manager = APNsManager()
+        self.notification_server_url = settings.notification_server_url
 
     def create_job(  # pylint: disable=too-many-arguments
         self,
@@ -153,18 +155,21 @@ class JobManager:
                 close_stream=True,
             )
 
-            # Send push notification with badge count
+            # Send push notification via VPS
             if job.notify_token:
                 LOGGER.info("🔔 Sending notification for token=%s with badge=%d", job.notify_token[:8], badge_count)
                 try:
-                    import asyncio
-                    asyncio.run(
-                        self.apns_manager.send_notification(
-                            device_token=job.notify_token,
-                            title="ジョブ完了",
-                            body=f"{job.runner} の実行が{'成功' if job.status == 'success' else '失敗'}しました",
-                            badge=badge_count,
-                        )
+                    # Room名とスレッド名を取得
+                    room = db.query(Room).filter_by(id=job.room_id).first()
+                    thread = db.query(Thread).filter_by(id=job.thread_id).first()
+                    room_name = room.name if room else "Unknown"
+                    thread_name = thread.name if thread else "Default"
+
+                    self._send_notification_via_vps(
+                        device_token=job.notify_token,
+                        title="推論完了",
+                        body=f"{room_name}/{thread_name} - {job.runner}",
+                        badge=badge_count,
                     )
                 except Exception as e:
                     LOGGER.error("Failed to send notification: %s", e)
@@ -215,23 +220,80 @@ class JobManager:
                     close_stream=True,
                 )
 
-                # Send push notification with badge count
+                # Send push notification via VPS
                 if job.notify_token:
                     LOGGER.info("🔔 Sending notification (error) for token=%s with badge=%d", job.notify_token[:8], badge_count)
                     try:
-                        import asyncio
-                        asyncio.run(
-                            self.apns_manager.send_notification(
-                                device_token=job.notify_token,
-                                title="ジョブ完了",
-                                body=f"{job.runner} の実行が失敗しました",
-                                badge=badge_count,
-                            )
+                        # Room名とスレッド名を取得
+                        room = db.query(Room).filter_by(id=job.room_id).first()
+                        thread = db.query(Thread).filter_by(id=job.thread_id).first()
+                        room_name = room.name if room else "Unknown"
+                        thread_name = thread.name if thread else "Default"
+
+                        self._send_notification_via_vps(
+                            device_token=job.notify_token,
+                            title="推論失敗",
+                            body=f"{room_name}/{thread_name} - {job.runner}",
+                            badge=badge_count,
                         )
                     except Exception as e:
                         LOGGER.error("Failed to send notification: %s", e)
         finally:
             db.close()
+
+    def _send_notification_via_vps(
+        self,
+        device_token: str,
+        title: str,
+        body: str,
+        badge: Optional[int] = None,
+    ) -> bool:
+        """Send push notification via VPS notification server.
+
+        Args:
+            device_token: APNs device token (hex string)
+            title: Notification title
+            body: Notification body
+            badge: Badge count (optional)
+
+        Returns:
+            True if notification sent successfully, False otherwise
+        """
+        if not device_token:
+            LOGGER.debug("No device token provided. Skipping notification.")
+            return False
+
+        try:
+            payload = {
+                "deviceToken": device_token,
+                "title": title,
+                "body": body,
+            }
+            if badge is not None:
+                payload["badge"] = badge
+
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    self.notification_server_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+
+                if response.status_code == 200:
+                    LOGGER.info("📱 Notification sent via VPS to %s: %s", device_token[:8], title)
+                    return True
+                else:
+                    LOGGER.error(
+                        "Failed to send notification via VPS to %s: HTTP %d - %s",
+                        device_token[:8],
+                        response.status_code,
+                        response.text,
+                    )
+                    return False
+
+        except Exception as exc:
+            LOGGER.error("Failed to send notification via VPS to %s: %s", device_token[:8], exc)
+            return False
 
     def get_jobs(
         self,

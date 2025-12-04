@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     apns_bundle_id: str = ""
     apns_environment: str = "sandbox"
 
+    # Remote Notification Server (VPS)
+    notification_server_url: str = "https://remoteprompt.soconnect.biz/send"
+
     # SSL/TLS Certificate Configuration
     ssl_mode: Literal["commercial", "self_signed", "auto"] = "auto"
     ssl_auto_fallback_enabled: bool = False  # Require explicit opt-in for fallback
