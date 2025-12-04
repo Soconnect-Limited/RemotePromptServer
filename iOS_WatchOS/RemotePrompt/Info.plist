@@ -38,6 +38,10 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>ローカルネットワーク上のRemotePromptサーバーに接続します。</string>
 
+	<!-- Camera Usage Description -->
+	<key>NSCameraUsageDescription</key>
+	<string>設定を共有するQRコードをスキャンするためにカメラを使用します。</string>
+
 	<!-- UI Application Scene Manifest -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
@@ -61,8 +65,8 @@
 	</array>
 
 	<!-- Launch Screen -->
-	<key>UILaunchScreen</key>
-	<dict/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 
 	<!-- Status Bar Style -->
 	<key>UIStatusBarStyle</key>

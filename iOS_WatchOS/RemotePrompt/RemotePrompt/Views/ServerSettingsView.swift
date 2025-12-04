@@ -11,6 +11,8 @@ struct ServerSettingsView: View {
     @State private var showResetConfirmation: Bool = false
     @State private var showResetAllConfirmation: Bool = false
     @State private var showBonjourSection: Bool = true
+    @State private var showQRCodeSheet: Bool = false
+    @State private var showQRScannerSheet: Bool = false
 
     /// iPad向けの最大フォーム幅
     private let maxFormWidth: CGFloat = 600
@@ -428,6 +430,27 @@ struct ServerSettingsView: View {
 
     private var advancedSection: some View {
         Section {
+            // 設定共有ボタン
+            Button {
+                showQRCodeSheet = true
+            } label: {
+                HStack {
+                    Image(systemName: "qrcode")
+                    Text("設定をQRコードで共有")
+                }
+            }
+            .disabled(viewModel.serverURL.isEmpty)
+
+            // 設定インポートボタン
+            Button {
+                showQRScannerSheet = true
+            } label: {
+                HStack {
+                    Image(systemName: "qrcode.viewfinder")
+                    Text("QRコードから設定をインポート")
+                }
+            }
+
             Button("証明書信頼をリセット") {
                 showResetConfirmation = true
             }
@@ -439,6 +462,12 @@ struct ServerSettingsView: View {
             .foregroundColor(.red)
         } header: {
             Text("詳細設定")
+        }
+        .sheet(isPresented: $showQRCodeSheet) {
+            SettingsQRCodeView()
+        }
+        .sheet(isPresented: $showQRScannerSheet) {
+            SettingsQRScannerView()
         }
     }
 
