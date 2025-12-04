@@ -168,14 +168,26 @@ struct ServerSettingsView: View {
 
     private var serverURLSection: some View {
         Section {
-            TextField("例: My Server", text: $viewModel.serverName)
+            ZStack(alignment: .leading) {
+                if viewModel.serverName.isEmpty {
+                    Text("例: My Server")
+                        .foregroundColor(Color(UIColor.placeholderText))
+                }
+                TextField("", text: $viewModel.serverName)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
-                TextField("例: https://192.168.1.100:8443", text: $viewModel.serverURL)
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .autocapitalization(.none)
-                    .autocorrectionDisabled()
+                ZStack(alignment: .leading) {
+                    if viewModel.serverURL.isEmpty {
+                        Text(verbatim: "例: https://192.168.1.100:8443")
+                            .foregroundColor(Color(UIColor.placeholderText))
+                    }
+                    TextField("", text: $viewModel.serverURL)
+                        .textContentType(nil)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                }
 
                 if !viewModel.serverURL.isEmpty && !viewModel.isValidMainURL {
                     Text("https:// で始まるURLを入力してください")
@@ -196,8 +208,8 @@ struct ServerSettingsView: View {
         Section {
             ForEach(viewModel.alternativeURLs.indices, id: \.self) { index in
                 HStack {
-                    Text(viewModel.alternativeURLs[index])
-                        .foregroundColor(.primary) // 入力済みは白（ライトモードでは黒）
+                    Text(verbatim: viewModel.alternativeURLs[index])
+                        .foregroundStyle(.primary)
                     Spacer()
                     Button {
                         viewModel.removeAlternativeURL(at: index)
@@ -210,11 +222,17 @@ struct ServerSettingsView: View {
             }
 
             HStack {
-                TextField("例: https://100.64.0.1:8443", text: $newAlternativeURL)
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .autocapitalization(.none)
-                    .autocorrectionDisabled()
+                ZStack(alignment: .leading) {
+                    if newAlternativeURL.isEmpty {
+                        Text(verbatim: "例: https://100.64.0.1:8443")
+                            .foregroundColor(Color(UIColor.placeholderText))
+                    }
+                    TextField("", text: $newAlternativeURL)
+                        .textContentType(nil)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                }
 
                 Button {
                     viewModel.addAlternativeURL(newAlternativeURL)
@@ -239,10 +257,16 @@ struct ServerSettingsView: View {
 
     private var apiKeySection: some View {
         Section {
-            SecureField("例: your-secret-api-key", text: $viewModel.apiKey)
-                .textContentType(.password)
-                .autocapitalization(.none)
-                .autocorrectionDisabled()
+            ZStack(alignment: .leading) {
+                if viewModel.apiKey.isEmpty {
+                    Text("例: your-secret-api-key")
+                        .foregroundColor(Color(UIColor.placeholderText))
+                }
+                SecureField("", text: $viewModel.apiKey)
+                    .textContentType(.password)
+                    .autocapitalization(.none)
+                    .autocorrectionDisabled()
+            }
         } header: {
             Text("認証")
         } footer: {
