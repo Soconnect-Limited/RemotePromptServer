@@ -79,6 +79,8 @@ struct RoomDetailView: View {
                     selectedThread = thread
                     // v4.4: スレッド切り替え時は全runner用ViewModelをクリア
                     chatViewModels.removeAll()
+                    // v4.5: スレッド選択直後に表示用ViewModelを生成してロード待ちを防ぐ
+                    ensureViewModel(for: thread, runner: selectedRunner.rawValue)
                     // v4.3.1: スレッド選択時に現在のrunnerを既読にする
                     Task { @MainActor in
                         await threadListViewModel.markRunnerAsRead(
@@ -156,6 +158,18 @@ struct RoomDetailView: View {
                                 runner: newRunner.rawValue
                             )
                             updateSelectedThreadUnread(removeRunner: newRunner.rawValue)
+                        }
+                    }
+                }
+                .onChange(of: selectedThread) { _, newThread in
+                    if let thread = newThread {
+                        ensureViewModel(for: thread, runner: selectedRunner.rawValue)
+                        Task { @MainActor in
+                            await threadListViewModel.markRunnerAsRead(
+                                threadId: thread.id,
+                                runner: selectedRunner.rawValue
+                            )
+                            updateSelectedThreadUnread(removeRunner: selectedRunner.rawValue)
                         }
                     }
                 }
