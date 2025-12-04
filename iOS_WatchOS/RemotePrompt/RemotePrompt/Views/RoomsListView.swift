@@ -131,24 +131,28 @@ struct RoomsListView: View {
 
     @ViewBuilder
     private var roomsList: some View {
-        List {
-            if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
-                loadingView
-            } else if viewModel.rooms.isEmpty {
-                emptyStateView
-            } else {
-                roomsForEach
+        if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
+            loadingView
+        } else {
+            List {
+                if viewModel.rooms.isEmpty {
+                    emptyStateView
+                } else {
+                    roomsForEach
+                }
             }
         }
     }
 
     private var loadingView: some View {
-        HStack {
-            Spacer()
-            ProgressView("ルームを読み込み中...")
-            Spacer()
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text("読み込み中...")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
         }
-        .listRowBackground(Color.clear)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyStateView: some View {
