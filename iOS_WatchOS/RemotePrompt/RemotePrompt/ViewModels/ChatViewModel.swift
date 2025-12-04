@@ -482,6 +482,8 @@ final class ChatViewModel: ObservableObject {
         return true
     }
 
+    private var successfulJobs: Set<String> = []  // SSEでsuccessを受信済みのジョブ（エラー表示抑制用）
+
     private func startSSEStreaming(jobId: String, messageId: String) {
         guard enableStreaming else {
             print("DEBUG: startSSEStreaming() - Streaming disabled, fetching final result for job: \(jobId)")
@@ -503,6 +505,7 @@ final class ChatViewModel: ObservableObject {
         // 新規ジョブ開始時に既存フラグをリセット
         finalResultFetched.remove(jobId)
         terminalStatusReceived.remove(jobId)
+        successfulJobs.remove(jobId)
 
         // IMPORTANT: sseCancellablesに直接格納するためのSet を先に作成
         sseCancellables[jobId] = Set<AnyCancellable>()
@@ -518,6 +521,10 @@ final class ChatViewModel: ObservableObject {
                 guard let self else { return }
                 if status == "success" || status == "failed" {
                     terminalStatusReceived.insert(jobId)
+                    // successステータスを記録（後続のエラー表示抑制用）
+                    if status == "success" {
+                        successfulJobs.insert(jobId)
+                    }
                     guard !self.finalResultFetched.contains(jobId) else {
                         print("DEBUG: Terminal status already fetched for job: \(jobId)")
                         return
@@ -560,7 +567,12 @@ final class ChatViewModel: ObservableObject {
             .compactMap { $0 }
             .sink { [weak self] message in
                 print("DEBUG: SSE error: \(message)")
-                self?.errorMessage = message
+                // SSEで既にsuccessを受信済みの場合、エラー表示をスキップ
+                guard let self, !self.successfulJobs.contains(jobId) else {
+                    print("DEBUG: SSE error ignored for successful job: \(jobId)")
+                    return
+                }
+                self.errorMessage = message
             }
             .store(in: &sseCancellables[jobId]!)
 
@@ -590,6 +602,7 @@ final class ChatViewModel: ObservableObject {
         sseCancellables.removeValue(forKey: jobId)?.forEach { $0.cancel() }
         finalResultFetched.remove(jobId)
         terminalStatusReceived.remove(jobId)
+        successfulJobs.remove(jobId)
 
         // finalResultFetchedはTask内のdeferで管理するため、ここでは削除しない
         // （Step 1.1/1.2のdeferが責務を持つ）
@@ -680,6 +693,24 @@ final class ChatViewModel: ObservableObject {
 #endif
         } catch {
             print("DEBUG: fetchFinalResult error: \(error)")
+
+            // SSEで既にsuccessを受信済みの場合、ネットワークエラーは無視
+            // （推論は正常終了しているため、アラート表示は不要）
+            if successfulJobs.contains(jobId) {
+                print("DEBUG: fetchFinalResult - Ignoring error for already successful job: \(jobId)")
+                // メッセージを完了状態のままにする（エラー状態に変更しない）
+                if let index = messages.firstIndex(where: { $0.id == messageId }) {
+                    var message = messages[index]
+                    if message.status != .completed {
+                        message.status = .completed
+                        message.finishedAt = Date()
+                        messages[index] = message
+                        messageStore.updateMessage(message)
+                    }
+                }
+                return
+            }
+
             // アシスタントメッセージを失敗状態に更新
             if let index = messages.firstIndex(where: { $0.id == messageId }) {
                 var message = messages[index]
@@ -902,6 +933,7 @@ final class ChatViewModel: ObservableObject {
         sseCancellables.removeAll()
         finalResultFetched.removeAll()
         terminalStatusReceived.removeAll()
+        successfulJobs.removeAll()
 
         // フォアグラウンド監視を解除
         if let observer = foregroundObserver {
