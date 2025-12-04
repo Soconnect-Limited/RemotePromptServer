@@ -44,6 +44,15 @@ nonisolated final class BadgeManager: Sendable {
         let startTime = CFAbsoluteTimeGetCurrent()
         print("[BadgeManager] updateBadge START @ \(Date()) isMainThread: \(Foundation.Thread.isMainThread)")
 
+        // サーバー設定が完了していなければスキップ
+        let isConfigured = await MainActor.run {
+            ServerConfigurationStore.shared.currentConfiguration?.isFullyConfigured == true
+        }
+        guard isConfigured else {
+            print("[BadgeManager] Server not fully configured, skipping badge update")
+            return
+        }
+
         // メインのルーム読み込みを優先するため、少し待機
         try? await Task.sleep(for: .seconds(2))
 

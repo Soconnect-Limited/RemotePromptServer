@@ -93,6 +93,11 @@ struct ServerConfiguration: Codable, Identifiable, Hashable {
         return true
     }
 
+    /// URL と APIキーの両方が設定されているか
+    var isFullyConfigured: Bool {
+        isValidURL && !apiKey.isEmpty
+    }
+
     /// 代替URLのバリデーション
     var validAlternativeURLs: [String] {
         alternativeURLs.filter { urlString in

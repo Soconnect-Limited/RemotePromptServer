@@ -35,17 +35,21 @@ struct AppConfiguration {
     }
 
     var apiKey: String? {
-        guard let key = value(for: .apiKey) else {
-#if DEBUG
-            assertionFailure("API Key not configured. Provide REMOTE_PROMPT_API_KEY env, RemotePromptAPIKey in Info.plist, or RemotePromptConfig.plist")
-#endif
-            return nil
+        // plist/環境変数に設定されていれば使用
+        if let key = value(for: .apiKey) {
+            return key
         }
-        return key
+        // ServerConfigurationStoreに保存されたAPIキーを参照
+        if let storedKey = ServerConfigurationStore.shared.currentConfiguration?.apiKey,
+           !storedKey.isEmpty {
+            return storedKey
+        }
+        // 初回起動時はAPIキーが未設定でもOK（サーバー設定画面で設定する）
+        return nil
     }
 
     var isAPIKeyConfigured: Bool {
-        value(for: .apiKey) != nil
+        apiKey != nil
     }
 
     private func value(for key: Key) -> String? {

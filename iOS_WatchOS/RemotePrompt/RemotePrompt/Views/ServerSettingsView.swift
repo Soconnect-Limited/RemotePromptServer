@@ -13,6 +13,9 @@ struct ServerSettingsView: View {
     @State private var showBonjourSection: Bool = true
     @State private var showQRCodeSheet: Bool = false
     @State private var showQRScannerSheet: Bool = false
+    @State private var showDeviceIdEditSheet: Bool = false
+    @State private var editingDeviceId: String = ""
+    @State private var showDeviceIdConfirmation: Bool = false
 
     /// iPad向けの最大フォーム幅
     private let maxFormWidth: CGFloat = 600
@@ -70,6 +73,32 @@ struct ServerSettingsView: View {
                 }
             } message: {
                 Text(L10n.Settings.resetAllConfirm)
+            }
+            .sheet(isPresented: $showQRCodeSheet) {
+                SettingsQRCodeView()
+            }
+            .sheet(isPresented: $showQRScannerSheet) {
+                SettingsQRScannerView()
+            }
+            .sheet(isPresented: $showDeviceIdEditSheet) {
+                DeviceIdEditSheet(
+                    deviceId: $editingDeviceId,
+                    onConfirm: {
+                        showDeviceIdConfirmation = true
+                    }
+                )
+                .presentationDetents([.medium])
+            }
+            .alert(L10n.DeviceId.editTitle, isPresented: $showDeviceIdConfirmation) {
+                Button(L10n.Common.cancel, role: .cancel) {
+                    editingDeviceId = ""
+                }
+                Button(L10n.DeviceId.editButton, role: .destructive) {
+                    APIClient.setDeviceId(editingDeviceId)
+                    editingDeviceId = ""
+                }
+            } message: {
+                Text(L10n.DeviceId.editConfirm)
             }
         }
     }
@@ -430,7 +459,7 @@ struct ServerSettingsView: View {
 
     private var advancedSection: some View {
         Section {
-            // DeviceID表示
+            // DeviceID表示・編集
             HStack {
                 Text(L10n.QR.shareDeviceId)
                 Spacer()
@@ -440,11 +469,22 @@ struct ServerSettingsView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                editingDeviceId = ""
+                showDeviceIdEditSheet = true
+            }
             .contextMenu {
                 Button {
                     UIPasteboard.general.string = APIClient.getDeviceId()
                 } label: {
                     Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
+                }
+                Button {
+                    editingDeviceId = ""
+                    showDeviceIdEditSheet = true
+                } label: {
+                    Label(L10n.DeviceId.editButton, systemImage: "pencil")
                 }
             }
 
@@ -480,12 +520,6 @@ struct ServerSettingsView: View {
             .foregroundColor(.red)
         } header: {
             Text(L10n.Settings.sectionAdvanced)
-        }
-        .sheet(isPresented: $showQRCodeSheet) {
-            SettingsQRCodeView()
-        }
-        .sheet(isPresented: $showQRScannerSheet) {
-            SettingsQRScannerView()
         }
     }
 
@@ -562,6 +596,61 @@ private struct AIProviderRow: View {
                 set: { _ in onToggle() }
             ))
             .labelsHidden()
+        }
+    }
+}
+
+// MARK: - Device ID Edit Sheet
+
+/// デバイスID編集シート
+private struct DeviceIdEditSheet: View {
+    @Binding var deviceId: String
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(L10n.DeviceId.editPlaceholder, text: $deviceId)
+                        .font(.system(.body, design: .monospaced))
+                        .autocapitalization(.none)
+                        .autocorrectionDisabled()
+                } footer: {
+                    Text(L10n.DeviceId.editHint)
+                }
+
+                Section {
+                    HStack {
+                        Text(L10n.QR.shareDeviceId)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(APIClient.getDeviceId())
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                } header: {
+                    Text(L10n.DeviceId.current)
+                }
+            }
+            .navigationTitle(L10n.DeviceId.editTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.Common.cancel) {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.DeviceId.editButton) {
+                        dismiss()
+                        onConfirm()
+                    }
+                    .disabled(deviceId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
     }
 }

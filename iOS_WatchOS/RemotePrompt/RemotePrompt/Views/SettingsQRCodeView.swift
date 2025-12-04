@@ -116,6 +116,15 @@ struct SettingsShareData: Codable {
 
     // スキーム識別子
     static let scheme = "remoteprompt"
+
+    enum CodingKeys: String, CodingKey {
+        case serverURL = "server_url"
+        case apiKey = "api_key"
+        case deviceId = "device_id"
+        case alternativeURLs = "alternative_urls"
+        case autoFallback = "auto_fallback"
+        case certificateFingerprint = "certificate_fingerprint"
+    }
 }
 
 #Preview {

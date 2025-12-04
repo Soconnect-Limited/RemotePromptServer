@@ -104,8 +104,8 @@ struct SettingsQRScannerView: View {
 
         ServerConfigurationStore.shared.save(config)
 
-        // デバイスIDを保存
-        UserDefaults.standard.set(data.deviceId, forKey: "device_id")
+        // デバイスIDを保存（APIClient経由でKeychainに保存）
+        APIClient.setDeviceId(data.deviceId)
 
         // APIClient のセッションを無効化して再接続を促す
         APIClient.shared.invalidateSession()
@@ -156,6 +156,14 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         }
     }
 
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.previewLayer?.frame = CGRect(origin: .zero, size: size)
+            self?.updatePreviewLayerOrientation()
+        }, completion: nil)
+    }
+
     private func setupCamera() {
         let session = AVCaptureSession()
 
@@ -199,6 +207,9 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         view.layer.addSublayer(preview)
         previewLayer = preview
 
+        // 初回セットアップ時にも向きを設定
+        updatePreviewLayerOrientation()
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.captureSession?.startRunning()
         }
@@ -207,6 +218,34 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer?.frame = view.layer.bounds
+        updatePreviewLayerOrientation()
+    }
+
+    /// プレビューレイヤーの向きを現在のデバイス向きに合わせる
+    private func updatePreviewLayerOrientation() {
+        guard let connection = previewLayer?.connection, connection.isVideoOrientationSupported else {
+            return
+        }
+
+        let orientation: AVCaptureVideoOrientation
+        if let windowScene = view.window?.windowScene {
+            switch windowScene.interfaceOrientation {
+            case .portrait:
+                orientation = .portrait
+            case .portraitUpsideDown:
+                orientation = .portraitUpsideDown
+            case .landscapeLeft:
+                orientation = .landscapeLeft
+            case .landscapeRight:
+                orientation = .landscapeRight
+            @unknown default:
+                orientation = .portrait
+            }
+        } else {
+            orientation = .portrait
+        }
+
+        connection.videoOrientation = orientation
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

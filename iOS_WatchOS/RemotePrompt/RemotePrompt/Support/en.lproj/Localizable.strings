@@ -151,6 +151,14 @@
 "qr.invalid" = "Invalid QR code";
 "qr.unknown.error" = "An unknown error occurred";
 
+// MARK: - Device ID
+"deviceId.edit.title" = "Edit Device ID";
+"deviceId.edit.hint" = "Enter a Device ID to sync data across multiple devices (iPhone/iPad).";
+"deviceId.edit.placeholder" = "Paste Device ID from another device";
+"deviceId.edit.confirm" = "Change Device ID to this value? Data associated with the new ID will be displayed.";
+"deviceId.edit.button" = "Change Device ID";
+"deviceId.current" = "Current ID";
+
 // MARK: - Camera
 "camera.access.denied" = "Cannot access camera";
 "camera.input.failed" = "Cannot add camera input";

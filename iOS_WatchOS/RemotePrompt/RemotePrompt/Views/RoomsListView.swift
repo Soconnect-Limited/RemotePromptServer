@@ -57,13 +57,43 @@ struct RoomsListView: View {
                 .toolbar { toolbarContent }
                 .task {
                     print("[RoomsListView] .task START @ \(Date())")
+                    // サーバー設定（URL + APIキー）が未完了なら読み込みをスキップ
+                    guard ServerConfigurationStore.shared.currentConfiguration?.isFullyConfigured == true else {
+                        hasLoadedOnce = true
+                        print("[RoomsListView] Server not fully configured, skipping loadRooms")
+                        return
+                    }
                     await viewModel.loadRooms()
                     hasLoadedOnce = true
                     print("[RoomsListView] hasLoadedOnce = true @ \(Date())")
                 }
                 .refreshable {
-                    await viewModel.loadRooms()
+                    print("[RoomsListView] .refreshable triggered @ \(Date())")
+                    // 最低500msのローディング表示を確保（UXのため）
+                    await withTaskGroup(of: Void.self) { group in
+                        group.addTask { await viewModel.loadRooms() }
+                        group.addTask { try? await Task.sleep(for: .milliseconds(500)) }
+                        await group.waitForAll()
+                    }
+                    // 触覚フィードバック
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    print("[RoomsListView] .refreshable completed @ \(Date())")
                 }
+                .overlay {
+                    if viewModel.isLoading && hasLoadedOnce {
+                        VStack {
+                            ProgressView()
+                                .scaleEffect(1.2)
+                                .padding(16)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black.opacity(0.1))
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: viewModel.isLoading)
                 .sheet(isPresented: $showingCreateRoom) {
                     CreateRoomView(viewModel: viewModel)
                         .presentationDetents([.medium, .large])
@@ -132,32 +162,35 @@ struct RoomsListView: View {
 
     @ViewBuilder
     private var roomsList: some View {
-        if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
-            loadingView
-        } else {
-            List {
-                if viewModel.rooms.isEmpty {
-                    emptyStateView
-                } else {
-                    roomsForEach
-                }
+        List {
+            if !hasLoadedOnce || (viewModel.rooms.isEmpty && viewModel.isLoading) {
+                loadingView
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else if viewModel.rooms.isEmpty {
+                emptyStateView
+            } else {
+                roomsForEach
             }
         }
     }
 
     private var loadingView: some View {
         VStack(spacing: 16) {
+            Spacer()
             ProgressView()
                 .scaleEffect(1.5)
             Text(L10n.Common.loading)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
     }
 
     private var emptyStateView: some View {
         VStack(spacing: 12) {
+            Spacer()
             Image(systemName: "folder.badge.plus")
                 .font(.largeTitle)
                 .foregroundColor(.secondary)
@@ -166,8 +199,9 @@ struct RoomsListView: View {
             Text(L10n.Rooms.emptyHint)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
+            Spacer()
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: UIScreen.main.bounds.height * 0.6)
         .listRowBackground(Color.clear)
     }
 

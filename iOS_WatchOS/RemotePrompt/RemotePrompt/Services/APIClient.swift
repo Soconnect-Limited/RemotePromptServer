@@ -534,6 +534,15 @@ final class APIClient: APIClientProtocol {
         return newId
     }
 
+    /// デバイスIDを設定（複数デバイス間で同一IDを共有する場合に使用）
+    static func setDeviceId(_ newId: String) {
+        let keychainKey = "device_id"
+        let userDefaultsKey = "remote_prompt_device_id"
+
+        KeychainHelper.set(key: keychainKey, value: newId)
+        UserDefaults.standard.set(newId, forKey: userDefaultsKey)
+    }
+
     // MARK: - Thread Management
 
     /// v4.2: runner パラメータ削除（全Thread取得、クライアント側でフィルタ）

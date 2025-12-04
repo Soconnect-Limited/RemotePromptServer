@@ -271,6 +271,16 @@ enum L10n {
         }
     }
 
+    // MARK: - Device ID
+    enum DeviceId {
+        static var editTitle: String { "deviceId.edit.title".localized }
+        static var editHint: String { "deviceId.edit.hint".localized }
+        static var editPlaceholder: String { "deviceId.edit.placeholder".localized }
+        static var editConfirm: String { "deviceId.edit.confirm".localized }
+        static var editButton: String { "deviceId.edit.button".localized }
+        static var current: String { "deviceId.current".localized }
+    }
+
     // MARK: - Errors
     enum Error {
         static var invalidUrl: String { "error.invalidUrl".localized }

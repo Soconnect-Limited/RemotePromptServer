@@ -151,6 +151,14 @@
 "qr.invalid" = "無効なQRコードです";
 "qr.unknown.error" = "不明なエラーが発生しました";
 
+// MARK: - Device ID
+"deviceId.edit.title" = "デバイスIDを編集";
+"deviceId.edit.hint" = "複数デバイス（iPhone/iPad）間でデータを同期するためのデバイスIDを入力してください。";
+"deviceId.edit.placeholder" = "別のデバイスからコピーしたIDを貼り付け";
+"deviceId.edit.confirm" = "デバイスIDを変更しますか？新しいIDに紐づくデータが表示されます。";
+"deviceId.edit.button" = "デバイスIDを変更";
+"deviceId.current" = "現在のID";
+
 // MARK: - Camera
 "camera.access.denied" = "カメラにアクセスできません";
 "camera.input.failed" = "カメラ入力を追加できません";
