@@ -111,21 +111,32 @@ final class BonjourDiscovery: ObservableObject {
     // MARK: - Private Methods
 
     private func handleStateUpdate(_ state: NWBrowser.State) {
+        print("[BonjourDiscovery] State update: \(state)")
         switch state {
+        case .setup:
+            print("[BonjourDiscovery] Browser setup")
         case .ready:
-            print("[BonjourDiscovery] Browser ready")
+            print("[BonjourDiscovery] Browser ready - waiting for services...")
         case .failed(let error):
             print("[BonjourDiscovery] Browser failed: \(error)")
             self.error = error
             isSearching = false
         case .cancelled:
+            print("[BonjourDiscovery] Browser cancelled")
             isSearching = false
-        default:
+        case .waiting(let error):
+            print("[BonjourDiscovery] Browser waiting: \(error)")
+        @unknown default:
+            print("[BonjourDiscovery] Browser unknown state")
             break
         }
     }
 
     private func handleResultsChanged(results: Set<NWBrowser.Result>, changes: Set<NWBrowser.Result.Change>) {
+        print("[BonjourDiscovery] Results changed - total results: \(results.count), changes: \(changes.count)")
+        for result in results {
+            print("[BonjourDiscovery] Result: \(result.endpoint)")
+        }
         for change in changes {
             switch change {
             case .added(let result):

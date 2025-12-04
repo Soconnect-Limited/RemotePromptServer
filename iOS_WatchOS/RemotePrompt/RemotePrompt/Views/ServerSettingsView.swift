@@ -18,7 +18,7 @@ struct ServerSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                bonjourSection
+                // bonjourSection  // Bonjour自動検出は一時的に非表示
                 serverURLSection
                 alternativeURLsSection
                 apiKeySection
@@ -168,13 +168,14 @@ struct ServerSettingsView: View {
 
     private var serverURLSection: some View {
         Section {
-            ZStack(alignment: .leading) {
-                if viewModel.serverName.isEmpty {
-                    Text("例: My Server")
-                        .foregroundColor(Color(UIColor.placeholderText))
-                }
-                TextField("", text: $viewModel.serverName)
-            }
+            // サーバー名入力欄は一時的に非表示
+            // ZStack(alignment: .leading) {
+            //     if viewModel.serverName.isEmpty {
+            //         Text("例: My Server")
+            //             .foregroundColor(Color(UIColor.placeholderText))
+            //     }
+            //     TextField("", text: $viewModel.serverName)
+            // }
 
             VStack(alignment: .leading, spacing: 4) {
                 ZStack(alignment: .leading) {
