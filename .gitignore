@@ -48,3 +48,12 @@ backups/
 # Secrets
 secrets/
 *.p8
+
+# SSL/TLS Certificates and Keys
+certs/
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+**/private_key.json
