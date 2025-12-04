@@ -430,6 +430,24 @@ struct ServerSettingsView: View {
 
     private var advancedSection: some View {
         Section {
+            // DeviceID表示
+            HStack {
+                Text(L10n.QR.shareDeviceId)
+                Spacer()
+                Text(APIClient.getDeviceId())
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .contextMenu {
+                Button {
+                    UIPasteboard.general.string = APIClient.getDeviceId()
+                } label: {
+                    Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
+                }
+            }
+
             // 設定共有ボタン
             Button {
                 showQRCodeSheet = true

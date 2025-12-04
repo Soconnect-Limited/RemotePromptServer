@@ -18,7 +18,7 @@
 "common.openSettings" = "設定を開く";
 
 // MARK: - Rooms
-"rooms.title" = "ルーム";
+"rooms.title" = "Rooms";
 "rooms.empty" = "ルームがありません";
 "rooms.empty.hint" = "+ボタンをタップして新しいルームを作成してください";
 "rooms.delete.title" = "ルームを削除";

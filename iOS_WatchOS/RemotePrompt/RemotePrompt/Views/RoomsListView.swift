@@ -50,7 +50,7 @@ struct RoomsListView: View {
                 .accessibilityIdentifier("rooms.list")
                 .listStyle(.plain)
                 .navigationTitle(L10n.Rooms.title)
-                .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.large)
                 .navigationDestination(for: Room.self) { room in
                     RoomDetailView(room: room, apiClient: detailAPIClient)
                 }
