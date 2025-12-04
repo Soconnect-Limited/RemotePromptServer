@@ -1,0 +1,36 @@
+{
+  "claude": {
+    "displayName": "Claude Code",
+    "models": [
+      {"id": "default", "displayName": "デフォルト", "description": "プラン設定に基づくモデル"},
+      {"id": "opus", "displayName": "Opus (最新)", "description": "最高性能（MAXプラン推奨）"},
+      {"id": "sonnet", "displayName": "Sonnet (最新)", "description": "バランス型"},
+      {"id": "haiku", "displayName": "Haiku (軽量)", "description": "高速・低コスト"},
+      {"id": "claude-opus-4-5-20251101", "displayName": "Opus 4.5", "description": "Opus 4.5 固定"},
+      {"id": "claude-sonnet-4-5-20250929", "displayName": "Sonnet 4.5", "description": "Sonnet 4.5 固定"},
+      {"id": "claude-sonnet-4-20250514", "displayName": "Sonnet 4", "description": "Sonnet 4 固定"}
+    ]
+  },
+  "codex": {
+    "displayName": "Codex",
+    "models": [
+      {"id": "default", "displayName": "デフォルト", "description": "OpenAI設定に基づく"},
+      {"id": "gpt-5.1-codex-max", "displayName": "GPT-5.1 Codex Max", "description": "最高性能（推奨）"},
+      {"id": "gpt-5.1-codex-mini", "displayName": "GPT-5.1 Codex Mini", "description": "軽量・高速"},
+      {"id": "gpt-5.1", "displayName": "GPT-5.1", "description": "汎用モデル"},
+      {"id": "gpt-5.1-codex", "displayName": "GPT-5.1 Codex", "description": "レガシー Codex"},
+      {"id": "gpt-5-codex", "displayName": "GPT-5 Codex", "description": "レガシー Codex"},
+      {"id": "gpt-5-codex-mini", "displayName": "GPT-5 Codex Mini", "description": "レガシー 軽量版"},
+      {"id": "gpt-5", "displayName": "GPT-5", "description": "レガシー 汎用"}
+    ]
+  },
+  "gemini": {
+    "displayName": "Gemini",
+    "models": [
+      {"id": "default", "displayName": "デフォルト", "description": "Google設定に基づく"},
+      {"id": "gemini-2.5-pro", "displayName": "Gemini 2.5 Pro", "description": "最高性能"},
+      {"id": "gemini-2.5-flash", "displayName": "Gemini 2.5 Flash", "description": "高速版"},
+      {"id": "gemini-2.0-flash", "displayName": "Gemini 2.0 Flash", "description": "安定版"}
+    ]
+  }
+}
