@@ -19,31 +19,22 @@ struct MarkdownEditorView: View {
     }
 
     var body: some View {
-        VStack {
-            if viewModel.isLoading {
-                ProgressView(L10n.Common.loading)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if isEmbeddedInSplitView {
+                // SplitView埋め込み時: ナビゲーションバーなし（親が管理）
+                editorView
             } else {
-                SyntaxHighlightedTextEditor(text: $viewModel.fileContent)
-            }
-        }
-        .navigationTitle(fileItem.name)
-        .toolbar {
-            // SplitViewに埋め込まれていない場合のみ閉じるボタンを表示
-            if !isEmbeddedInSplitView {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(L10n.Common.close) { dismiss() }
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { Task { await save() } }) {
-                    if viewModel.isSaving {
-                        ProgressView()
-                    } else {
-                        Text(L10n.Editor.save)
+                // 通常表示: ナビゲーションバーあり
+                editorView
+                    .navigationTitle(fileItem.name)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button(L10n.Common.close) { dismiss() }
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            saveButton
+                        }
                     }
-                }
-                .disabled(!viewModel.isDirty || viewModel.isSaving)
             }
         }
         .alert(isPresented: Binding<Bool>(
@@ -62,6 +53,30 @@ struct MarkdownEditorView: View {
         .task {
             await viewModel.loadFile(path: fileItem.path)
         }
+    }
+
+    @ViewBuilder
+    private var editorView: some View {
+        VStack {
+            if viewModel.isLoading {
+                ProgressView(L10n.Common.loading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                SyntaxHighlightedTextEditor(text: $viewModel.fileContent)
+            }
+        }
+    }
+
+    @ViewBuilder
+    var saveButton: some View {
+        Button(action: { Task { await save() } }) {
+            if viewModel.isSaving {
+                ProgressView()
+            } else {
+                Text(L10n.Editor.save)
+            }
+        }
+        .disabled(!viewModel.isDirty || viewModel.isSaving)
     }
 
     private func save() async {
