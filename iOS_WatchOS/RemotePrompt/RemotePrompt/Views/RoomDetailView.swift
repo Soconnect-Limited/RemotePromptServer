@@ -16,6 +16,7 @@ struct RoomDetailView: View {
 
     /// iPad判定用（regular = iPad, compact = iPhone）
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) private var dismiss
 
     /// 有効なAIプロバイダー（設定順序でソート）
     private var enabledProviders: [AIProviderConfiguration] {
@@ -91,6 +92,15 @@ struct RoomDetailView: View {
             )
             .navigationTitle(room.name)
             .toolbar {
+                if horizontalSizeClass == .regular {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Label("Rooms", systemImage: "chevron.left")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showFileBrowser = true

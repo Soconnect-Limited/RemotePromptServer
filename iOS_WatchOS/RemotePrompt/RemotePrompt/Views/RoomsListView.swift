@@ -21,6 +21,7 @@ struct RoomsListView: View {
     @State private var showingSSECertificateModeChangedAlert = false
     @State private var sseCertificateModeChangedEvent: CertificateModeChangedEvent?
     private let detailAPIClient: APIClientProtocol
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     init(viewModel: RoomsViewModel? = nil) {
         if let viewModel {
@@ -52,7 +53,7 @@ struct RoomsListView: View {
                 .navigationTitle(L10n.Rooms.title)
                 .navigationBarTitleDisplayMode(.large)
                 .navigationDestination(for: Room.self) { room in
-                    RoomDetailView(room: room, apiClient: detailAPIClient)
+                    roomDetailDestination(for: room)
                 }
                 .toolbar { toolbarContent }
                 .task {
@@ -226,6 +227,19 @@ struct RoomsListView: View {
             .onAppear {
                 print("[RoomsListView] ✅ ROOMS VISIBLE @ \(Date())")
             }
+        }
+    }
+
+    // iPadではRoomDetailView内のNavigationSplitViewでナビゲーションを完結させるため、
+    // 親NavigationStackのナビバーを非表示にする
+    @ViewBuilder
+    private func roomDetailDestination(for room: Room) -> some View {
+        if horizontalSizeClass == .regular {
+            RoomDetailView(room: room, apiClient: detailAPIClient)
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationBarBackButtonHidden(true)
+        } else {
+            RoomDetailView(room: room, apiClient: detailAPIClient)
         }
     }
 
