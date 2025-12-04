@@ -107,13 +107,24 @@ struct RoomDetailView: View {
             runnerPicker
 
             // v4.4: runner別に独立したChatViewModelを使用（入力欄の分離）
-            ChatView(viewModel: getOrCreateViewModel(for: thread))
-                .background(Color(.systemBackground))
+            // 既存のViewModelがある場合はそれを使用、なければプレースホルダー表示
+            if let viewModel = chatViewModels[selectedRunner.rawValue] {
+                ChatView(viewModel: viewModel)
+                    .background(Color(.systemBackground))
+            } else {
+                // ViewModelがまだ作成されていない場合のプレースホルダー
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+            }
         }
         .navigationTitle(thread.name)
         .transition(.move(edge: .trailing))
-        // v4.3.2: チャット画面表示時に既読にする
+        // v4.3.2: チャット画面表示時に既読にする & ViewModelを遅延生成
         .onAppear {
+            // View描画後にViewModelを生成（state更新を遅延）
+            ensureViewModel(for: thread, runner: selectedRunner.rawValue)
+
             Task { @MainActor in
                 await threadListViewModel.markRunnerAsRead(
                     threadId: thread.id,
@@ -123,7 +134,11 @@ struct RoomDetailView: View {
             }
         }
         .onChange(of: selectedRunner) { _, newRunner in
-            // v4.4: runner切り替え時は別のViewModelに切り替え（入力欄が独立）
+            // v4.4: runner切り替え時は別のViewModelを遅延生成
+            if let thread = selectedThread {
+                ensureViewModel(for: thread, runner: newRunner.rawValue)
+            }
+
             Task { @MainActor in
                 // v4.3.1: 選択されたrunnerを既読にする
                 if let thread = selectedThread {
@@ -138,22 +153,19 @@ struct RoomDetailView: View {
         }
     }
 
-    /// v4.4: runner別のChatViewModelを取得または生成
-    private func getOrCreateViewModel(for thread: Thread) -> ChatViewModel {
-        let runnerKey = selectedRunner.rawValue
-        if let existing = chatViewModels[runnerKey] {
-            return existing
-        }
+    /// v4.4: runner別のChatViewModelを遅延生成（View描画後に呼び出す）
+    /// - Note: View描画中にstateを変更するとSwiftUIの警告が出るため、onAppear/onChangeから呼び出す
+    private func ensureViewModel(for thread: Thread, runner: String) {
+        guard chatViewModels[runner] == nil else { return }
         let newViewModel = ChatViewModel(
-            runner: runnerKey,
+            runner: runner,
             roomId: room.id,
             threadId: thread.id,
             apiClient: apiClient,
             enableStreaming: enableStreaming,
             validateAPIKey: !AppEnvironment.isUITesting
         )
-        chatViewModels[runnerKey] = newViewModel
-        return newViewModel
+        chatViewModels[runner] = newViewModel
     }
 
     private var runnerPicker: some View {
