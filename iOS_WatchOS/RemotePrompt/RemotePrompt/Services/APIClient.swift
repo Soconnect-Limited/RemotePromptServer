@@ -11,15 +11,15 @@ enum APIError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "無効なURLです"
+            return L10n.Error.invalidUrl
         case .httpError(let code):
-            return "サーバーエラー(\(code))"
+            return L10n.Error.server(code)
         case .missingAPIKey:
-            return "APIキーが未設定です。サーバー設定を確認してください。"
+            return L10n.Error.apiKeyMissing
         case .certificateError(let message):
-            return "証明書エラー: \(message)"
+            return L10n.Error.certificate(message)
         case .serverNotConfigured:
-            return "サーバーが設定されていません。設定画面からサーバーを追加してください。"
+            return L10n.Error.apiKeyMissing
         }
     }
 }

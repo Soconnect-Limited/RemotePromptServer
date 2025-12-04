@@ -14,12 +14,12 @@ struct CertificateConfirmationView: View {
                 .foregroundColor(.orange)
 
             // タイトル
-            Text("サーバーの証明書を検証できません")
+            Text(L10n.Certificate.verifyFailed)
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
             // 説明
-            Text("このサーバーは自己署名証明書を使用しています。続行する前に、以下のフィンガープリントがサーバー側の表示と一致することを確認してください。")
+            Text(L10n.Certificate.verifyHint)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -27,7 +27,7 @@ struct CertificateConfirmationView: View {
 
             // フィンガープリント表示
             VStack(spacing: 8) {
-                Text("SHA256 フィンガープリント")
+                Text(L10n.Certificate.sha256)
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -44,7 +44,7 @@ struct CertificateConfirmationView: View {
                 Button {
                     onTrust()
                 } label: {
-                    Text("信頼して接続")
+                    Text(L10n.Certificate.trustConnect)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -52,7 +52,7 @@ struct CertificateConfirmationView: View {
                 Button {
                     onCancel()
                 } label: {
-                    Text("キャンセル")
+                    Text(L10n.Common.cancel)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -79,19 +79,19 @@ struct CertificateChangedAlertView: View {
                 .foregroundColor(.red)
 
             // タイトル
-            Text("サーバーの証明書が変更されました")
+            Text(L10n.Certificate.changedTitle)
                 .font(.headline)
                 .foregroundColor(.red)
                 .multilineTextAlignment(.center)
 
             // 警告メッセージ
             VStack(spacing: 8) {
-                Text("これは中間者攻撃の可能性があります")
+                Text(L10n.Certificate.mitm)
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.red)
 
-                Text("サーバー管理者に確認してください")
+                Text(L10n.Certificate.contactAdmin)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -99,7 +99,7 @@ struct CertificateChangedAlertView: View {
             // フィンガープリント比較
             VStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("旧フィンガープリント")
+                    Text(L10n.Certificate.oldFingerprint)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text(shortFingerprint(oldFingerprint))
@@ -109,7 +109,7 @@ struct CertificateChangedAlertView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("新フィンガープリント")
+                    Text(L10n.Certificate.newFingerprint)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text(shortFingerprint(newFingerprint))
@@ -127,7 +127,7 @@ struct CertificateChangedAlertView: View {
                 Button {
                     onCancel()
                 } label: {
-                    Text("接続を中止")
+                    Text(L10n.Certificate.cancelConnection)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -136,7 +136,7 @@ struct CertificateChangedAlertView: View {
                 Button {
                     onTrustNew()
                 } label: {
-                    Text("新しい証明書を信頼")
+                    Text(L10n.Certificate.trustNew)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
@@ -145,7 +145,7 @@ struct CertificateChangedAlertView: View {
                 Button {
                     onReset()
                 } label: {
-                    Text("保存済み証明書を破棄")
+                    Text(L10n.Certificate.discardSaved)
                         .frame(maxWidth: .infinity)
                         .foregroundColor(.secondary)
                 }

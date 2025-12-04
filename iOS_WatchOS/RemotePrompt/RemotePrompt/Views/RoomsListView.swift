@@ -49,7 +49,8 @@ struct RoomsListView: View {
             roomsList
                 .accessibilityIdentifier("rooms.list")
                 .listStyle(.plain)
-                .navigationTitle("Rooms")
+                .navigationTitle(L10n.Rooms.title)
+                .navigationBarTitleDisplayMode(.inline)
                 .navigationDestination(for: Room.self) { room in
                     RoomDetailView(room: room, apiClient: detailAPIClient)
                 }
@@ -77,14 +78,14 @@ struct RoomsListView: View {
                         .presentationDragIndicator(.visible)
                 }
                 .alert(
-                    "ルームを削除",
+                    L10n.Rooms.deleteTitle,
                     isPresented: $showingDeleteConfirmation
                 ) {
                     deleteConfirmationButtons
                 } message: {
                     deleteConfirmationMessage
                 }
-                .alert("エラー", isPresented: errorAlertBinding) {
+                .alert(L10n.Common.error, isPresented: errorAlertBinding) {
                     Button("OK", role: .cancel) { viewModel.errorMessage = nil }
                 } message: {
                     Text(viewModel.errorMessage ?? "")
@@ -148,7 +149,7 @@ struct RoomsListView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.5)
-            Text("読み込み中...")
+            Text(L10n.Common.loading)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -160,9 +161,9 @@ struct RoomsListView: View {
             Image(systemName: "folder.badge.plus")
                 .font(.largeTitle)
                 .foregroundColor(.secondary)
-            Text("ルームがありません")
+            Text(L10n.Rooms.empty)
                 .font(.headline)
-            Text("右上のボタンから新しいルームを作成してください")
+            Text(L10n.Rooms.emptyHint)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -206,14 +207,14 @@ struct RoomsListView: View {
                 roomToDelete = room
                 showingDeleteConfirmation = true
             } label: {
-                Label("削除", systemImage: "trash")
+                Label(L10n.Common.delete, systemImage: "trash")
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 roomToEdit = room
             } label: {
-                Label("編集", systemImage: "pencil")
+                Label(L10n.Common.edit, systemImage: "pencil")
             }
             .tint(.blue)
         }
@@ -223,7 +224,7 @@ struct RoomsListView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             if !viewModel.rooms.isEmpty {
-                Button(isEditMode ? "完了" : "編集") {
+                Button(isEditMode ? L10n.Common.done : L10n.Common.edit) {
                     withAnimation {
                         isEditMode.toggle()
                     }
@@ -250,7 +251,7 @@ struct RoomsListView: View {
 
     @ViewBuilder
     private var deleteConfirmationButtons: some View {
-        Button("削除", role: .destructive) {
+        Button(L10n.Common.delete, role: .destructive) {
             if let room = roomToDelete {
                 Task {
                     _ = await viewModel.deleteRoom(room)
@@ -258,7 +259,7 @@ struct RoomsListView: View {
                 }
             }
         }
-        Button("キャンセル", role: .cancel) {
+        Button(L10n.Common.cancel, role: .cancel) {
             roomToDelete = nil
         }
     }
@@ -266,7 +267,7 @@ struct RoomsListView: View {
     @ViewBuilder
     private var deleteConfirmationMessage: some View {
         if let room = roomToDelete {
-            Text("「\(room.name)」を削除すると、関連するスレッドとメッセージも削除されます。")
+            Text(L10n.Rooms.deleteMessage(room.name))
         }
     }
 
@@ -288,14 +289,10 @@ struct RoomsListView: View {
 
         print("[RoomsListView] Certificate mismatch detected - showing dialog immediately")
 
-        certificateErrorMessage = """
-        サーバー証明書が変更されました。
-
-        保存済み: \(storedFingerprint.prefix(16))...
-        受信: \(receivedFingerprint.prefix(16))...
-
-        これが予期された変更であれば、新しい証明書を信頼してください。
-        """
+        certificateErrorMessage = L10n.Certificate.mismatchMessage(
+            stored: String(storedFingerprint.prefix(16)),
+            received: String(receivedFingerprint.prefix(16))
+        )
         pendingCertificateFingerprint = receivedFingerprint
         showingCertificateError = true
     }
@@ -334,22 +331,22 @@ private struct CertificateAlertsModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("証明書エラー", isPresented: $showingCertificateError) {
+            .alert(L10n.Certificate.errorTitle, isPresented: $showingCertificateError) {
                 certificateErrorButtons
             } message: {
                 Text(certificateErrorMessage)
             }
-            .alert("証明書が変更されます", isPresented: $showingSSECertificateChangedAlert) {
+            .alert(L10n.Certificate.changedTitle, isPresented: $showingSSECertificateChangedAlert) {
                 certificateChangedButtons
             } message: {
                 certificateChangedMessage
             }
-            .alert("証明書が失効しました", isPresented: $showingSSECertificateRevokedAlert) {
+            .alert(L10n.Certificate.revokedTitle, isPresented: $showingSSECertificateRevokedAlert) {
                 certificateRevokedButtons
             } message: {
                 certificateRevokedMessage
             }
-            .alert("証明書モードが変更されました", isPresented: $showingSSECertificateModeChangedAlert) {
+            .alert(L10n.Certificate.modeChangedTitle, isPresented: $showingSSECertificateModeChangedAlert) {
                 certificateModeChangedButtons
             } message: {
                 certificateModeChangedMessage
@@ -359,18 +356,18 @@ private struct CertificateAlertsModifier: ViewModifier {
     @ViewBuilder
     private var certificateErrorButtons: some View {
         if let fingerprint = pendingCertificateFingerprint {
-            Button("新しい証明書を信頼する") {
+            Button(L10n.Certificate.trustNew) {
                 trustNewCertificate(fingerprint)
             }
         }
-        Button("設定を開く") {
+        Button(L10n.Common.openSettings) {
             viewModel.errorMessage = nil
             pendingCertificateFingerprint = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 showingServerSettings = true
             }
         }
-        Button("キャンセル", role: .cancel) {
+        Button(L10n.Common.cancel, role: .cancel) {
             showingCertificateError = false
             pendingCertificateFingerprint = nil
         }
@@ -380,17 +377,17 @@ private struct CertificateAlertsModifier: ViewModifier {
     private var certificateChangedButtons: some View {
         if let event = sseCertificateChangedEvent {
             if event.effectiveAfterRestart {
-                Button("OK") {
+                Button(L10n.Common.ok) {
                     sseCertificateChangedEvent = nil
                 }
             } else {
-                Button("新しい証明書で再接続") {
+                Button(L10n.Certificate.reconnect) {
                     sseCertificateChangedEvent = nil
                     Task {
                         await viewModel.loadRooms()
                     }
                 }
-                Button("キャンセル", role: .cancel) {
+                Button(L10n.Common.cancel, role: .cancel) {
                     sseCertificateChangedEvent = nil
                 }
             }
@@ -401,22 +398,22 @@ private struct CertificateAlertsModifier: ViewModifier {
     private var certificateChangedMessage: some View {
         if let event = sseCertificateChangedEvent {
             if event.effectiveAfterRestart {
-                Text("サーバー証明書が更新されました。\n\nサーバー再起動後に再接続してください。\n\n理由: \(event.reason)")
+                Text(L10n.Certificate.updatedRestart(event.reason))
             } else {
-                Text("サーバー証明書が更新されました。\n\n新しい証明書で再接続しますか？\n\n理由: \(event.reason)")
+                Text(L10n.Certificate.updatedReconnect(event.reason))
             }
         }
     }
 
     @ViewBuilder
     private var certificateRevokedButtons: some View {
-        Button("設定を開く") {
+        Button(L10n.Common.openSettings) {
             sseCertificateRevokedEvent = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 showingServerSettings = true
             }
         }
-        Button("OK", role: .cancel) {
+        Button(L10n.Common.ok, role: .cancel) {
             sseCertificateRevokedEvent = nil
         }
     }
@@ -424,19 +421,19 @@ private struct CertificateAlertsModifier: ViewModifier {
     @ViewBuilder
     private var certificateRevokedMessage: some View {
         if let event = sseCertificateRevokedEvent {
-            Text("サーバー証明書が失効しました。\n\nサーバー再起動後に設定画面から再接続してください。\n\n理由: \(event.reason)")
+            Text(L10n.Certificate.revokedMessage(event.reason))
         }
     }
 
     @ViewBuilder
     private var certificateModeChangedButtons: some View {
-        Button("設定を開く") {
+        Button(L10n.Common.openSettings) {
             sseCertificateModeChangedEvent = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 showingServerSettings = true
             }
         }
-        Button("OK", role: .cancel) {
+        Button(L10n.Common.ok, role: .cancel) {
             sseCertificateModeChangedEvent = nil
         }
     }
@@ -444,7 +441,7 @@ private struct CertificateAlertsModifier: ViewModifier {
     @ViewBuilder
     private var certificateModeChangedMessage: some View {
         if let event = sseCertificateModeChangedEvent {
-            Text("証明書モードが「\(event.modeBefore)」から「\(event.modeAfter)」に変更されました。\n\n設定画面から証明書を再確認してください。\n\n理由: \(event.reason)")
+            Text(L10n.Certificate.modeChangedMessage(from: event.modeBefore, to: event.modeAfter, reason: event.reason))
         }
     }
 }

@@ -22,12 +22,7 @@ struct RoomSettingsView: View {
     }
 
     private var runnerDisplayName: String {
-        switch runner {
-        case "claude": return "Claude設定"
-        case "codex": return "Codex設定"
-        case "gemini": return "Gemini設定"
-        default: return "\(runner)設定"
-        }
+        L10n.Settings.runnerSettings(runner)
     }
 
     var body: some View {
@@ -77,14 +72,14 @@ struct RoomSettingsView: View {
             .navigationTitle(runnerDisplayName)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
+                    Button(L10n.Common.close) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }
+                    Button(L10n.Common.save) { Task { await save() } }
                         .disabled(viewModel.isLoading)
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    Button("デフォルトに戻す") { Task { await resetToDefault() } }
+                    Button(L10n.RoomSettings.resetDefault) { Task { await resetToDefault() } }
                         .disabled(viewModel.isLoading)
                 }
             }
@@ -95,11 +90,11 @@ struct RoomSettingsView: View {
                         .padding()
                 }
             }
-            .alert("エラー", isPresented: Binding(
+            .alert(L10n.Common.error, isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )) {
-                Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+                Button(L10n.Common.ok, role: .cancel) { viewModel.errorMessage = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
@@ -151,7 +146,7 @@ private struct CustomFlagsEditor: View {
                     flags = newValue.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 }
             if !flags.isEmpty {
-                Text("送信値: " + flags.joined(separator: ", "))
+                Text(L10n.RoomSettings.sendValue(flags.joined(separator: ", ")))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

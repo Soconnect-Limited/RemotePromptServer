@@ -25,7 +25,7 @@ struct SettingsQRScannerView: View {
                             .font(.system(size: 60))
                             .foregroundColor(.white)
 
-                        Text("別のデバイスで表示されたQRコードをスキャンしてください")
+                        Text(L10n.QR.importHint)
                             .font(.subheadline)
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
@@ -39,31 +39,31 @@ struct SettingsQRScannerView: View {
                     Spacer()
                 }
             }
-            .navigationTitle("設定をインポート")
+            .navigationTitle(L10n.QR.importTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
             }
-            .alert("設定をインポート", isPresented: $showImportConfirmation) {
-                Button("キャンセル", role: .cancel) {
+            .alert(L10n.QR.importTitle, isPresented: $showImportConfirmation) {
+                Button(L10n.Common.cancel, role: .cancel) {
                     scannedData = nil
                 }
-                Button("インポート") {
+                Button(L10n.QR.importButton) {
                     importSettings()
                 }
             } message: {
                 if let data = scannedData {
-                    Text("以下の設定をインポートしますか？\n\nサーバー: \(data.serverURL)\nデバイスID: \(String(data.deviceId.prefix(8)))...")
+                    Text(L10n.QR.importConfirm(server: data.serverURL, deviceId: String(data.deviceId.prefix(8))))
                 }
             }
-            .alert("エラー", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
+            .alert(L10n.Common.error, isPresented: $showError) {
+                Button(L10n.Common.ok, role: .cancel) {}
             } message: {
-                Text(errorMessage ?? "不明なエラーが発生しました")
+                Text(errorMessage ?? L10n.QR.unknownError)
             }
         }
     }
@@ -73,7 +73,7 @@ struct SettingsQRScannerView: View {
         case .success(let code):
             guard let data = code.data(using: .utf8),
                   let shareData = try? JSONDecoder().decode(SettingsShareData.self, from: data) else {
-                errorMessage = "無効なQRコードです"
+                errorMessage = L10n.QR.invalid
                 showError = true
                 return
             }
@@ -160,7 +160,7 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         let session = AVCaptureSession()
 
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else {
-            onScan?(.failure(NSError(domain: "QRScanner", code: 1, userInfo: [NSLocalizedDescriptionKey: "カメラにアクセスできません"])))
+            onScan?(.failure(NSError(domain: "QRScanner", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.Camera.accessDenied])))
             return
         }
 
@@ -176,7 +176,7 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         if session.canAddInput(videoInput) {
             session.addInput(videoInput)
         } else {
-            onScan?(.failure(NSError(domain: "QRScanner", code: 2, userInfo: [NSLocalizedDescriptionKey: "カメラ入力を追加できません"])))
+            onScan?(.failure(NSError(domain: "QRScanner", code: 2, userInfo: [NSLocalizedDescriptionKey: L10n.Camera.inputFailed])))
             return
         }
 
@@ -187,7 +187,7 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
             metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
             metadataOutput.metadataObjectTypes = [.qr]
         } else {
-            onScan?(.failure(NSError(domain: "QRScanner", code: 3, userInfo: [NSLocalizedDescriptionKey: "メタデータ出力を追加できません"])))
+            onScan?(.failure(NSError(domain: "QRScanner", code: 3, userInfo: [NSLocalizedDescriptionKey: L10n.Camera.metadataFailed])))
             return
         }
 

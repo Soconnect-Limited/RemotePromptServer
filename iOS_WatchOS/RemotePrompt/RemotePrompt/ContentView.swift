@@ -15,7 +15,7 @@ struct ContentView: View {
                     initialSetupView
                 }
             } else {
-                ProgressView("読み込み中...")
+                ProgressView(L10n.Common.loading)
             }
         }
         .task {
@@ -51,11 +51,11 @@ struct ContentView: View {
                 .font(.system(size: horizontalSizeClass == .regular ? 80 : 60))
                 .foregroundColor(.blue)
 
-            Text("RemotePromptへようこそ")
+            Text(L10n.Welcome.title)
                 .font(horizontalSizeClass == .regular ? .largeTitle : .title)
                 .fontWeight(.bold)
 
-            Text("まず、接続するサーバーを設定してください。")
+            Text(L10n.Welcome.hint)
                 .font(horizontalSizeClass == .regular ? .title3 : .body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -66,7 +66,7 @@ struct ContentView: View {
             } label: {
                 HStack {
                     Image(systemName: "gear")
-                    Text("サーバーを設定")
+                    Text(L10n.Welcome.setup)
                 }
                 .font(.headline)
                 .padding(.horizontal, horizontalSizeClass == .regular ? 48 : 32)

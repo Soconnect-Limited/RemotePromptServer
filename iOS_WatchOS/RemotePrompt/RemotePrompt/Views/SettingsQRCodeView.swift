@@ -11,7 +11,7 @@ struct SettingsQRCodeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text("このQRコードを別のデバイスでスキャンして設定をインポートしてください")
+                Text(L10n.QR.shareHint)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -27,20 +27,20 @@ struct SettingsQRCodeView: View {
                         .background(Color.white)
                         .cornerRadius(12)
                 } else {
-                    Text("QRコードを生成できませんでした")
+                    Text(L10n.QR.generateFailed)
                         .foregroundColor(.red)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("共有される設定:")
+                    Text(L10n.QR.shareInfo)
                         .font(.headline)
 
                     if let config = ServerConfigurationStore.shared.currentConfiguration {
                         Group {
-                            LabeledContent("サーバーURL", value: config.url)
-                            LabeledContent("デバイスID", value: String(APIClient.getDeviceId().prefix(8)) + "...")
+                            LabeledContent(L10n.QR.shareServerUrl, value: config.url)
+                            LabeledContent(L10n.QR.shareDeviceId, value: String(APIClient.getDeviceId().prefix(8)) + "...")
                             if !config.alternativeURLs.isEmpty {
-                                LabeledContent("代替URL", value: "\(config.alternativeURLs.count)件")
+                                LabeledContent(L10n.QR.shareAltUrls, value: L10n.QR.shareAltUrlsCount(config.alternativeURLs.count))
                             }
                         }
                         .font(.caption)
@@ -53,11 +53,11 @@ struct SettingsQRCodeView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("設定を共有")
+            .navigationTitle(L10n.QR.shareTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") {
+                    Button(L10n.Common.close) {
                         dismiss()
                     }
                 }

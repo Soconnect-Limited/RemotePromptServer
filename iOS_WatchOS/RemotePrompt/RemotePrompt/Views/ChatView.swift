@@ -32,11 +32,11 @@ struct ChatView: View {
             )
         }
         .background(Color(.systemBackground).ignoresSafeArea())
-        .alert("エラー", isPresented: Binding(
+        .alert(L10n.Common.error, isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
         )) {
-            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+            Button(L10n.Common.ok, role: .cancel) { viewModel.errorMessage = nil }
         } message: {
             Text(viewModel.errorMessage ?? "")
         }

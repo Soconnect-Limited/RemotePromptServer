@@ -139,17 +139,17 @@ enum ConnectionError: Error, Equatable {
     var localizedDescription: String {
         switch self {
         case .invalidURL:
-            return "無効なURLです"
+            return L10n.Error.invalidUrl
         case .networkError(let message):
-            return "ネットワークエラー: \(message)"
+            return L10n.Error.network(message)
         case .certificateError(let message):
-            return "証明書エラー: \(message)"
+            return L10n.Error.certificate(message)
         case .authenticationError:
-            return "認証エラー: APIキーを確認してください"
+            return L10n.Error.auth
         case .serverError(let statusCode):
-            return "サーバーエラー: \(statusCode)"
+            return L10n.Error.server(statusCode)
         case .unknown(let message):
-            return "不明なエラー: \(message)"
+            return L10n.Error.unknown(message)
         }
     }
 }

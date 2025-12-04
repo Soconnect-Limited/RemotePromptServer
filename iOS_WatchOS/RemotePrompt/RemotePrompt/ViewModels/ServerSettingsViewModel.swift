@@ -116,7 +116,7 @@ final class ServerSettingsViewModel: ObservableObject {
         }
 
         // 全て失敗
-        connectionStatus = .failed(error: .networkError("全てのURLへの接続に失敗しました"))
+        connectionStatus = .failed(error: .networkError(L10n.Connection.failedAll))
     }
 
     /// 代替URLを追加
@@ -343,7 +343,7 @@ final class ServerSettingsViewModel: ObservableObject {
                     pendingCertificateInfo = info
                     pendingCertificateData = certData
                     showCertificateChangedAlert = true
-                    connectionStatus = .failed(error: .certificateError("証明書が変更されました"))
+                    connectionStatus = .failed(error: .certificateError(L10n.Certificate.changedTitle))
                 }
             } else {
                 // 未保存: 新規証明書確認

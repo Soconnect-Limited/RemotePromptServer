@@ -34,27 +34,27 @@ struct EditRoomView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("基本情報")) {
-                    TextField("ルーム名", text: $name)
+                Section(header: Text(L10n.Room.sectionBasic)) {
+                    TextField(L10n.Room.fieldName, text: $name)
                         .accessibilityIdentifier("editRoom.name")
-                    TextField("ワークスペースパス", text: $workspacePath)
+                    TextField(L10n.Room.fieldWorkspace, text: $workspacePath)
                         .accessibilityIdentifier("editRoom.workspacePath")
-                    TextField("アイコン (絵文字)", text: $icon)
+                    TextField(L10n.Room.fieldIcon, text: $icon)
                         .accessibilityIdentifier("editRoom.icon")
                         .textInputAutocapitalization(.never)
                 }
 
                 if let error = viewModel.errorMessage {
-                    Section("エラー") {
+                    Section(L10n.Common.error) {
                         Text(error)
                             .foregroundColor(.red)
                     }
                 }
             }
-            .navigationTitle("ルームを編集")
+            .navigationTitle(L10n.Room.editTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -63,7 +63,7 @@ struct EditRoomView: View {
                         if isSubmitting {
                             ProgressView()
                         } else {
-                            Text("保存")
+                            Text(L10n.Common.save)
                         }
                     }
                     .accessibilityIdentifier("editRoom.submit")

@@ -379,7 +379,7 @@ final class ChatViewModel: ObservableObject {
                 guard let index = messages.firstIndex(where: { $0.id == message.id }) else { continue }
                 var failed = messages[index]
                 failed.status = .failed
-                failed.errorMessage = "回復失敗: \(error.localizedDescription)"
+                failed.errorMessage = L10n.Chat.recoveryFailed(error.localizedDescription)
                 messages[index] = failed
                 messageStore.updateMessage(failed)
             }
@@ -763,7 +763,7 @@ final class ChatViewModel: ObservableObject {
         if let index = messages.firstIndex(where: { $0.id == messageId }) {
             var message = messages[index]
             message.status = .failed
-            message.errorMessage = "応答待機がタイムアウトしました"
+            message.errorMessage = L10n.Chat.timeout
             messages[index] = message
             messageStore.updateMessage(message)
         }
@@ -846,7 +846,7 @@ final class ChatViewModel: ObservableObject {
             if let index = messages.firstIndex(where: { $0.jobId == jobId }) {
                 var cancelledMessage = messages[index]
                 cancelledMessage.status = .failed
-                cancelledMessage.errorMessage = "ユーザーによりキャンセルされました"
+                cancelledMessage.errorMessage = L10n.Chat.cancelled
                 cancelledMessage.finishedAt = Date()
                 messages[index] = cancelledMessage
                 messageStore.updateMessage(cancelledMessage)
@@ -877,7 +877,7 @@ final class ChatViewModel: ObservableObject {
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             var cancelledMessage = messages[index]
             cancelledMessage.status = .failed
-            cancelledMessage.errorMessage = "ユーザーによりキャンセルされました"
+            cancelledMessage.errorMessage = L10n.Chat.cancelled
             cancelledMessage.finishedAt = Date()
             messages[index] = cancelledMessage
             messageStore.updateMessage(cancelledMessage)

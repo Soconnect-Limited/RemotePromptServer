@@ -18,27 +18,27 @@ struct CreateRoomView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("基本情報")) {
-                    TextField("ルーム名", text: $name)
+                Section(header: Text(L10n.Room.sectionBasic)) {
+                    TextField(L10n.Room.fieldName, text: $name)
                         .accessibilityIdentifier("createRoom.name")
-                    TextField("ワークスペースパス", text: $workspacePath)
+                    TextField(L10n.Room.fieldWorkspace, text: $workspacePath)
                         .accessibilityIdentifier("createRoom.workspacePath")
-                    TextField("アイコン (絵文字)", text: $icon)
+                    TextField(L10n.Room.fieldIcon, text: $icon)
                         .accessibilityIdentifier("createRoom.icon")
                         .textInputAutocapitalization(.never)
                 }
 
                 if let error = viewModel.errorMessage {
-                    Section("エラー") {
+                    Section(L10n.Common.error) {
                         Text(error)
                             .foregroundColor(.red)
                     }
                 }
             }
-            .navigationTitle("新規ルーム")
+            .navigationTitle(L10n.Room.createTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") { dismiss() }
+                    Button(L10n.Common.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -47,7 +47,7 @@ struct CreateRoomView: View {
                         if isSubmitting {
                             ProgressView()
                         } else {
-                            Text("作成")
+                            Text(L10n.Common.create)
                         }
                     }
                     .accessibilityIdentifier("createRoom.submit")

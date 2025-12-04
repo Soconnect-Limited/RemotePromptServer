@@ -1,0 +1,208 @@
+/*
+  Localizable.strings (English)
+  RemotePrompt
+*/
+
+// MARK: - Common
+"common.cancel" = "Cancel";
+"common.save" = "Save";
+"common.delete" = "Delete";
+"common.edit" = "Edit";
+"common.done" = "Done";
+"common.close" = "Close";
+"common.ok" = "OK";
+"common.error" = "Error";
+"common.loading" = "Loading...";
+"common.create" = "Create";
+"common.reset" = "Reset";
+"common.openSettings" = "Open Settings";
+
+// MARK: - Rooms
+"rooms.title" = "Rooms";
+"rooms.empty" = "No rooms";
+"rooms.empty.hint" = "Tap the + button to create a new room";
+"rooms.delete.title" = "Delete Room";
+"rooms.delete.message" = "Deleting \"%@\" will also delete related threads and messages.";
+
+// MARK: - Room Create/Edit
+"room.create.title" = "New Room";
+"room.edit.title" = "Edit Room";
+"room.field.name" = "Room Name";
+"room.field.workspace" = "Workspace Path";
+"room.field.icon" = "Icon (Emoji)";
+"room.section.basic" = "Basic Info";
+
+// MARK: - Threads
+"threads.title" = "Threads";
+"threads.empty" = "No threads";
+"threads.new" = "New Thread";
+"threads.create.title" = "Create Thread";
+"threads.create.hint" = "Enter a thread name to organize your conversations";
+"threads.edit.title" = "Edit Thread";
+"threads.field.name" = "Thread Name";
+"threads.untitled" = "Untitled";
+"threads.lastConversation" = "Last conversation: %@ %@";
+"threads.noHistory" = "No conversation history";
+"threads.fetch.error" = "Failed to fetch threads: %@";
+"threads.create.error" = "Failed to create thread: %@";
+"threads.update.error" = "Failed to update thread name: %@";
+"threads.delete.error" = "Failed to delete thread: %@";
+
+// MARK: - Chat
+"chat.input.placeholder" = "Enter message...";
+"chat.generating" = "Generating response...";
+"chat.cancel" = "Cancel Response";
+"chat.recovery.failed" = "Recovery failed: %@";
+"chat.cancelled" = "Cancelled by user";
+"chat.timeout" = "Response timed out";
+"chat.readMore" = "Read more";
+"chat.collapse" = "Collapse";
+
+// MARK: - Server Settings
+"settings.server.title" = "Server Settings";
+"settings.server.url" = "Server URL";
+"settings.server.url.placeholder" = "e.g. https://192.168.1.100:8443";
+"settings.server.url.hint" = "Enter the RemotePrompt server URL including the port number.";
+"settings.server.url.invalid" = "Enter a URL starting with https://";
+"settings.server.apikey" = "API Key";
+"settings.server.apikey.placeholder" = "e.g. your-secret-api-key";
+"settings.server.apikey.hint" = "Enter the API_KEY set in the server's .env file.";
+"settings.server.section.info" = "Server Info";
+"settings.server.section.auth" = "Authentication";
+"settings.server.section.connection" = "Connection Status";
+"settings.server.section.certificate" = "Certificate Info";
+"settings.server.section.ai" = "AI Settings";
+"settings.server.section.advanced" = "Advanced Settings";
+
+// MARK: - Connection
+"connection.test" = "Test Connection";
+"connection.status.idle" = "Not connected";
+"connection.status.testing" = "Connecting...";
+"connection.status.success" = "Connected";
+"connection.failed.all" = "Failed to connect to all URLs";
+
+// MARK: - Alternative URLs
+"settings.alturl.title" = "Alternative URLs";
+"settings.alturl.toggle" = "Auto Fallback";
+"settings.alturl.hint" = "If the main URL fails, alternative URLs will be tried in order. Add URLs for other networks like Tailscale.";
+"settings.alturl.placeholder" = "e.g. https://100.64.0.1:8443";
+
+// MARK: - AI Providers
+"settings.ai.sort.hint" = "Drag to change order. This affects the tab order on the chat screen.";
+"settings.claude" = "Claude Settings";
+"settings.codex" = "Codex Settings";
+"settings.gemini" = "Gemini Settings";
+"settings.runner" = "%@ Settings";
+
+// MARK: - Certificate
+"certificate.title" = "Certificate Confirmation";
+"certificate.changed.title" = "Certificate Changed";
+"certificate.revoked.title" = "Certificate Revoked";
+"certificate.mode.changed.title" = "Certificate Mode Changed";
+"certificate.error.title" = "Certificate Error";
+"certificate.trust" = "Trust Certificate";
+"certificate.trust.new" = "Trust New Certificate";
+"certificate.reconnect" = "Reconnect with New Certificate";
+"certificate.reset" = "Reset Certificate Trust";
+"certificate.reset.confirm" = "Certificate re-confirmation will be required on next connection.";
+"certificate.fingerprint" = "Fingerprint";
+"certificate.commonName" = "Common Name";
+"certificate.validUntil" = "Valid Until";
+"certificate.selfSigned" = "Self-signed Certificate";
+"certificate.commercial" = "Commercial Certificate";
+"certificate.new.pending" = "New certificate generated";
+"certificate.new.pending.hint" = "Will take effect after server restart";
+"certificate.verify.failed" = "Cannot verify server certificate.";
+"certificate.verify.hint" = "This server uses a self-signed certificate. Before continuing, verify that the fingerprint below matches what is displayed on the server.";
+"certificate.changed.warning" = "The server certificate has changed.\nThis could be a man-in-the-middle attack.\n\nPlease verify with the server administrator.";
+"certificate.changed.detail" = "\nOld: %@...\nNew: %@...";
+"certificate.mismatch.message" = "Server certificate has changed.\n\nStored: %@...\nReceived: %@...\n\nIf this is an expected change, trust the new certificate.";
+"certificate.updated.restart" = "Server certificate has been updated.\n\nPlease reconnect after server restart.\n\nReason: %@";
+"certificate.updated.reconnect" = "Server certificate has been updated.\n\nReconnect with the new certificate?\n\nReason: %@";
+"certificate.revoked.message" = "Server certificate has been revoked.\n\nPlease reconnect from settings after server restart.\n\nReason: %@";
+"certificate.mode.changed.message" = "Certificate mode changed from \"%@\" to \"%@\".\n\nPlease re-confirm the certificate from settings.\n\nReason: %@";
+"certificate.trust.connect" = "Trust and Connect";
+"certificate.cancel.connection" = "Cancel Connection";
+"certificate.discard.saved" = "Discard Saved Certificate";
+"certificate.sha256" = "SHA256 Fingerprint";
+"certificate.old.fingerprint" = "Old Fingerprint";
+"certificate.new.fingerprint" = "New Fingerprint";
+"certificate.mitm" = "This could be a man-in-the-middle attack";
+"certificate.contact.admin" = "Please verify with the server administrator";
+
+// MARK: - Editor
+"editor.save" = "Save";
+"editor.save.success" = "Saved";
+"editor.save.error" = "Save Error";
+
+// MARK: - QR Code
+"qr.share.title" = "Share Settings";
+"qr.share.hint" = "Scan this QR code on another device to import settings";
+"qr.share.info" = "Settings to share:";
+"qr.share.serverUrl" = "Server URL";
+"qr.share.deviceId" = "Device ID";
+"qr.share.altUrls" = "Alternative URLs";
+"qr.share.altUrls.count" = "%d items";
+"qr.generate.failed" = "Failed to generate QR code";
+"qr.import.title" = "Import Settings";
+"qr.import.hint" = "Scan a QR code displayed on another device";
+"qr.import.confirm" = "Import the following settings?\n\nServer: %@\nDevice ID: %@...";
+"qr.import.button" = "Import";
+"qr.invalid" = "Invalid QR code";
+"qr.unknown.error" = "An unknown error occurred";
+
+// MARK: - Camera
+"camera.access.denied" = "Cannot access camera";
+"camera.input.failed" = "Cannot add camera input";
+"camera.metadata.failed" = "Cannot add metadata output";
+
+// MARK: - Reset
+"settings.reset.certificate" = "Reset Certificate Trust";
+"settings.reset.all" = "Reset All Settings";
+"settings.reset.all.title" = "Reset All Settings";
+"settings.reset.all.confirm" = "All server connection information will be deleted.";
+
+// MARK: - Welcome
+"welcome.title" = "Welcome to RemotePrompt";
+"welcome.hint" = "First, set up the server to connect to.";
+"welcome.setup" = "Set Up Server";
+
+// MARK: - File Browser
+"files.empty" = "This directory is empty";
+"files.copy.path" = "Copy Path";
+"files.retry" = "Retry";
+"files.error.unknown" = "Unknown error";
+
+// MARK: - File Errors
+"file.error.size" = "File size exceeds limit (500KB): %@";
+"file.error.path" = "Invalid file path";
+"file.error.auth" = "Authentication failed";
+"file.error.permission" = "You don't have permission to access this room";
+"file.error.network" = "A network error occurred";
+"file.error.server" = "Server error (%d): %@";
+
+// MARK: - Markdown Editor
+"editor.save" = "Save";
+"editor.save.success" = "Saved";
+"editor.save.error" = "Save Error";
+
+// MARK: - Bonjour Discovery
+"bonjour.searching" = "Searching for servers...";
+"bonjour.notfound" = "No servers found on local network";
+"bonjour.search" = "Search for Servers";
+"bonjour.stop" = "Stop Search";
+"bonjour.auto" = "Auto Detect";
+"bonjour.hint" = "Automatically detect RemotePrompt servers on the same network.";
+
+// MARK: - Room Settings
+"roomsettings.sendValue" = "Send value: %@";
+"roomsettings.resetDefault" = "Reset to Default";
+
+// MARK: - Connection Errors
+"error.invalidUrl" = "Invalid URL";
+"error.network" = "Network error: %@";
+"error.certificate" = "Certificate error: %@";
+"error.auth" = "Authentication error: Please check your API key";
+"error.server" = "Server error: %@";
+"error.unknown" = "Unknown error: %@";
+"error.apikey.missing" = "API key is not set. Please set the API key in server settings.";

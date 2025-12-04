@@ -29,47 +29,47 @@ struct ServerSettingsView: View {
                 certificateSection
                 advancedSection
             }
-            .navigationTitle("サーバー設定")
+            .navigationTitle(L10n.Settings.serverTitle)
             .navigationBarTitleDisplayMode(horizontalSizeClass == .regular ? .large : .inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(L10n.Common.save) {
                         viewModel.saveConfiguration()
                         dismiss()
                     }
                     .disabled(!viewModel.canSave)
                 }
             }
-            .alert("証明書の確認", isPresented: $viewModel.showCertificateAlert) {
+            .alert(L10n.Certificate.title, isPresented: $viewModel.showCertificateAlert) {
                 certificateAlertButtons
             } message: {
                 certificateAlertMessage
             }
-            .alert("証明書が変更されました", isPresented: $viewModel.showCertificateChangedAlert) {
+            .alert(L10n.Certificate.changedTitle, isPresented: $viewModel.showCertificateChangedAlert) {
                 certificateChangedAlertButtons
             } message: {
                 certificateChangedAlertMessage
             }
-            .alert("証明書信頼をリセット", isPresented: $showResetConfirmation) {
-                Button("キャンセル", role: .cancel) {}
-                Button("リセット", role: .destructive) {
+            .alert(L10n.Certificate.reset, isPresented: $showResetConfirmation) {
+                Button(L10n.Common.cancel, role: .cancel) {}
+                Button(L10n.Common.reset, role: .destructive) {
                     viewModel.resetCertificateTrust()
                 }
             } message: {
-                Text("次回接続時に証明書の再確認が必要になります。")
+                Text(L10n.Certificate.resetConfirm)
             }
-            .alert("すべての設定をリセット", isPresented: $showResetAllConfirmation) {
-                Button("キャンセル", role: .cancel) {}
-                Button("すべてリセット", role: .destructive) {
+            .alert(L10n.Settings.resetAllTitle, isPresented: $showResetAllConfirmation) {
+                Button(L10n.Common.cancel, role: .cancel) {}
+                Button(L10n.Settings.resetAll, role: .destructive) {
                     viewModel.resetAllSettings()
                 }
             } message: {
-                Text("サーバー接続情報がすべて削除されます。")
+                Text(L10n.Settings.resetAllConfirm)
             }
         }
     }
@@ -82,13 +82,13 @@ struct ServerSettingsView: View {
                 HStack {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text("サーバーを検索中...")
+                    Text(L10n.Bonjour.searching)
                         .foregroundColor(.secondary)
                 }
             }
 
             if bonjourDiscovery.discoveredServers.isEmpty && !bonjourDiscovery.isSearching {
-                Text("ローカルネットワーク上にサーバーが見つかりません")
+                Text(L10n.Bonjour.notfound)
                     .foregroundColor(.secondary)
                     .font(.caption)
             }
@@ -102,7 +102,7 @@ struct ServerSettingsView: View {
                             Text(server.name)
                                 .foregroundColor(.primary)
                             if let sslMode = server.metadata.sslMode {
-                                Text(sslMode == "self_signed" ? "自己署名証明書" : "商用証明書")
+                                Text(sslMode == "self_signed" ? L10n.Certificate.selfSigned : L10n.Certificate.commercial)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -124,12 +124,12 @@ struct ServerSettingsView: View {
             } label: {
                 HStack {
                     Image(systemName: bonjourDiscovery.isSearching ? "stop.fill" : "magnifyingglass")
-                    Text(bonjourDiscovery.isSearching ? "検索を停止" : "サーバーを検索")
+                    Text(bonjourDiscovery.isSearching ? L10n.Bonjour.stop : L10n.Bonjour.search)
                 }
             }
         } header: {
             HStack {
-                Text("自動検出")
+                Text(L10n.Bonjour.auto)
                 Spacer()
                 Button {
                     showBonjourSection.toggle()
@@ -139,7 +139,7 @@ struct ServerSettingsView: View {
                 }
             }
         } footer: {
-            Text("同じネットワーク上のRemotePromptサーバーを自動検出します。")
+            Text(L10n.Bonjour.hint)
         }
         .onAppear {
             // 自動的に検索を開始
@@ -182,7 +182,7 @@ struct ServerSettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 ZStack(alignment: .leading) {
                     if viewModel.serverURL.isEmpty {
-                        Text(verbatim: "例: https://192.168.1.100:8443")
+                        Text(L10n.Settings.serverUrlPlaceholder)
                             .foregroundColor(Color(UIColor.placeholderText))
                     }
                     TextField("", text: $viewModel.serverURL)
@@ -193,15 +193,15 @@ struct ServerSettingsView: View {
                 }
 
                 if !viewModel.serverURL.isEmpty && !viewModel.isValidMainURL {
-                    Text("https:// で始まるURLを入力してください")
+                    Text(L10n.Settings.serverUrlInvalid)
                         .font(.caption)
                         .foregroundColor(.red)
                 }
             }
         } header: {
-            Text("サーバー情報")
+            Text(L10n.Settings.sectionInfo)
         } footer: {
-            Text("RemotePromptサーバーのURLを入力してください。ポート番号も含めてください。")
+            Text(L10n.Settings.serverUrlHint)
         }
     }
 
@@ -227,7 +227,7 @@ struct ServerSettingsView: View {
             HStack {
                 ZStack(alignment: .leading) {
                     if newAlternativeURL.isEmpty {
-                        Text(verbatim: "例: https://100.64.0.1:8443")
+                        Text(L10n.AltUrl.placeholder)
                             .foregroundColor(Color(UIColor.placeholderText))
                     }
                     TextField("", text: $newAlternativeURL)
@@ -248,11 +248,11 @@ struct ServerSettingsView: View {
                 .disabled(newAlternativeURL.isEmpty)
             }
 
-            Toggle("自動フォールバック", isOn: $viewModel.autoFallback)
+            Toggle(L10n.AltUrl.toggle, isOn: $viewModel.autoFallback)
         } header: {
-            Text("代替URL")
+            Text(L10n.AltUrl.title)
         } footer: {
-            Text("メインURLに接続できない場合、代替URLを順番に試行します。Tailscale等の別ネットワーク用URLを追加できます。")
+            Text(L10n.AltUrl.hint)
         }
     }
 
@@ -262,7 +262,7 @@ struct ServerSettingsView: View {
         Section {
             ZStack(alignment: .leading) {
                 if viewModel.apiKey.isEmpty {
-                    Text("例: your-secret-api-key")
+                    Text(L10n.Settings.apiKeyPlaceholder)
                         .foregroundColor(Color(UIColor.placeholderText))
                 }
                 SecureField("", text: $viewModel.apiKey)
@@ -271,9 +271,9 @@ struct ServerSettingsView: View {
                     .autocorrectionDisabled()
             }
         } header: {
-            Text("認証")
+            Text(L10n.Settings.sectionAuth)
         } footer: {
-            Text("サーバーの.envファイルに設定されているAPI_KEYを入力してください。")
+            Text(L10n.Settings.apiKeyHint)
         }
     }
 
@@ -294,13 +294,13 @@ struct ServerSettingsView: View {
             }
         } header: {
             HStack {
-                Text("AI設定")
+                Text(L10n.Settings.sectionAI)
                 Spacer()
                 EditButton()
                     .font(.caption)
             }
         } footer: {
-            Text("ドラッグで表示順を変更できます。チャット画面のタブ順序に反映されます。")
+            Text(L10n.Settings.aiSortHint)
         }
     }
 
@@ -332,12 +332,12 @@ struct ServerSettingsView: View {
                         ProgressView()
                             .scaleEffect(0.8)
                     }
-                    Text("接続テスト")
+                    Text(L10n.Connection.test)
                 }
             }
             .disabled(viewModel.serverURL.isEmpty || viewModel.connectionStatus == .connecting)
         } header: {
-            Text("接続状態")
+            Text(L10n.Settings.sectionConnection)
         }
     }
 
@@ -364,11 +364,11 @@ struct ServerSettingsView: View {
     private var connectionStatusText: String {
         switch viewModel.connectionStatus {
         case .idle:
-            return "未接続"
+            return L10n.Connection.idle
         case .connecting:
-            return "接続中..."
+            return L10n.Connection.testing
         case .success:
-            return "接続成功"
+            return L10n.Connection.success
         case .failed(let error):
             return error.localizedDescription
         }
@@ -380,18 +380,18 @@ struct ServerSettingsView: View {
         Group {
             if let info = viewModel.certificateInfo {
                 Section {
-                    LabeledContent("フィンガープリント") {
+                    LabeledContent(L10n.Certificate.fingerprint) {
                         Text(info.shortFingerprint)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
                     }
 
                     if let cn = info.commonName {
-                        LabeledContent("コモンネーム", value: cn)
+                        LabeledContent(L10n.Certificate.commonName, value: cn)
                     }
 
                     if let validUntil = info.validUntil {
-                        LabeledContent("有効期限") {
+                        LabeledContent(L10n.Certificate.validUntil) {
                             Text(validUntil, style: .date)
                         }
                     }
@@ -400,7 +400,7 @@ struct ServerSettingsView: View {
                         HStack {
                             Image(systemName: "lock.shield")
                                 .foregroundColor(.orange)
-                            Text("自己署名証明書")
+                            Text(L10n.Certificate.selfSigned)
                                 .foregroundColor(.orange)
                         }
                     }
@@ -411,16 +411,16 @@ struct ServerSettingsView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.yellow)
                             VStack(alignment: .leading) {
-                                Text("新しい証明書が生成されました")
+                                Text(L10n.Certificate.newPending)
                                     .font(.caption)
-                                Text("サーバー再起動後に有効になります")
+                                Text(L10n.Certificate.newPendingHint)
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
                         }
                     }
                 } header: {
-                    Text("証明書情報")
+                    Text(L10n.Settings.sectionCertificate)
                 }
             }
         }
@@ -436,7 +436,7 @@ struct ServerSettingsView: View {
             } label: {
                 HStack {
                     Image(systemName: "qrcode")
-                    Text("設定をQRコードで共有")
+                    Text(L10n.QR.shareTitle)
                 }
             }
             .disabled(viewModel.serverURL.isEmpty)
@@ -447,21 +447,21 @@ struct ServerSettingsView: View {
             } label: {
                 HStack {
                     Image(systemName: "qrcode.viewfinder")
-                    Text("QRコードから設定をインポート")
+                    Text(L10n.QR.importTitle)
                 }
             }
 
-            Button("証明書信頼をリセット") {
+            Button(L10n.Settings.resetCertificate) {
                 showResetConfirmation = true
             }
             .foregroundColor(.orange)
 
-            Button("すべての設定をリセット") {
+            Button(L10n.Settings.resetAll) {
                 showResetAllConfirmation = true
             }
             .foregroundColor(.red)
         } header: {
-            Text("詳細設定")
+            Text(L10n.Settings.sectionAdvanced)
         }
         .sheet(isPresented: $showQRCodeSheet) {
             SettingsQRCodeView()
@@ -475,10 +475,10 @@ struct ServerSettingsView: View {
 
     private var certificateAlertButtons: some View {
         Group {
-            Button("キャンセル", role: .cancel) {
+            Button(L10n.Common.cancel, role: .cancel) {
                 viewModel.rejectCertificate()
             }
-            Button("信頼して接続") {
+            Button(L10n.Certificate.trust) {
                 viewModel.trustCertificate()
             }
         }
@@ -487,9 +487,9 @@ struct ServerSettingsView: View {
     private var certificateAlertMessage: some View {
         VStack {
             if let info = viewModel.pendingCertificateInfo ?? viewModel.certificateInfo {
-                Text("このサーバーは自己署名証明書を使用しています。\n\nフィンガープリント:\n\(info.fingerprint)\n\nサーバー側の表示と一致していますか？")
+                Text("\(L10n.Certificate.verifyHint)\n\n\(L10n.Certificate.fingerprint):\n\(info.fingerprint)")
             } else {
-                Text("サーバーの証明書を検証できません。")
+                Text(L10n.Certificate.verifyFailed)
             }
         }
     }
@@ -498,10 +498,10 @@ struct ServerSettingsView: View {
 
     private var certificateChangedAlertButtons: some View {
         Group {
-            Button("接続を中止", role: .cancel) {
+            Button(L10n.Common.cancel, role: .cancel) {
                 viewModel.rejectCertificate()
             }
-            Button("新しい証明書を信頼", role: .destructive) {
+            Button(L10n.Certificate.trustNew, role: .destructive) {
                 viewModel.trustCertificate()
             }
         }
@@ -509,11 +509,11 @@ struct ServerSettingsView: View {
 
     private var certificateChangedAlertMessage: some View {
         VStack {
-            Text("サーバーの証明書が変更されました。\nこれは中間者攻撃の可能性があります。\n\nサーバー管理者に確認してください。")
+            Text(L10n.Certificate.changedWarning)
 
             if let old = ServerConfigurationStore.shared.currentConfiguration?.certificateFingerprint,
                let new = viewModel.pendingCertificateInfo?.fingerprint {
-                Text("\n旧: \(String(old.prefix(20)))...\n新: \(String(new.prefix(20)))...")
+                Text(L10n.Certificate.changedDetail(old: String(old.prefix(20)), new: String(new.prefix(20))))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

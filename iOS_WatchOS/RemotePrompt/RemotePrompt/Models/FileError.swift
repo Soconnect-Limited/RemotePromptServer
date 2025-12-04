@@ -15,17 +15,17 @@ enum FileError: LocalizedError {
             formatter.allowedUnits = [.useKB, .useMB]
             formatter.countStyle = .file
             let formatted = formatter.string(fromByteCount: size)
-            return "ファイルサイズが上限(500KB)を超えています: \(formatted)"
+            return L10n.Files.sizeError(formatted)
         case .invalidPath:
-            return "不正なファイルパスです"
+            return L10n.Files.pathError
         case .unauthorized:
-            return "認証に失敗しました"
+            return L10n.Files.authError
         case .forbidden:
-            return "このルームにアクセスする権限がありません"
+            return L10n.Files.permissionError
         case .networkError:
-            return "ネットワークエラーが発生しました"
+            return L10n.Files.networkError
         case .serverError(let code, let detail):
-            return "サーバーエラー(\(code)): \(detail)"
+            return L10n.Files.serverError(code, detail)
         }
     }
 }

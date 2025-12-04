@@ -13,25 +13,25 @@ struct CreateThreadView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("スレッド名", text: $threadName)
+                    TextField(L10n.Threads.fieldName, text: $threadName)
                         .focused($isTextFieldFocused)
                 } header: {
-                    Text("新しいスレッド")
+                    Text(L10n.Threads.new)
                 } footer: {
-                    Text("会話を整理するためのスレッド名を入力してください")
+                    Text(L10n.Threads.createHint)
                 }
             }
-            .navigationTitle("スレッド作成")
+            .navigationTitle(L10n.Threads.createTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("作成") {
-                        onCreate(threadName.isEmpty ? "無題" : threadName)
+                    Button(L10n.Common.create) {
+                        onCreate(threadName.isEmpty ? L10n.Threads.untitled : threadName)
                         dismiss()
                     }
                 }

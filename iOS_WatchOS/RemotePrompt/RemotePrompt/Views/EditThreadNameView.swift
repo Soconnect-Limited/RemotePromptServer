@@ -19,23 +19,23 @@ struct EditThreadNameView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("スレッド名", text: $threadName)
+                    TextField(L10n.Threads.fieldName, text: $threadName)
                         .focused($isTextFieldFocused)
                 } header: {
-                    Text("スレッド名を編集")
+                    Text(L10n.Threads.editTitle)
                 }
             }
-            .navigationTitle("スレッド編集")
+            .navigationTitle(L10n.Threads.editTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
+                    Button(L10n.Common.cancel) {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        onUpdate(threadName.isEmpty ? "無題" : threadName)
+                    Button(L10n.Common.save) {
+                        onUpdate(threadName.isEmpty ? L10n.Threads.untitled : threadName)
                         dismiss()
                     }
                 }

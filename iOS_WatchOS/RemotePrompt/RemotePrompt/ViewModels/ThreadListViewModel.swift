@@ -50,7 +50,7 @@ final class ThreadListViewModel: ObservableObject {
             // v4.2: クライアント側でrunnerフィルタリング（将来的に実装可能）
             // 現在はrunnerFilterなしで全Thread表示
         } catch {
-            errorMessage = "スレッド取得失敗: \(error.localizedDescription)"
+            errorMessage = L10n.Threads.fetchError(error.localizedDescription)
         }
 
         isLoading = false
@@ -70,7 +70,7 @@ final class ThreadListViewModel: ObservableObject {
             )
             threads.insert(newThread, at: 0)
         } catch {
-            errorMessage = "スレッド作成失敗: \(error.localizedDescription)"
+            errorMessage = L10n.Threads.createError(error.localizedDescription)
         }
 
         isLoading = false
@@ -91,7 +91,7 @@ final class ThreadListViewModel: ObservableObject {
                 threads[index] = updatedThread
             }
         } catch {
-            errorMessage = "スレッド名更新失敗: \(error.localizedDescription)"
+            errorMessage = L10n.Threads.updateError(error.localizedDescription)
         }
 
         isLoading = false
@@ -106,7 +106,7 @@ final class ThreadListViewModel: ObservableObject {
             try await apiClient.deleteThread(threadId: threadId, deviceId: deviceId)
             threads.removeAll { $0.id == threadId }
         } catch {
-            errorMessage = "スレッド削除失敗: \(error.localizedDescription)"
+            errorMessage = L10n.Threads.deleteError(error.localizedDescription)
         }
 
         isLoading = false

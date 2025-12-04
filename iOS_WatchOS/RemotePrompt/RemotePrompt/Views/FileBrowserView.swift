@@ -46,14 +46,14 @@ struct FileBrowserView: View {
     private var contentView: some View {
         Group {
                 if viewModel.isLoading {
-                    ProgressView("読み込み中…")
+                    ProgressView(L10n.Common.loading)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if viewModel.fileItems.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "folder.badge.questionmark")
                             .font(.largeTitle)
                             .foregroundStyle(.secondary)
-                        Text("このディレクトリは空です")
+                        Text(L10n.Files.empty)
                             .foregroundColor(.secondary)
                         if viewModel.showRetry {
                             retryButton
@@ -70,7 +70,7 @@ struct FileBrowserView: View {
                                 Button {
                                     UIPasteboard.general.string = item.path
                                 } label: {
-                                    Label("パスをコピー", systemImage: "doc.on.doc")
+                                    Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
                                 }
                             }
                         } else {
@@ -83,7 +83,7 @@ struct FileBrowserView: View {
                                 Button {
                                     UIPasteboard.general.string = item.path
                                 } label: {
-                                    Label("パスをコピー", systemImage: "doc.on.doc")
+                                    Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
                                 }
                             }
                         }
@@ -106,7 +106,7 @@ struct FileBrowserView: View {
                 get: { viewModel.errorMessage != nil },
                 set: { _ in viewModel.errorMessage = nil }
             )) {
-                Alert(title: Text("エラー"), message: Text(viewModel.errorMessage ?? "不明なエラー"), dismissButton: .default(Text("OK")))
+                Alert(title: Text(L10n.Common.error), message: Text(viewModel.errorMessage ?? L10n.Files.unknownError), dismissButton: .default(Text(L10n.Common.ok)))
             }
             .task {
                 await viewModel.loadFiles(path: initialPath)
@@ -117,7 +117,7 @@ struct FileBrowserView: View {
         Button {
             Task { await viewModel.loadFiles(path: viewModel.currentPath) }
         } label: {
-            Label("リトライ", systemImage: "arrow.clockwise")
+            Label(L10n.Files.retry, systemImage: "arrow.clockwise")
         }
     }
 }

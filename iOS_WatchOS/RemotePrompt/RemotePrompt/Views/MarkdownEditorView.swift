@@ -17,7 +17,7 @@ struct MarkdownEditorView: View {
     var body: some View {
         VStack {
             if viewModel.isLoading {
-                ProgressView("読み込み中…")
+                ProgressView(L10n.Common.loading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 SyntaxHighlightedTextEditor(text: $viewModel.fileContent)
@@ -26,14 +26,14 @@ struct MarkdownEditorView: View {
         .navigationTitle(fileItem.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button("閉じる") { dismiss() }
+                Button(L10n.Common.close) { dismiss() }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { Task { await save() } }) {
                     if viewModel.isSaving {
                         ProgressView()
                     } else {
-                        Text("保存")
+                        Text(L10n.Editor.save)
                     }
                 }
                 .disabled(!viewModel.isDirty || viewModel.isSaving)
@@ -47,9 +47,9 @@ struct MarkdownEditorView: View {
             }
         )) {
             if let error = viewModel.errorMessage {
-                return Alert(title: Text("保存エラー"), message: Text(error), dismissButton: .default(Text("OK")))
+                return Alert(title: Text(L10n.Editor.saveError), message: Text(error), dismissButton: .default(Text(L10n.Common.ok)))
             } else {
-                return Alert(title: Text(saveSucceeded ? "保存しました" : ""), dismissButton: .default(Text("OK")))
+                return Alert(title: Text(saveSucceeded ? L10n.Editor.saveSuccess : ""), dismissButton: .default(Text(L10n.Common.ok)))
             }
         }
         .task {

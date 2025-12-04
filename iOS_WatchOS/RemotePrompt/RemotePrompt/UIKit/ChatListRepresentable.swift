@@ -881,7 +881,7 @@ struct ChatListRepresentable: UIViewRepresentable {
 
             return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
                 let cancelAction = UIAction(
-                    title: "応答をキャンセル",
+                    title: L10n.Chat.cancel,
                     image: UIImage(systemName: "xmark.circle"),
                     attributes: .destructive
                 ) { _ in
@@ -979,7 +979,7 @@ final class ChatMessageCell: UITableViewCell {
         activityIndicator.hidesWhenStopped = true
         loadingStackView.addArrangedSubview(activityIndicator)
 
-        loadingLabel.text = "応答を生成中..."
+        loadingLabel.text = L10n.Chat.generating
         loadingLabel.font = UIFont.preferredFont(forTextStyle: .body)
         loadingLabel.textColor = .label
         loadingStackView.addArrangedSubview(loadingLabel)
@@ -993,7 +993,7 @@ final class ChatMessageCell: UITableViewCell {
 
         // Phase 4: 展開ボタン設定
         expandButton.translatesAutoresizingMaskIntoConstraints = false
-        expandButton.setTitle("続きを読む", for: .normal)
+        expandButton.setTitle(L10n.Chat.readMore, for: .normal)
         expandButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .body)
         expandButton.addTarget(self, action: #selector(toggleExpand), for: .touchUpInside)
         expandButton.contentHorizontalAlignment = .trailing
@@ -1159,7 +1159,7 @@ final class ChatMessageCell: UITableViewCell {
             // Phase 4: 長文折りたたみボタン表示制御
             if markdown.count > truncateThreshold {
                 expandButton.isHidden = false
-                expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
+                expandButton.setTitle(isExpanded ? L10n.Chat.collapse : L10n.Chat.readMore, for: .normal)
             } else {
                 expandButton.isHidden = true
             }
@@ -1244,7 +1244,7 @@ final class ChatMessageCell: UITableViewCell {
     // Phase 4: 展開/折りたたみトグル（UIStackViewベース）
     @objc private func toggleExpand() {
         isExpanded.toggle()
-        expandButton.setTitle(isExpanded ? "折りたたむ" : "続きを読む", for: .normal)
+        expandButton.setTitle(isExpanded ? L10n.Chat.collapse : L10n.Chat.readMore, for: .normal)
 
         // Memory Leak Fix: ビューをプールに回収してからクリア
         recycleViewsToPool()
@@ -1311,7 +1311,7 @@ final class ChatMessageCell: UITableViewCell {
         isExpanded = false
         fullContent = ""
         expandButton.isHidden = true
-        expandButton.setTitle("続きを読む", for: .normal)
+        expandButton.setTitle(L10n.Chat.readMore, for: .normal)
 
         // 制約をリセット（textViewBottomConstraintは再設定時に制御される）
         textViewBottomConstraint?.isActive = false

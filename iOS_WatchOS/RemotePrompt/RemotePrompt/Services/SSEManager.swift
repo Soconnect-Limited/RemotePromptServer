@@ -106,7 +106,7 @@ final class SSEManager: NSObject, ObservableObject, URLSessionDataDelegate, URLS
         let allURLs = Constants.allURLs
         guard currentURLIndex < allURLs.count else {
             DispatchQueue.main.async {
-                self.errorMessage = "全てのサーバーに接続できませんでした"
+                self.errorMessage = L10n.Connection.failedAll
             }
             return
         }

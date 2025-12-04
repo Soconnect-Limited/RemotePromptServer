@@ -37,7 +37,7 @@ struct InputBar: View {
             }
 
             HStack(spacing: 12) {
-                TextField("メッセージを入力...", text: $text, axis: .vertical)
+                TextField(L10n.Chat.placeholder, text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
                     .disabled(isLoading)

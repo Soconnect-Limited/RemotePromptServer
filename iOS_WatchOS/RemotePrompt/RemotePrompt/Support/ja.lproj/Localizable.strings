@@ -1,0 +1,208 @@
+/*
+  Localizable.strings (Japanese)
+  RemotePrompt
+*/
+
+// MARK: - Common
+"common.cancel" = "キャンセル";
+"common.save" = "保存";
+"common.delete" = "削除";
+"common.edit" = "編集";
+"common.done" = "完了";
+"common.close" = "閉じる";
+"common.ok" = "OK";
+"common.error" = "エラー";
+"common.loading" = "読み込み中...";
+"common.create" = "作成";
+"common.reset" = "リセット";
+"common.openSettings" = "設定を開く";
+
+// MARK: - Rooms
+"rooms.title" = "ルーム";
+"rooms.empty" = "ルームがありません";
+"rooms.empty.hint" = "+ボタンをタップして新しいルームを作成してください";
+"rooms.delete.title" = "ルームを削除";
+"rooms.delete.message" = "「%@」を削除すると、関連するスレッドとメッセージも削除されます。";
+
+// MARK: - Room Create/Edit
+"room.create.title" = "新規ルーム";
+"room.edit.title" = "ルームを編集";
+"room.field.name" = "ルーム名";
+"room.field.workspace" = "ワークスペースパス";
+"room.field.icon" = "アイコン（絵文字）";
+"room.section.basic" = "基本情報";
+
+// MARK: - Threads
+"threads.title" = "スレッド";
+"threads.empty" = "スレッドがありません";
+"threads.new" = "新規スレッド";
+"threads.create.title" = "スレッドを作成";
+"threads.create.hint" = "会話を整理するためのスレッド名を入力してください";
+"threads.edit.title" = "スレッドを編集";
+"threads.field.name" = "スレッド名";
+"threads.untitled" = "無題";
+"threads.lastConversation" = "最終会話: %@ %@";
+"threads.noHistory" = "会話履歴がありません";
+"threads.fetch.error" = "スレッドの取得に失敗しました: %@";
+"threads.create.error" = "スレッドの作成に失敗しました: %@";
+"threads.update.error" = "スレッド名の更新に失敗しました: %@";
+"threads.delete.error" = "スレッドの削除に失敗しました: %@";
+
+// MARK: - Chat
+"chat.input.placeholder" = "メッセージを入力...";
+"chat.generating" = "応答を生成中...";
+"chat.cancel" = "応答をキャンセル";
+"chat.recovery.failed" = "復旧に失敗しました: %@";
+"chat.cancelled" = "ユーザーによってキャンセルされました";
+"chat.timeout" = "応答がタイムアウトしました";
+"chat.readMore" = "もっと見る";
+"chat.collapse" = "折りたたむ";
+
+// MARK: - Server Settings
+"settings.server.title" = "サーバー設定";
+"settings.server.url" = "サーバーURL";
+"settings.server.url.placeholder" = "例: https://192.168.1.100:8443";
+"settings.server.url.hint" = "ポート番号を含むRemotePromptサーバーのURLを入力してください。";
+"settings.server.url.invalid" = "https://で始まるURLを入力してください";
+"settings.server.apikey" = "APIキー";
+"settings.server.apikey.placeholder" = "例: your-secret-api-key";
+"settings.server.apikey.hint" = "サーバーの.envファイルで設定したAPI_KEYを入力してください。";
+"settings.server.section.info" = "サーバー情報";
+"settings.server.section.auth" = "認証";
+"settings.server.section.connection" = "接続状況";
+"settings.server.section.certificate" = "証明書情報";
+"settings.server.section.ai" = "AI設定";
+"settings.server.section.advanced" = "詳細設定";
+
+// MARK: - Connection
+"connection.test" = "接続テスト";
+"connection.status.idle" = "未接続";
+"connection.status.testing" = "接続中...";
+"connection.status.success" = "接続済み";
+"connection.failed.all" = "すべてのURLへの接続に失敗しました";
+
+// MARK: - Alternative URLs
+"settings.alturl.title" = "代替URL";
+"settings.alturl.toggle" = "自動フォールバック";
+"settings.alturl.hint" = "メインURLへの接続に失敗した場合、代替URLに順番に接続を試みます。Tailscaleなど別のネットワーク用のURLを追加してください。";
+"settings.alturl.placeholder" = "例: https://100.64.0.1:8443";
+
+// MARK: - AI Providers
+"settings.ai.sort.hint" = "ドラッグで順序を変更できます。チャット画面のタブ順序に反映されます。";
+"settings.claude" = "Claude設定";
+"settings.codex" = "Codex設定";
+"settings.gemini" = "Gemini設定";
+"settings.runner" = "%@設定";
+
+// MARK: - Certificate
+"certificate.title" = "証明書の確認";
+"certificate.changed.title" = "証明書が変更されました";
+"certificate.revoked.title" = "証明書が失効しました";
+"certificate.mode.changed.title" = "証明書モードが変更されました";
+"certificate.error.title" = "証明書エラー";
+"certificate.trust" = "証明書を信頼";
+"certificate.trust.new" = "新しい証明書を信頼";
+"certificate.reconnect" = "新しい証明書で再接続";
+"certificate.reset" = "証明書の信頼をリセット";
+"certificate.reset.confirm" = "次回の接続時に証明書の再確認が必要になります。";
+"certificate.fingerprint" = "フィンガープリント";
+"certificate.commonName" = "コモンネーム";
+"certificate.validUntil" = "有効期限";
+"certificate.selfSigned" = "自己署名証明書";
+"certificate.commercial" = "商用証明書";
+"certificate.new.pending" = "新しい証明書が生成されました";
+"certificate.new.pending.hint" = "サーバー再起動後に有効になります";
+"certificate.verify.failed" = "サーバー証明書を検証できません。";
+"certificate.verify.hint" = "このサーバーは自己署名証明書を使用しています。続行する前に、以下のフィンガープリントがサーバーに表示されているものと一致することを確認してください。";
+"certificate.changed.warning" = "サーバー証明書が変更されました。\n中間者攻撃の可能性があります。\n\nサーバー管理者に確認してください。";
+"certificate.changed.detail" = "\n旧: %@...\n新: %@...";
+"certificate.mismatch.message" = "サーバー証明書が変更されました。\n\n保存済み: %@...\n受信: %@...\n\nこれが予期された変更であれば、新しい証明書を信頼してください。";
+"certificate.updated.restart" = "サーバー証明書が更新されました。\n\nサーバー再起動後に再接続してください。\n\n理由: %@";
+"certificate.updated.reconnect" = "サーバー証明書が更新されました。\n\n新しい証明書で再接続しますか？\n\n理由: %@";
+"certificate.revoked.message" = "サーバー証明書が失効しました。\n\nサーバー再起動後、設定から再接続してください。\n\n理由: %@";
+"certificate.mode.changed.message" = "証明書モードが「%@」から「%@」に変更されました。\n\n設定から証明書を再確認してください。\n\n理由: %@";
+"certificate.trust.connect" = "信頼して接続";
+"certificate.cancel.connection" = "接続を中止";
+"certificate.discard.saved" = "保存済み証明書を破棄";
+"certificate.sha256" = "SHA256 フィンガープリント";
+"certificate.old.fingerprint" = "旧フィンガープリント";
+"certificate.new.fingerprint" = "新フィンガープリント";
+"certificate.mitm" = "中間者攻撃の可能性があります";
+"certificate.contact.admin" = "サーバー管理者に確認してください";
+
+// MARK: - Editor
+"editor.save" = "保存";
+"editor.save.success" = "保存しました";
+"editor.save.error" = "保存エラー";
+
+// MARK: - QR Code
+"qr.share.title" = "設定を共有";
+"qr.share.hint" = "このQRコードを別のデバイスでスキャンして設定をインポートできます";
+"qr.share.info" = "共有する設定:";
+"qr.share.serverUrl" = "サーバーURL";
+"qr.share.deviceId" = "デバイスID";
+"qr.share.altUrls" = "代替URL";
+"qr.share.altUrls.count" = "%d件";
+"qr.generate.failed" = "QRコードの生成に失敗しました";
+"qr.import.title" = "設定をインポート";
+"qr.import.hint" = "別のデバイスに表示されたQRコードをスキャンしてください";
+"qr.import.confirm" = "以下の設定をインポートしますか？\n\nサーバー: %@\nデバイスID: %@...";
+"qr.import.button" = "インポート";
+"qr.invalid" = "無効なQRコードです";
+"qr.unknown.error" = "不明なエラーが発生しました";
+
+// MARK: - Camera
+"camera.access.denied" = "カメラにアクセスできません";
+"camera.input.failed" = "カメラ入力を追加できません";
+"camera.metadata.failed" = "メタデータ出力を追加できません";
+
+// MARK: - Reset
+"settings.reset.certificate" = "証明書の信頼をリセット";
+"settings.reset.all" = "すべての設定をリセット";
+"settings.reset.all.title" = "すべての設定をリセット";
+"settings.reset.all.confirm" = "サーバー接続情報がすべて削除されます。";
+
+// MARK: - Welcome
+"welcome.title" = "RemotePromptへようこそ";
+"welcome.hint" = "まず、接続するサーバーを設定してください。";
+"welcome.setup" = "サーバーを設定";
+
+// MARK: - File Browser
+"files.empty" = "このディレクトリは空です";
+"files.copy.path" = "パスをコピー";
+"files.retry" = "再試行";
+"files.error.unknown" = "不明なエラー";
+
+// MARK: - File Errors
+"file.error.size" = "ファイルサイズが上限(500KB)を超えています: %@";
+"file.error.path" = "無効なファイルパスです";
+"file.error.auth" = "認証に失敗しました";
+"file.error.permission" = "このルームへのアクセス権限がありません";
+"file.error.network" = "ネットワークエラーが発生しました";
+"file.error.server" = "サーバーエラー (%d): %@";
+
+// MARK: - Markdown Editor
+"editor.save" = "保存";
+"editor.save.success" = "保存しました";
+"editor.save.error" = "保存エラー";
+
+// MARK: - Bonjour Discovery
+"bonjour.searching" = "サーバーを検索中...";
+"bonjour.notfound" = "ローカルネットワークでサーバーが見つかりません";
+"bonjour.search" = "サーバーを検索";
+"bonjour.stop" = "検索を停止";
+"bonjour.auto" = "自動検出";
+"bonjour.hint" = "同じネットワーク上のRemotePromptサーバーを自動検出します。";
+
+// MARK: - Room Settings
+"roomsettings.sendValue" = "送信値: %@";
+"roomsettings.resetDefault" = "デフォルトに戻す";
+
+// MARK: - Connection Errors
+"error.invalidUrl" = "無効なURLです";
+"error.network" = "ネットワークエラー: %@";
+"error.certificate" = "証明書エラー: %@";
+"error.auth" = "認証エラー: APIキーを確認してください";
+"error.server" = "サーバーエラー: %@";
+"error.unknown" = "不明なエラー: %@";
+"error.apikey.missing" = "APIキーが設定されていません。サーバー設定でAPIキーを設定してください。";

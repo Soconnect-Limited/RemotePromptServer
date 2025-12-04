@@ -36,19 +36,19 @@ struct ThreadListView: View {
     var body: some View {
         Group {
             if viewModel.isLoading && viewModel.threads.isEmpty {
-                ProgressView("読み込み中...")
+                ProgressView(L10n.Common.loading)
             } else if viewModel.threads.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "bubble.left.and.bubble.right")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
-                    Text("スレッドがありません")
+                    Text(L10n.Threads.empty)
                         .font(.headline)
                         .foregroundColor(.secondary)
                     Button {
                         showCreateThread = true
                     } label: {
-                        Label("新しいスレッド", systemImage: "plus.circle.fill")
+                        Label(L10n.Threads.new, systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -72,7 +72,7 @@ struct ThreadListView: View {
                         Button {
                             threadToEdit = thread
                         } label: {
-                            Label("編集", systemImage: "pencil")
+                            Label(L10n.Common.edit, systemImage: "pencil")
                         }
                         .tint(.blue)
                     }
@@ -82,7 +82,7 @@ struct ThreadListView: View {
                                 await viewModel.deleteThread(threadId: thread.id)
                             }
                         } label: {
-                            Label("削除", systemImage: "trash")
+                            Label(L10n.Common.delete, systemImage: "trash")
                         }
                     }
                 }
@@ -118,13 +118,13 @@ struct ThreadListView: View {
             }
         }
         .alert(
-            "エラー",
+            L10n.Common.error,
             isPresented: Binding(
                 get: { viewModel.errorMessage != nil },
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {
+            Button(L10n.Common.ok, role: .cancel) {
                 viewModel.errorMessage = nil
             }
         } message: {
@@ -154,11 +154,11 @@ private struct ThreadRowView: View {
                     .fontWeight(thread.hasUnread ? .bold : .regular)
 
                 if let updatedAt = thread.updatedAt {
-                    Text("最終会話: \(updatedAt, style: .date) \(updatedAt, style: .time)")
+                    Text("\(L10n.Threads.lastConversation): \(updatedAt, style: .date) \(updatedAt, style: .time)")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 } else {
-                    Text("会話履歴なし")
+                    Text(L10n.Threads.noHistory)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
