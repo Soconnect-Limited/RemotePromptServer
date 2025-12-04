@@ -3,15 +3,37 @@ import SwiftUI
 struct FileRow: View {
     let item: FileItem
 
+    private var iconName: String {
+        switch item.type {
+        case .directory:
+            return "folder.fill"
+        case .markdownFile:
+            return "doc.text.fill"
+        case .pdfFile:
+            return "doc.richtext.fill"
+        }
+    }
+
+    private var iconColor: Color {
+        switch item.type {
+        case .directory:
+            return .blue
+        case .markdownFile:
+            return .green
+        case .pdfFile:
+            return .red
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: item.type == .directory ? "folder.fill" : "doc.text.fill")
-                .foregroundStyle(item.type == .directory ? .blue : .green)
+            Image(systemName: iconName)
+                .foregroundStyle(iconColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if let size = item.size, item.type == .markdownFile {
+                if let size = item.size, item.type != .directory {
                     Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
                         .font(.footnote)
                         .foregroundColor(.secondary)

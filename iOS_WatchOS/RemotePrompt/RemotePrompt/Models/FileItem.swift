@@ -21,4 +21,5 @@ struct FileItem: Identifiable, Codable, Hashable {
 enum FileType: String, Codable {
     case directory
     case markdownFile = "markdown_file"
+    case pdfFile = "pdf_file"
 }

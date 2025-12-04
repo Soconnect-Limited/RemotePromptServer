@@ -52,7 +52,7 @@ from utils.settings_validator import (
     validate_settings,
 )
 from auth_helpers import verify_room_ownership
-from file_operations import list_files, read_file, write_file, WriteResult
+from file_operations import list_files, read_file, read_pdf_file, write_file, WriteResult
 from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
 
 # Setup logging BEFORE any manager initialization
@@ -611,8 +611,17 @@ async def get_room_file(
     _: None = Depends(verify_api_key),
 ) -> Response:
     room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+
+    # ファイル拡張子に応じて読み込み方法を切り替え
+    is_pdf = filepath.lower().endswith(".pdf")
+
     try:
-        content = read_file(workspace_path=room.workspace_path, file_path=filepath)
+        if is_pdf:
+            content = read_pdf_file(workspace_path=room.workspace_path, file_path=filepath)
+            return Response(content=content, media_type="application/pdf")
+        else:
+            content = read_file(workspace_path=room.workspace_path, file_path=filepath)
+            return Response(content=content, media_type="text/plain; charset=utf-8")
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found")
     except FileSizeExceeded as exc:
@@ -621,8 +630,6 @@ async def get_room_file(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
-
-    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 @app.put("/rooms/{room_id}/files/{filepath:path}")

@@ -60,6 +60,13 @@ def validate_markdown_extension(file_path: Path) -> None:
         raise InvalidExtension("Only .md files are allowed")
 
 
+def validate_pdf_extension(file_path: Path) -> None:
+    """Ensure the path points to a .pdf file."""
+
+    if file_path.suffix.lower() != ".pdf":
+        raise InvalidExtension("Only .pdf files are allowed")
+
+
 def validate_file_size(file_path: Path, max_size: int = MAX_FILE_SIZE) -> int:
     """Validate file size is within limit.
 

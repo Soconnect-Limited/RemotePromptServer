@@ -15,7 +15,11 @@ from file_security import (
     validate_file_path,
     validate_file_size,
     validate_markdown_extension,
+    validate_pdf_extension,
 )
+
+# PDFファイルのサイズ上限（10MB）
+MAX_PDF_SIZE = 10_000_000
 
 FileItemDict = Dict[str, object]
 
@@ -54,14 +58,22 @@ def list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]:
                     ).isoformat(),
                 }
             )
-        elif entry.is_file() and entry.suffix.lower() == ".md":
+        elif entry.is_file():
+            suffix = entry.suffix.lower()
+            if suffix == ".md":
+                file_type = "markdown_file"
+            elif suffix == ".pdf":
+                file_type = "pdf_file"
+            else:
+                continue  # 未対応の拡張子はスキップ
+
             stat = entry.stat()
             path = entry.relative_to(base).as_posix()
             results.append(
                 {
                     "id": path,
                     "name": entry.name,
-                    "type": "markdown_file",
+                    "type": file_type,
                     "path": path,
                     "size": stat.st_size,
                     "modified_at": datetime.fromtimestamp(
@@ -113,3 +125,13 @@ def write_file(workspace_path: str, file_path: str, content: str) -> WriteResult
         os.chmod(target, orig_mode)
 
     return WriteResult(success=True, size=encoded_size, backup_created=backup_created)
+
+
+def read_pdf_file(workspace_path: str, file_path: str) -> bytes:
+    """Read a PDF file as binary data."""
+    target = validate_file_path(workspace_path, file_path)
+    if not target.exists() or not target.is_file():
+        raise FileNotFoundError("File not found")
+    validate_pdf_extension(target)
+    validate_file_size(target, max_size=MAX_PDF_SIZE)
+    return target.read_bytes()

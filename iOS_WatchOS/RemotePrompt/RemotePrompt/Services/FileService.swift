@@ -140,6 +140,35 @@ final class FileService {
         }
     }
 
+    /// PDFファイルをバイナリデータとして取得
+    func readPDFFile(roomId: String, path: String, deviceId: String) async throws -> Data {
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
+
+        let encodedPath = encodePathSegment(path)
+        var lastError: Error = APIError.invalidURL
+
+        for baseURL in allURLs {
+            do {
+                guard let url = URL(string: "\(baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
+                    continue
+                }
+
+                var request = try makeRequest(url: url, method: "GET")
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                return data
+            } catch let error as FileError {
+                throw error
+            } catch {
+                lastError = error
+                print("[FileService] readPDFFile failed for \(baseURL): \(error.localizedDescription)")
+                continue
+            }
+        }
+        throw lastError
+    }
+
     // MARK: - Helpers
 
     private func encodePathSegment(_ path: String) -> String {

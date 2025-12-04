@@ -9,7 +9,7 @@ struct FileBrowserView: View {
     private let initialPath: String
     private let isRoot: Bool
 
-    /// iPad: 選択中のMarkdownファイル
+    /// iPad: 選択中のファイル（Markdown or PDF）
     @State private var selectedFile: FileItem?
     /// iPad: SplitViewのサイドバー表示状態
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -69,7 +69,7 @@ struct FileBrowserView: View {
                 }
         } detail: {
             if let file = selectedFile {
-                MarkdownEditorView(room: room, fileItem: file, isEmbeddedInSplitView: true)
+                fileDetailView(for: file)
                     .toolbar {
                         // サイドバーが非表示の時のみdetail側に閉じるボタンを表示
                         ToolbarItem(placement: .cancellationAction) {
@@ -82,7 +82,7 @@ struct FileBrowserView: View {
                 ContentUnavailableView(
                     "ファイルを選択",
                     systemImage: "doc.text",
-                    description: Text("左のリストからMarkdownファイルを選択してください")
+                    description: Text("左のリストからファイルを選択してください")
                 )
                 .toolbar {
                     // サイドバーが非表示の時のみdetail側に閉じるボタンを表示
@@ -239,9 +239,22 @@ struct FileBrowserView: View {
                                     Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
                                 }
                             }
-                        } else {
+                        } else if item.type == .markdownFile {
                             NavigationLink {
                                 MarkdownEditorView(room: room, fileItem: item)
+                            } label: {
+                                FileRow(item: item)
+                            }
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = item.path
+                                } label: {
+                                    Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
+                                }
+                            }
+                        } else if item.type == .pdfFile {
+                            NavigationLink {
+                                PDFViewerView(room: room, fileItem: item)
                             } label: {
                                 FileRow(item: item)
                             }
@@ -284,6 +297,20 @@ struct FileBrowserView: View {
             Task { await viewModel.loadFiles(path: viewModel.currentPath) }
         } label: {
             Label(L10n.Files.retry, systemImage: "arrow.clockwise")
+        }
+    }
+
+    /// iPad SplitView: ファイルタイプに応じた詳細ビュー
+    @ViewBuilder
+    private func fileDetailView(for file: FileItem) -> some View {
+        switch file.type {
+        case .markdownFile:
+            MarkdownEditorView(room: room, fileItem: file, isEmbeddedInSplitView: true)
+        case .pdfFile:
+            PDFViewerView(room: room, fileItem: file, isEmbeddedInSplitView: true)
+        case .directory:
+            // ディレクトリは詳細ビューに表示しない
+            EmptyView()
         }
     }
 }
