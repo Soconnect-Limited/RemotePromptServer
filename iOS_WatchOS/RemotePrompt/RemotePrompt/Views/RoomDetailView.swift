@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// Room詳細画面（Thread一覧 → Chat表示）
+/// iPad: NavigationSplitViewで左側にスレッド一覧、右側にチャット表示
+/// iPhone: 従来通りの画面遷移
 struct RoomDetailView: View {
     let room: Room
     private let apiClient: APIClientProtocol
@@ -10,7 +12,10 @@ struct RoomDetailView: View {
     @State private var selectedRunner: AIProvider = .claude
     @State private var showFileBrowser = false
     @State private var showRoomSettings = false
-    @State private var chatViewModels: [String: ChatViewModel] = [:]  // v4.4: runner別に独立したViewModel  // v4.1: Persistent ViewModel for runner switching
+    @State private var chatViewModels: [String: ChatViewModel] = [:]  // v4.4: runner別に独立したViewModel
+
+    /// iPad判定用（regular = iPad, compact = iPhone）
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// 有効なAIプロバイダー（設定順序でソート）
     private var enabledProviders: [AIProviderConfiguration] {
@@ -36,21 +41,17 @@ struct RoomDetailView: View {
 
     var body: some View {
         Group {
-            if let thread = selectedThread {
-                chatViewContainer(for: thread)
+            if horizontalSizeClass == .regular {
+                // iPad: SplitView（左にスレッド一覧、右にチャット）
+                iPadSplitView
             } else {
-                threadListLayer
+                // iPhone: 従来通りの画面遷移
+                iPhoneNavigationView
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(selectedThread != nil)
-        .toolbar {
-            toolbarContent
-        }
-        .sheet(isPresented: $showFileBrowser) {
-            NavigationStack {
-                FileBrowserView(room: room, path: "", isRoot: false)
-            }
+        .fullScreenCover(isPresented: $showFileBrowser) {
+            // iPadでは全画面でSplitView表示
+            FileBrowserView(room: room, path: "", isRoot: true)
         }
         .sheet(isPresented: $showRoomSettings) {
             if selectedThread != nil {
@@ -62,6 +63,118 @@ struct RoomDetailView: View {
             if let firstEnabled = enabledProviders.first {
                 selectedRunner = firstEnabled.provider
             }
+        }
+    }
+
+    // MARK: - iPad SplitView
+
+    private var iPadSplitView: some View {
+        NavigationSplitView {
+            // サイドバー: スレッド一覧
+            ThreadListView(
+                room: room,
+                runner: "claude",
+                onThreadSelected: { thread in
+                    selectedThread = thread
+                    // v4.4: スレッド切り替え時は全runner用ViewModelをクリア
+                    chatViewModels.removeAll()
+                    // v4.3.1: スレッド選択時に現在のrunnerを既読にする
+                    Task { @MainActor in
+                        await threadListViewModel.markRunnerAsRead(
+                            threadId: thread.id,
+                            runner: selectedRunner.rawValue
+                        )
+                        updateSelectedThreadUnread(removeRunner: selectedRunner.rawValue)
+                    }
+                },
+                viewModel: threadListViewModel
+            )
+            .navigationTitle(room.name)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showFileBrowser = true
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                }
+            }
+        } detail: {
+            // 詳細: チャット画面
+            if let thread = selectedThread {
+                VStack(spacing: 0) {
+                    runnerPicker
+
+                    if let viewModel = chatViewModels[selectedRunner.rawValue] {
+                        ChatView(viewModel: viewModel)
+                            .background(Color(.systemBackground))
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(Color(.systemBackground))
+                    }
+                }
+                .navigationTitle(thread.name)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showRoomSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                    }
+                }
+                .onAppear {
+                    ensureViewModel(for: thread, runner: selectedRunner.rawValue)
+                    Task { @MainActor in
+                        await threadListViewModel.markRunnerAsRead(
+                            threadId: thread.id,
+                            runner: selectedRunner.rawValue
+                        )
+                        updateSelectedThreadUnread(removeRunner: selectedRunner.rawValue)
+                    }
+                }
+                .onChange(of: selectedRunner) { _, newRunner in
+                    if let thread = selectedThread {
+                        ensureViewModel(for: thread, runner: newRunner.rawValue)
+                    }
+                    Task { @MainActor in
+                        if let thread = selectedThread {
+                            await threadListViewModel.markRunnerAsRead(
+                                threadId: thread.id,
+                                runner: newRunner.rawValue
+                            )
+                            updateSelectedThreadUnread(removeRunner: newRunner.rawValue)
+                        }
+                    }
+                }
+            } else {
+                // スレッド未選択時のプレースホルダー
+                ContentUnavailableView(
+                    "スレッドを選択",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: Text("左のリストからスレッドを選択してください")
+                )
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    // MARK: - iPhone Navigation
+
+    private var iPhoneNavigationView: some View {
+        Group {
+            if let thread = selectedThread {
+                chatViewContainer(for: thread)
+            } else {
+                threadListLayer
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(selectedThread != nil)
+        .toolbar {
+            toolbarContent
         }
     }
 

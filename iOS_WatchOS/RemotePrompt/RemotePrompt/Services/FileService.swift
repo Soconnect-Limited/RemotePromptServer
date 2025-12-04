@@ -11,7 +11,29 @@ final class FileService {
 
     init() {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        // サーバーはISO8601形式（+00:00タイムゾーン付き）を返すためカスタムデコーダーを使用
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            // フラクショナルセカンドなしでも試す
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: dateString) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid date format: \(dateString)"
+            )
+        }
         self.decoder = decoder
     }
 

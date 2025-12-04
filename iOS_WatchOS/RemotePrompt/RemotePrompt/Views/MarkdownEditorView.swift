@@ -3,14 +3,18 @@ import SwiftUI
 struct MarkdownEditorView: View {
     let room: Room
     let fileItem: FileItem
+    /// SplitViewのdetailとして表示されている場合はtrue（閉じるボタンを非表示にする）
+    var isEmbeddedInSplitView: Bool = false
+
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: MarkdownEditorViewModel
     @State private var showSaveAlert = false
     @State private var saveSucceeded = false
 
-    init(room: Room, fileItem: FileItem) {
+    init(room: Room, fileItem: FileItem, isEmbeddedInSplitView: Bool = false) {
         self.room = room
         self.fileItem = fileItem
+        self.isEmbeddedInSplitView = isEmbeddedInSplitView
         _viewModel = StateObject(wrappedValue: MarkdownEditorViewModel(roomId: room.id))
     }
 
@@ -25,8 +29,11 @@ struct MarkdownEditorView: View {
         }
         .navigationTitle(fileItem.name)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(L10n.Common.close) { dismiss() }
+            // SplitViewに埋め込まれていない場合のみ閉じるボタンを表示
+            if !isEmbeddedInSplitView {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(L10n.Common.close) { dismiss() }
+                }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { Task { await save() } }) {
