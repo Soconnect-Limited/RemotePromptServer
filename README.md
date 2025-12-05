@@ -41,7 +41,7 @@ npm install -g @anthropic-ai/claude-code  # TODO: 正式なパッケージ名に
 
 ```bash
 # リポジトリをクローン
-git clone https://github.com/yourusername/RemotePromptServer.git
+git clone https://github.com/Soconnect-Limited/RemotePromptServer.git
 cd RemotePromptServer
 
 # 仮想環境を作成
@@ -136,7 +136,7 @@ npm install -g @anthropic-ai/claude-code  # TODO: Update to official package nam
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/RemotePromptServer.git
+git clone https://github.com/Soconnect-Limited/RemotePromptServer.git
 cd RemotePromptServer
 
 # Create virtual environment
