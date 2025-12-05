@@ -14,6 +14,15 @@ struct FileBrowserView: View {
     /// iPad: SplitViewのサイドバー表示状態
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
+    /// 画像アップロード関連
+    @State private var showingImageSourceSheet = false
+    @State private var selectedImageSource: ImagePickerSource?
+    @State private var showingImagePicker = false
+
+    /// サイズ超過画像のアラート用
+    @State private var showingOversizedAlert = false
+    @State private var pendingOversizedImages: [OversizedImage] = []
+
     init(room: Room, path: String = "", isRoot: Bool = true) {
         self.room = room
         self.initialPath = path
@@ -49,6 +58,78 @@ struct FileBrowserView: View {
                 // iPhone または サブディレクトリ: 従来のナビゲーション
                 iPhoneContentView
             }
+        }
+        // 画像選択ダイアログ（共通）
+        .confirmationDialog("画像を追加", isPresented: $showingImageSourceSheet, titleVisibility: .visible) {
+            Button("フォトライブラリから選択") {
+                selectedImageSource = .photoLibrary
+                showingImagePicker = true
+            }
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button("カメラで撮影") {
+                    selectedImageSource = .camera
+                    showingImagePicker = true
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        // 画像ピッカー（共通）
+        .sheet(isPresented: $showingImagePicker, onDismiss: {
+            // シートが閉じたら状態をリセット
+            selectedImageSource = nil
+        }) {
+            if let source = selectedImageSource {
+                ImagePickerView(
+                    source: source,
+                    onImagesSelected: { selectedImages in
+                        showingImagePicker = false
+                        Task {
+                            await viewModel.uploadImages(selectedImages)
+                        }
+                    },
+                    onOversizedImages: { oversizedImages in
+                        // シートは既に閉じているはず（onImagesSelected or onCancelで閉じる）
+                        pendingOversizedImages = oversizedImages
+                        showingOversizedAlert = true
+                    },
+                    onCancel: {
+                        showingImagePicker = false
+                    }
+                )
+            }
+        }
+        // サイズ超過アラート（共通）
+        .alert("ファイルサイズが100MBを超えています", isPresented: $showingOversizedAlert) {
+            Button("オリジナル") {
+                let images = pendingOversizedImages.map { oversized in
+                    SelectedImage(data: oversized.originalData, filename: oversized.filename)
+                }
+                Task {
+                    await viewModel.uploadImages(images)
+                }
+                pendingOversizedImages = []
+            }
+            Button("圧縮") {
+                let images = pendingOversizedImages.compactMap { oversized -> SelectedImage? in
+                    guard let compressedData = compressImageToFitSize(oversized.image, maxSize: 100_000_000) else {
+                        return nil
+                    }
+                    let newFilename = (oversized.filename as NSString).deletingPathExtension + ".jpg"
+                    return SelectedImage(data: compressedData, filename: newFilename)
+                }
+                Task {
+                    await viewModel.uploadImages(images)
+                }
+                pendingOversizedImages = []
+            }
+            Button("キャンセル", role: .cancel) {
+                pendingOversizedImages = []
+            }
+        } message: {
+            let count = pendingOversizedImages.count
+            let totalSize = pendingOversizedImages.reduce(0) { $0 + $1.originalSize }
+            let sizeMB = Double(totalSize) / 1_000_000
+            Text("\(count)件の画像（合計\(String(format: "%.1f", sizeMB))MB）が100MBを超えています。\nオリジナルをそのままアップロードしますか？圧縮しますか？")
         }
     }
 
@@ -174,6 +255,10 @@ struct FileBrowserView: View {
         )) {
             Alert(title: Text(L10n.Common.error), message: Text(viewModel.errorMessage ?? L10n.Files.unknownError), dismissButton: .default(Text(L10n.Common.ok)))
         }
+        // 下部: 画像アップロードバー
+        .safeAreaInset(edge: .bottom) {
+            imageUploadBar
+        }
         // パンくずナビゲーション
         .safeAreaInset(edge: .top) {
             if !viewModel.currentPath.isEmpty {
@@ -265,6 +350,19 @@ struct FileBrowserView: View {
                                     Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
                                 }
                             }
+                        } else if item.type == .imageFile {
+                            NavigationLink {
+                                ImageViewerView(room: room, fileItem: item)
+                            } label: {
+                                FileRow(item: item)
+                            }
+                            .contextMenu {
+                                Button {
+                                    UIPasteboard.general.string = item.path
+                                } label: {
+                                    Label(L10n.Files.copyPath, systemImage: "doc.on.doc")
+                                }
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -287,6 +385,10 @@ struct FileBrowserView: View {
             )) {
                 Alert(title: Text(L10n.Common.error), message: Text(viewModel.errorMessage ?? L10n.Files.unknownError), dismissButton: .default(Text(L10n.Common.ok)))
             }
+            // 下部: 画像アップロードバー
+            .safeAreaInset(edge: .bottom) {
+                imageUploadBar
+            }
             .task {
                 await viewModel.loadFiles(path: initialPath)
             }
@@ -308,10 +410,37 @@ struct FileBrowserView: View {
             MarkdownEditorView(room: room, fileItem: file, isEmbeddedInSplitView: true)
         case .pdfFile:
             PDFViewerView(room: room, fileItem: file, isEmbeddedInSplitView: true)
+        case .imageFile:
+            ImageViewerView(room: room, fileItem: file)
         case .directory:
             // ディレクトリは詳細ビューに表示しない
             EmptyView()
         }
+    }
+
+    // MARK: - 画像アップロードバー
+
+    private var imageUploadBar: some View {
+        HStack {
+            if viewModel.isUploading {
+                ProgressView()
+                    .padding(.trailing, 8)
+                Text(viewModel.uploadProgress ?? "アップロード中...")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else {
+                Button {
+                    showingImageSourceSheet = true
+                } label: {
+                    Label("画像を追加", systemImage: "photo.badge.plus")
+                        .font(.subheadline)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color(.secondarySystemBackground))
     }
 }
 

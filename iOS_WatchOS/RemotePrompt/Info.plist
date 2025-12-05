@@ -40,7 +40,11 @@
 
 	<!-- Camera Usage Description -->
 	<key>NSCameraUsageDescription</key>
-	<string>設定を共有するQRコードをスキャンするためにカメラを使用します。</string>
+	<string>QRコードのスキャンや画像の撮影に使用します。</string>
+
+	<!-- Photo Library Usage Description -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Workspaceに画像をアップロードするためにフォトライブラリにアクセスします。</string>
 
 	<!-- UI Application Scene Manifest -->
 	<key>UIApplicationSceneManifest</key>

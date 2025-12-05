@@ -169,6 +169,98 @@ final class FileService {
         throw lastError
     }
 
+    /// 画像ファイルをバイナリデータとして取得
+    func readImageFile(roomId: String, path: String, deviceId: String) async throws -> Data {
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
+
+        let encodedPath = encodePathSegment(path)
+        var lastError: Error = APIError.invalidURL
+
+        for baseURL in allURLs {
+            do {
+                guard let url = URL(string: "\(baseURL)/rooms/\(roomId)/files/\(encodedPath)?device_id=\(deviceId)") else {
+                    continue
+                }
+
+                var request = try makeRequest(url: url, method: "GET")
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                return data
+            } catch let error as FileError {
+                throw error
+            } catch {
+                lastError = error
+                print("[FileService] readImageFile failed for \(baseURL): \(error.localizedDescription)")
+                continue
+            }
+        }
+        throw lastError
+    }
+
+    /// 画像アップロードレスポンス
+    struct ImageUploadResponse: Codable {
+        let message: String
+        let path: String
+        let size: Int
+    }
+
+    /// 画像ファイルをアップロード
+    func uploadImage(roomId: String, directoryPath: String, filename: String, imageData: Data, deviceId: String) async throws -> ImageUploadResponse {
+        let allURLs = Constants.allURLs
+        guard !allURLs.isEmpty else { throw APIError.serverNotConfigured }
+
+        var lastError: Error = APIError.invalidURL
+        let boundary = UUID().uuidString
+
+        for baseURL in allURLs {
+            do {
+                guard let url = URL(string: "\(baseURL)/rooms/\(roomId)/files/upload") else {
+                    continue
+                }
+
+                var request = try makeRequest(url: url, method: "POST")
+                request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+                // マルチパートフォームデータを構築
+                var body = Data()
+
+                // device_id
+                body.append("--\(boundary)\r\n".data(using: .utf8)!)
+                body.append("Content-Disposition: form-data; name=\"device_id\"\r\n\r\n".data(using: .utf8)!)
+                body.append("\(deviceId)\r\n".data(using: .utf8)!)
+
+                // directory_path
+                body.append("--\(boundary)\r\n".data(using: .utf8)!)
+                body.append("Content-Disposition: form-data; name=\"directory_path\"\r\n\r\n".data(using: .utf8)!)
+                body.append("\(directoryPath)\r\n".data(using: .utf8)!)
+
+                // file
+                body.append("--\(boundary)\r\n".data(using: .utf8)!)
+                body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+                body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+                body.append(imageData)
+                body.append("\r\n".data(using: .utf8)!)
+
+                // 終端
+                body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+                request.httpBody = body
+
+                let (data, response) = try await session.data(for: request)
+                try handleHTTPResponse(response, data: data)
+                return try JSONDecoder().decode(ImageUploadResponse.self, from: data)
+            } catch let error as FileError {
+                throw error
+            } catch {
+                lastError = error
+                print("[FileService] uploadImage failed for \(baseURL): \(error.localizedDescription)")
+                continue
+            }
+        }
+        throw lastError
+    }
+
     // MARK: - Helpers
 
     private func encodePathSegment(_ path: String) -> String {

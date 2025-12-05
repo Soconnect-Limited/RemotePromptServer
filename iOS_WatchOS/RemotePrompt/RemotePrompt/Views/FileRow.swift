@@ -11,6 +11,8 @@ struct FileRow: View {
             return "doc.text.fill"
         case .pdfFile:
             return "doc.richtext.fill"
+        case .imageFile:
+            return "photo.fill"
         }
     }
 
@@ -22,6 +24,8 @@ struct FileRow: View {
             return .green
         case .pdfFile:
             return .red
+        case .imageFile:
+            return .purple
         }
     }
 

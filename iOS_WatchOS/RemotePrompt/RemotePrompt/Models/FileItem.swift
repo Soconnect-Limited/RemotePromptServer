@@ -22,4 +22,5 @@ enum FileType: String, Codable {
     case directory
     case markdownFile = "markdown_file"
     case pdfFile = "pdf_file"
+    case imageFile = "image_file"
 }

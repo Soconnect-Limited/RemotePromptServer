@@ -67,6 +67,19 @@ def validate_pdf_extension(file_path: Path) -> None:
         raise InvalidExtension("Only .pdf files are allowed")
 
 
+# 許可する画像拡張子
+ALLOWED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".heic"}
+
+
+def validate_image_extension(file_path: Path) -> None:
+    """Ensure the path points to an allowed image file."""
+
+    if file_path.suffix.lower() not in ALLOWED_IMAGE_EXTENSIONS:
+        raise InvalidExtension(
+            f"Only image files are allowed: {', '.join(ALLOWED_IMAGE_EXTENSIONS)}"
+        )
+
+
 def validate_file_size(file_path: Path, max_size: int = MAX_FILE_SIZE) -> int:
     """Validate file size is within limit.
 

@@ -63,4 +63,13 @@ final class MarkdownEditorViewModel: ObservableObject {
     func discardChanges() {
         fileContent = originalContent
     }
+
+    /// 状態をリセット（別のファイルに切り替える前に呼ぶ）
+    func reset() {
+        fileContent = ""
+        originalContent = ""
+        errorMessage = nil
+        isLoading = false
+        isSaving = false
+    }
 }

@@ -10,6 +10,8 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showRetry = false
+    @Published var isUploading = false
+    @Published var uploadProgress: String?
 
     private let roomId: String
     private let deviceId: String
@@ -68,5 +70,50 @@ final class FileBrowserViewModel: ObservableObject {
 
     var navigationTitle: String {
         currentPath.isEmpty ? "Workspace" : currentPath
+    }
+
+    // MARK: - Image Upload
+
+    func uploadImages(_ selectedImages: [SelectedImage]) async {
+        guard !isUploading else { return }
+        guard !selectedImages.isEmpty else { return }
+
+        isUploading = true
+        errorMessage = nil
+
+        let total = selectedImages.count
+        var successCount = 0
+        var failedCount = 0
+
+        for (index, selectedImage) in selectedImages.enumerated() {
+            await MainActor.run {
+                self.uploadProgress = "アップロード中 (\(index + 1)/\(total))"
+            }
+
+            do {
+                _ = try await fileService.uploadImage(
+                    roomId: roomId,
+                    directoryPath: currentPath,
+                    filename: selectedImage.filename,
+                    imageData: selectedImage.data,
+                    deviceId: deviceId
+                )
+                successCount += 1
+            } catch {
+                failedCount += 1
+                print("[FileBrowserViewModel] uploadImage failed: \(error.localizedDescription)")
+            }
+        }
+
+        await MainActor.run {
+            self.uploadProgress = nil
+            self.isUploading = false
+            if failedCount > 0 {
+                self.errorMessage = "\(successCount)件アップロード成功、\(failedCount)件失敗"
+            }
+        }
+
+        // アップロード成功後、ファイルリストを更新
+        await loadFiles(path: currentPath)
     }
 }

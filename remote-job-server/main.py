@@ -11,11 +11,14 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
+    File,
+    Form,
     HTTPException,
     Header,
     Query,
     Request,
     Response,
+    UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -52,8 +55,17 @@ from utils.settings_validator import (
     validate_settings,
 )
 from auth_helpers import verify_room_ownership
-from file_operations import list_files, read_file, read_pdf_file, write_file, WriteResult
-from file_security import FileSizeExceeded, InvalidExtension, InvalidPath
+from file_operations import (
+    list_files,
+    read_file,
+    read_image_file,
+    read_pdf_file,
+    write_file,
+    write_image_file,
+    ImageWriteResult,
+    WriteResult,
+)
+from file_security import ALLOWED_IMAGE_EXTENSIONS, FileSizeExceeded, InvalidExtension, InvalidPath
 
 # Setup logging BEFORE any manager initialization
 setup_logging()
@@ -613,12 +625,27 @@ async def get_room_file(
     room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
 
     # ファイル拡張子に応じて読み込み方法を切り替え
-    is_pdf = filepath.lower().endswith(".pdf")
+    suffix = "." + filepath.lower().rsplit(".", 1)[-1] if "." in filepath else ""
+    is_pdf = suffix == ".pdf"
+    is_image = suffix in ALLOWED_IMAGE_EXTENSIONS
+
+    # 画像のMIMEタイプ
+    image_mime_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".heic": "image/heic",
+    }
 
     try:
         if is_pdf:
             content = read_pdf_file(workspace_path=room.workspace_path, file_path=filepath)
             return Response(content=content, media_type="application/pdf")
+        elif is_image:
+            content = read_image_file(workspace_path=room.workspace_path, file_path=filepath)
+            mime_type = image_mime_types.get(suffix, "application/octet-stream")
+            return Response(content=content, media_type=mime_type)
         else:
             content = read_file(workspace_path=room.workspace_path, file_path=filepath)
             return Response(content=content, media_type="text/plain; charset=utf-8")
@@ -667,6 +694,64 @@ async def put_room_file(
         "path": filepath,
         "size": result.size,
         "backup_created": result.backup_created,
+    }
+
+
+@app.post("/rooms/{room_id}/files/upload")
+async def upload_image_file(
+    room_id: str,
+    file: UploadFile = File(...),
+    device_id: str = Form(...),
+    directory_path: str = Form(""),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Upload an image file to the specified directory.
+
+    If a file with the same name exists, appends _1, _2, etc. to the filename.
+    Supported formats: PNG, JPEG, GIF, HEIC
+    """
+    room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+
+    # ファイル名を取得
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required")
+
+    # ファイルデータを読み込み
+    try:
+        data = await file.read()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {exc}") from exc
+
+    LOGGER.info(
+        "[UPLOAD] room_id=%s, filename=%s, directory_path='%s', data_size=%d",
+        room_id, file.filename, directory_path, len(data)
+    )
+
+    try:
+        result: ImageWriteResult = write_image_file(
+            workspace_path=room.workspace_path,
+            directory_path=directory_path,
+            filename=file.filename,
+            data=data,
+        )
+    except FileSizeExceeded as exc:
+        LOGGER.error("[UPLOAD] FileSizeExceeded: %s", exc)
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except (InvalidPath, InvalidExtension) as exc:
+        LOGGER.error("[UPLOAD] InvalidPath/Extension: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        LOGGER.error("[UPLOAD] FileNotFoundError: %s", exc)
+        raise HTTPException(status_code=404, detail="Directory not found")
+    except PermissionError as exc:
+        LOGGER.error("[UPLOAD] PermissionError: %s", exc)
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    return {
+        "message": "Image uploaded",
+        "path": result.saved_path,
+        "size": result.size,
     }
 
 

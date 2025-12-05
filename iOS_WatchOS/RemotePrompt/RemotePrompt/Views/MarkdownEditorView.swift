@@ -1,4 +1,11 @@
+import MarkdownUI
 import SwiftUI
+
+/// 表示モード
+enum MarkdownViewMode: String, CaseIterable {
+    case preview = "プレビュー"
+    case edit = "編集"
+}
 
 struct MarkdownEditorView: View {
     let room: Room
@@ -10,6 +17,7 @@ struct MarkdownEditorView: View {
     @StateObject private var viewModel: MarkdownEditorViewModel
     @State private var showSaveAlert = false
     @State private var saveSucceeded = false
+    @State private var viewMode: MarkdownViewMode = .preview
 
     init(room: Room, fileItem: FileItem, isEmbeddedInSplitView: Bool = false) {
         self.room = room
@@ -23,6 +31,16 @@ struct MarkdownEditorView: View {
             if isEmbeddedInSplitView {
                 // SplitView埋め込み時: ナビゲーションバーなし（親が管理）
                 editorView
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            modePicker
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            if viewMode == .edit {
+                                saveButton
+                            }
+                        }
+                    }
             } else {
                 // 通常表示: ナビゲーションバーあり
                 editorView
@@ -31,8 +49,13 @@ struct MarkdownEditorView: View {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button(L10n.Common.close) { dismiss() }
                         }
+                        ToolbarItem(placement: .principal) {
+                            modePicker
+                        }
                         ToolbarItem(placement: .primaryAction) {
-                            saveButton
+                            if viewMode == .edit {
+                                saveButton
+                            }
                         }
                     }
             }
@@ -50,9 +73,23 @@ struct MarkdownEditorView: View {
                 return Alert(title: Text(saveSucceeded ? L10n.Editor.saveSuccess : ""), dismissButton: .default(Text(L10n.Common.ok)))
             }
         }
-        .task {
+        .task(id: fileItem.id) {
             await viewModel.loadFile(path: fileItem.path)
         }
+        .onChange(of: fileItem.id) { _, _ in
+            viewModel.reset()
+        }
+    }
+
+    /// モード切り替えPicker
+    private var modePicker: some View {
+        Picker("モード", selection: $viewMode) {
+            ForEach(MarkdownViewMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 160)
     }
 
     @ViewBuilder
@@ -62,7 +99,16 @@ struct MarkdownEditorView: View {
                 ProgressView(L10n.Common.loading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                SyntaxHighlightedTextEditor(text: $viewModel.fileContent)
+                switch viewMode {
+                case .preview:
+                    ScrollView {
+                        Markdown(viewModel.fileContent)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                case .edit:
+                    SyntaxHighlightedTextEditor(text: $viewModel.fileContent)
+                }
             }
         }
     }
