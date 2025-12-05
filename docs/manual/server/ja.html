@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サーバー版マニュアル - RemotePrompt</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h2 { color: #333; margin-top: 40px; border-left: 4px solid #007AFF; padding-left: 10px; }
+        h3 { color: #555; margin-top: 25px; }
+        .lang-switch { text-align: right; margin-bottom: 20px; }
+        .lang-switch a { color: #007AFF; text-decoration: none; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        pre code { background: none; color: inherit; padding: 0; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f8f8; }
+        .note { background: #e7f3ff; border-left: 4px solid #007AFF; padding: 10px 15px; margin: 15px 0; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; }
+        .toc { background: #f8f8f8; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .toc ul { margin: 0; padding-left: 20px; }
+        .toc li { margin: 5px 0; }
+        .toc a { color: #007AFF; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <a href="en.html">English</a>
+    </div>
+
+    <h1>RemotePrompt Server マニュアル</h1>
+
+    <div class="toc">
+        <strong>目次</strong>
+        <ul>
+            <li><a href="#requirements">1. 必要環境</a></li>
+            <li><a href="#install-cli">2. AI CLIのインストール</a></li>
+            <li><a href="#install-server">3. サーバーのインストール</a></li>
+            <li><a href="#configuration">4. 設定</a></li>
+            <li><a href="#startup">5. 起動と停止</a></li>
+            <li><a href="#connect-ios">6. iOSアプリとの接続</a></li>
+            <li><a href="#troubleshooting">7. トラブルシューティング</a></li>
+        </ul>
+    </div>
+
+    <h2 id="requirements">1. 必要環境</h2>
+
+    <h3>オペレーティングシステム</h3>
+    <table>
+        <tr><th>OS</th><th>サポート状況</th><th>備考</th></tr>
+        <tr><td>macOS 12+</td><td>✅ 推奨</td><td>テスト済み</td></tr>
+        <tr><td>Linux</td><td>⚠️ 実験的</td><td>動作報告歓迎</td></tr>
+        <tr><td>Windows</td><td>⚠️ 実験的</td><td>WSL2推奨</td></tr>
+    </table>
+
+    <h3>ソフトウェア要件</h3>
+    <ul>
+        <li><strong>Python 3.11以上</strong></li>
+        <li><strong>Node.js 18以上</strong>（AI CLIのインストールに必要）</li>
+        <li><strong>pip</strong>（Pythonパッケージマネージャー）</li>
+    </ul>
+
+    <h2 id="install-cli">2. AI CLIのインストール</h2>
+
+    <p>使用したいAI CLIを少なくとも1つインストールしてください。</p>
+
+    <h3>Claude Code</h3>
+    <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
+    <p>インストール後、初回セットアップを実行：</p>
+    <pre><code>claude</code></pre>
+
+    <h3>OpenAI Codex</h3>
+    <pre><code>npm install -g @openai/codex</code></pre>
+    <p>APIキーの設定：</p>
+    <pre><code>export OPENAI_API_KEY="your-api-key"</code></pre>
+
+    <h3>Google Gemini CLI</h3>
+    <pre><code># インストール方法はGoogleの公式ドキュメントを参照</code></pre>
+
+    <h2 id="install-server">3. サーバーのインストール</h2>
+
+    <h3>Step 1: リポジトリのクローン</h3>
+    <pre><code>git clone https://github.com/yourusername/RemotePromptServer.git
+cd RemotePromptServer</code></pre>
+
+    <h3>Step 2: 仮想環境の作成</h3>
+    <pre><code>python3 -m venv .venv
+source .venv/bin/activate</code></pre>
+
+    <h3>Step 3: 依存関係のインストール</h3>
+    <pre><code>pip install -r requirements.txt</code></pre>
+
+    <h3>Step 4: 設定ファイルの作成</h3>
+    <pre><code>cp .env.example .env</code></pre>
+
+    <h2 id="configuration">4. 設定</h2>
+
+    <p><code>.env</code>ファイルを編集して設定を行います。</p>
+
+    <h3>必須設定</h3>
+    <table>
+        <tr><th>項目</th><th>説明</th><th>例</th></tr>
+        <tr>
+            <td><code>API_KEY</code></td>
+            <td>iOSアプリ認証用のキー</td>
+            <td>以下のコマンドで生成：<br><code>python3 -c "import secrets; print(secrets.token_urlsafe(32))"</code></td>
+        </tr>
+        <tr>
+            <td><code>SERVER_HOSTNAME</code></td>
+            <td>サーバーのIPアドレスまたはホスト名</td>
+            <td><code>192.168.1.100</code></td>
+        </tr>
+        <tr>
+            <td><code>SERVER_SAN_IPS</code></td>
+            <td>SSL証明書に含めるIPアドレス（カンマ区切り）</td>
+            <td><code>192.168.1.100,127.0.0.1</code></td>
+        </tr>
+    </table>
+
+    <h3>オプション設定</h3>
+    <table>
+        <tr><th>項目</th><th>デフォルト</th><th>説明</th></tr>
+        <tr><td><code>SERVER_PORT</code></td><td>8443</td><td>サーバーのポート番号</td></tr>
+        <tr><td><code>SSL_MODE</code></td><td>self_signed</td><td>SSL証明書のモード</td></tr>
+        <tr><td><code>BONJOUR_ENABLED</code></td><td>true</td><td>Bonjour自動検出の有効化</td></tr>
+        <tr><td><code>LOG_LEVEL</code></td><td>INFO</td><td>ログレベル</td></tr>
+    </table>
+
+    <div class="note">
+        <strong>IPアドレスの確認方法</strong><br>
+        macOS: <code>ipconfig getifaddr en0</code><br>
+        Linux: <code>hostname -I</code>
+    </div>
+
+    <h2 id="startup">5. 起動と停止</h2>
+
+    <h3>サーバーの起動</h3>
+    <pre><code># 仮想環境を有効化
+source .venv/bin/activate
+
+# サーバーを起動
+python main.py</code></pre>
+
+    <p>起動に成功すると、以下のような情報が表示されます：</p>
+    <pre><code>╔══════════════════════════════════════════════════════════════╗
+║                    RemotePrompt Server                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  URL: https://192.168.1.100:8443                              ║
+║  Fingerprint: SHA256:XXXX:XXXX:XXXX:...                      ║
+╚══════════════════════════════════════════════════════════════╝</code></pre>
+
+    <div class="warning">
+        <strong>重要</strong>: 表示されるフィンガープリントをメモしてください。iOSアプリでの初回接続時に必要です。
+    </div>
+
+    <h3>サーバーの停止</h3>
+    <p><code>Ctrl+C</code>を押してサーバーを停止します。</p>
+
+    <h3>バックグラウンド実行</h3>
+    <pre><code># nohupを使用
+nohup python main.py > server.log 2>&1 &
+
+# または tmux/screen を使用
+tmux new -s remoteprompt
+python main.py</code></pre>
+
+    <h2 id="connect-ios">6. iOSアプリとの接続</h2>
+
+    <h3>方法1: Bonjour自動検出（推奨）</h3>
+    <ol>
+        <li>サーバーとiOSデバイスが同じWi-Fiネットワークに接続されていることを確認</li>
+        <li>iOSアプリを開く</li>
+        <li>「サーバーを追加」→「自動検出」を選択</li>
+        <li>検出されたサーバーを選択</li>
+        <li>フィンガープリントを確認して「信頼」をタップ</li>
+    </ol>
+
+    <h3>方法2: QRコード</h3>
+    <ol>
+        <li>サーバー起動時に表示されるQRコードをスキャン</li>
+        <li>フィンガープリントを確認して「信頼」をタップ</li>
+    </ol>
+
+    <h3>方法3: 手動設定</h3>
+    <ol>
+        <li>iOSアプリで「サーバーを追加」→「手動設定」を選択</li>
+        <li>以下の情報を入力：
+            <ul>
+                <li>URL: <code>https://[SERVER_HOSTNAME]:[SERVER_PORT]</code></li>
+                <li>APIキー: <code>.env</code>の<code>API_KEY</code></li>
+                <li>フィンガープリント: 起動時に表示された値</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2 id="troubleshooting">7. トラブルシューティング</h2>
+
+    <h3>サーバーが起動しない</h3>
+    <table>
+        <tr><th>症状</th><th>原因</th><th>対処法</th></tr>
+        <tr>
+            <td>ポートが使用中</td>
+            <td>他のプロセスがポートを使用</td>
+            <td><code>lsof -i :8443</code>で確認し、プロセスを終了</td>
+        </tr>
+        <tr>
+            <td>モジュールが見つからない</td>
+            <td>仮想環境が有効化されていない</td>
+            <td><code>source .venv/bin/activate</code>を実行</td>
+        </tr>
+        <tr>
+            <td>証明書エラー</td>
+            <td>証明書の生成に失敗</td>
+            <td><code>certs/</code>ディレクトリを削除して再起動</td>
+        </tr>
+    </table>
+
+    <h3>iOSアプリから接続できない</h3>
+    <table>
+        <tr><th>症状</th><th>原因</th><th>対処法</th></tr>
+        <tr>
+            <td>サーバーが見つからない</td>
+            <td>ネットワークが異なる</td>
+            <td>同じWi-Fiに接続しているか確認</td>
+        </tr>
+        <tr>
+            <td>接続拒否</td>
+            <td>ファイアウォール</td>
+            <td>ポート8443を許可</td>
+        </tr>
+        <tr>
+            <td>証明書エラー</td>
+            <td>フィンガープリント不一致</td>
+            <td>iOSアプリでサーバーを削除して再登録</td>
+        </tr>
+        <tr>
+            <td>認証エラー</td>
+            <td>APIキーが不正</td>
+            <td><code>.env</code>のAPIキーとiOSアプリの設定を確認</td>
+        </tr>
+    </table>
+
+    <h3>CLIが実行されない</h3>
+    <table>
+        <tr><th>症状</th><th>原因</th><th>対処法</th></tr>
+        <tr>
+            <td>claude: command not found</td>
+            <td>CLIがインストールされていない</td>
+            <td><code>npm install -g @anthropic-ai/claude-code</code></td>
+        </tr>
+        <tr>
+            <td>認証エラー</td>
+            <td>CLIの認証が未設定</td>
+            <td>ターミナルで<code>claude</code>を実行して初期設定</td>
+        </tr>
+    </table>
+
+    <h3>ログの確認</h3>
+    <pre><code># リアルタイムでログを確認
+tail -f logs/server.log
+
+# エラーのみ抽出
+grep ERROR logs/server.log</code></pre>
+
+</body>
+</html>

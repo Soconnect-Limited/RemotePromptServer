@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Manual - RemotePrompt</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h2 { color: #333; margin-top: 40px; border-left: 4px solid #007AFF; padding-left: 10px; }
+        h3 { color: #555; margin-top: 25px; }
+        .lang-switch { text-align: right; margin-bottom: 20px; }
+        .lang-switch a { color: #007AFF; text-decoration: none; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; }
+        .note { background: #e7f3ff; border-left: 4px solid #007AFF; padding: 10px 15px; margin: 15px 0; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; }
+        .tip { background: #d4edda; border-left: 4px solid #28a745; padding: 10px 15px; margin: 15px 0; }
+        .toc { background: #f8f8f8; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .toc ul { margin: 0; padding-left: 20px; }
+        .toc li { margin: 5px 0; }
+        .toc a { color: #007AFF; text-decoration: none; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f8f8; }
+        .step { display: flex; margin: 15px 0; }
+        .step-num { background: #007AFF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+        .step-content { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <a href="ja.html">日本語</a>
+    </div>
+
+    <h1>RemotePrompt iOS Manual</h1>
+
+    <div class="toc">
+        <strong>Table of Contents</strong>
+        <ul>
+            <li><a href="#setup">1. Initial Setup</a></li>
+            <li><a href="#room">2. Creating and Managing Rooms</a></li>
+            <li><a href="#thread">3. Using Threads</a></li>
+            <li><a href="#prompt">4. Sending Prompts</a></li>
+            <li><a href="#settings">5. Settings</a></li>
+            <li><a href="#notifications">6. Notifications</a></li>
+            <li><a href="#troubleshooting">7. Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <h2 id="setup">1. Initial Setup</h2>
+
+    <h3>Adding a Server</h3>
+
+    <p>To use RemotePrompt, you first need to configure a connection to your server.</p>
+
+    <h4>Method 1: Auto Discovery (Recommended)</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Launch the app and tap "Add Server"</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Select "Auto Discover"</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Servers on the same network will be automatically displayed</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">Select the server you want to connect to</div>
+    </div>
+    <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">Verify that the displayed fingerprint matches the one shown when the server started</div>
+    </div>
+    <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-content">Tap "Trust" to complete the connection</div>
+    </div>
+
+    <h4>Method 2: QR Code Scan</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Select "Add Server" → "Scan QR Code"</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Scan the QR code displayed when the server starts with your camera</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Verify the fingerprint and tap "Trust"</div>
+    </div>
+
+    <h4>Method 3: Manual Configuration</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Select "Add Server" → "Manual Setup"</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Enter the following information:
+            <ul>
+                <li><strong>Server URL</strong>: https://[IP address]:[port]</li>
+                <li><strong>API Key</strong>: The key set in your server's .env file</li>
+                <li><strong>Fingerprint</strong>: The value displayed when the server started</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="warning">
+        <strong>Security Verification</strong><br>
+        Always verify that the fingerprint matches the one displayed when the server started. If it doesn't match, you may be connecting to a fake server.
+    </div>
+
+    <h2 id="room">2. Creating and Managing Rooms</h2>
+
+    <p><strong>Room</strong> represents a project or workspace. Each Room is associated with a specific directory.</p>
+
+    <h3>Creating a Room</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Tap the "+" button on the home screen</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Enter a Room name (e.g., "MyProject")</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Enter the workspace path (e.g., <code>/Users/username/Projects/MyProject</code>)</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">Select an icon (optional)</div>
+    </div>
+    <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">Tap "Create"</div>
+    </div>
+
+    <div class="note">
+        <strong>Workspace Path</strong><br>
+        Specify the directory path where the AI can operate. File read/write operations will be performed within this path.
+    </div>
+
+    <h3>Editing/Deleting Rooms</h3>
+    <ul>
+        <li><strong>Edit</strong>: Swipe left on a Room and tap "Edit"</li>
+        <li><strong>Delete</strong>: Swipe left on a Room and tap "Delete"</li>
+        <li><strong>Reorder</strong>: Enter "Edit" mode and drag to change order</li>
+    </ul>
+
+    <h2 id="thread">3. Using Threads</h2>
+
+    <p><strong>Thread</strong> is a conversation session within a Room. You can separate Threads for different tasks or topics.</p>
+
+    <h3>Creating a Thread</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Select a Room to open the Room detail screen</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Tap the "New Thread" button</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Enter a Thread name (e.g., "Bug Fix", "New Feature")</div>
+    </div>
+
+    <h3>Switching Between Threads</h3>
+    <p>Tap a different Thread from the Thread list to switch conversations. Each Thread maintains its own independent session.</p>
+
+    <div class="tip">
+        <strong>Tip</strong><br>
+        Keep related tasks in the same Thread so the AI can maintain context and work more efficiently.
+    </div>
+
+    <h2 id="prompt">4. Sending Prompts</h2>
+
+    <h3>Basic Usage</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Select a Thread to open the chat screen</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Enter your prompt in the text field at the bottom of the screen</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Tap the send button</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">Wait for the AI response (progress is shown in real-time)</div>
+    </div>
+
+    <h3>Switching AI Runners</h3>
+    <p>Use the segment control at the top of the screen to switch between AIs:</p>
+    <table>
+        <tr><th>Runner</th><th>Description</th></tr>
+        <tr><td><strong>Claude</strong></td><td>Anthropic Claude Code CLI</td></tr>
+        <tr><td><strong>Codex</strong></td><td>OpenAI Codex CLI</td></tr>
+        <tr><td><strong>Gemini</strong></td><td>Google Gemini CLI</td></tr>
+    </table>
+
+    <div class="note">
+        <strong>Session Continuity</strong><br>
+        Within the same Thread, the AI remembers previous conversations. You can give instructions like "Fix the previous code".
+    </div>
+
+    <h2 id="settings">5. Settings</h2>
+
+    <h3>Room Settings</h3>
+    <p>Each Room has settings to customize AI behavior.</p>
+
+    <table>
+        <tr><th>Setting</th><th>Description</th></tr>
+        <tr><td><strong>Model</strong></td><td>AI model to use (for each Claude, Codex, Gemini)</td></tr>
+        <tr><td><strong>Permission Mode</strong></td><td>Permission level for file operations</td></tr>
+        <tr><td><strong>Custom Flags</strong></td><td>Additional options to pass to the CLI</td></tr>
+    </table>
+
+    <h3>App Settings</h3>
+    <p>From the settings screen, you can change:</p>
+    <ul>
+        <li>Notifications on/off</li>
+        <li>Server connection management</li>
+        <li>Appearance settings</li>
+    </ul>
+
+    <h2 id="notifications">6. Notifications</h2>
+
+    <p>You'll receive a push notification when AI processing is complete.</p>
+
+    <h3>Enabling Notifications</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">You'll be asked to allow notifications on first launch</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Tap "Allow"</div>
+    </div>
+
+    <p>To change settings later, go to iOS "Settings" → "RemotePrompt" → "Notifications".</p>
+
+    <h3>Badge</h3>
+    <p>The badge on the app icon shows the number of unread completion notifications. Opening a Thread clears the badge.</p>
+
+    <h2 id="troubleshooting">7. Troubleshooting</h2>
+
+    <h3>Can't Connect to Server</h3>
+    <table>
+        <tr><th>Symptom</th><th>Solution</th></tr>
+        <tr>
+            <td>"Server not found"</td>
+            <td>
+                <ul>
+                    <li>Verify that the server and iPhone are connected to the same Wi-Fi</li>
+                    <li>Check that the server is running</li>
+                    <li>Check that the port is not blocked by a firewall</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>"Invalid certificate"</td>
+            <td>
+                <ul>
+                    <li>Restart the server and check the new fingerprint</li>
+                    <li>Remove the server from the app and re-register</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>"Authentication failed"</td>
+            <td>
+                <ul>
+                    <li>Verify the API key is correct</li>
+                    <li>Check the server's .env file</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <h3>Prompt Not Executing</h3>
+    <table>
+        <tr><th>Symptom</th><th>Solution</th></tr>
+        <tr>
+            <td>"Job failed"</td>
+            <td>
+                <ul>
+                    <li>Verify that CLI is correctly installed on the server</li>
+                    <li>Check the server log (logs/server.log)</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>No response</td>
+            <td>
+                <ul>
+                    <li>Check network connection</li>
+                    <li>Processing jobs may take time (timeout: 30 minutes)</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <h3>Notifications Not Arriving</h3>
+    <ul>
+        <li>Check that iOS "Settings" → "RemotePrompt" → "Notifications" is enabled</li>
+        <li>Verify "Do Not Disturb" is off</li>
+        <li>Try quitting and relaunching the app</li>
+    </ul>
+
+</body>
+</html>

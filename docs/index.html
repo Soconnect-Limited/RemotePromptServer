@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RemotePrompt - Remote AI CLI Control</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+        .hero {
+            text-align: center;
+            color: white;
+            padding: 60px 20px;
+        }
+        .hero h1 { font-size: 3em; margin-bottom: 10px; }
+        .hero p { font-size: 1.3em; opacity: 0.9; }
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .card:hover { transform: translateY(-5px); }
+        .card h3 { color: #333; margin-bottom: 15px; font-size: 1.2em; }
+        .card ul { list-style: none; }
+        .card li { margin: 10px 0; }
+        .card a {
+            color: #007AFF;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+        .card a:hover { text-decoration: underline; }
+        .card a::before {
+            content: "→";
+            margin-right: 8px;
+            color: #667eea;
+        }
+        .features {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+        .features h2 { color: #333; margin-bottom: 20px; text-align: center; }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .feature {
+            text-align: center;
+            padding: 15px;
+        }
+        .feature-icon { font-size: 2em; margin-bottom: 10px; }
+        .feature h4 { color: #333; margin-bottom: 5px; }
+        .feature p { color: #666; font-size: 0.9em; }
+        footer {
+            text-align: center;
+            color: white;
+            opacity: 0.8;
+            margin-top: 40px;
+            padding: 20px;
+        }
+        footer a { color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>RemotePrompt</h1>
+            <p>Control AI CLI tools from your iPhone</p>
+        </div>
+
+        <div class="card-grid">
+            <div class="card">
+                <h3>Documentation / ドキュメント</h3>
+                <ul>
+                    <li><a href="manual/server/en.html">Server Manual (English)</a></li>
+                    <li><a href="manual/server/ja.html">サーバーマニュアル (日本語)</a></li>
+                    <li><a href="manual/ios/en.html">iOS Manual (English)</a></li>
+                    <li><a href="manual/ios/ja.html">iOSマニュアル (日本語)</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Legal / 法的情報</h3>
+                <ul>
+                    <li><a href="privacy/en.html">Privacy Policy (English)</a></li>
+                    <li><a href="privacy/ja.html">プライバシーポリシー (日本語)</a></li>
+                    <li><a href="support.html">Support / サポート</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="features">
+            <h2>Features / 特徴</h2>
+            <div class="feature-list">
+                <div class="feature">
+                    <div class="feature-icon">🤖</div>
+                    <h4>Multiple AI Support</h4>
+                    <p>Claude, Codex, Gemini</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📡</div>
+                    <h4>Auto Discovery</h4>
+                    <p>Bonjour/mDNS</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <h4>Secure</h4>
+                    <p>SSL/TLS + Certificate Pinning</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <h4>Real-time</h4>
+                    <p>Server-Sent Events</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>
+                <a href="https://github.com/yourusername/RemotePromptServer">GitHub</a> |
+                MIT License
+            </p>
+        </footer>
+    </div>
+</body>
+</html>

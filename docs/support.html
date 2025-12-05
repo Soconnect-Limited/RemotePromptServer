@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support - RemotePrompt</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h2 { color: #333; margin-top: 30px; }
+        .lang-switch { text-align: right; margin-bottom: 20px; }
+        .lang-switch a { color: #007AFF; text-decoration: none; margin-left: 10px; }
+        .card { background: #f8f8f8; border-radius: 8px; padding: 20px; margin: 15px 0; }
+        .card h3 { margin-top: 0; color: #007AFF; }
+        a { color: #007AFF; }
+        .divider { border-top: 1px solid #ddd; margin: 40px 0; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <span>Language:</span>
+        <a href="#japanese">日本語</a>
+        <a href="#english">English</a>
+    </div>
+
+    <!-- Japanese Section -->
+    <section id="japanese">
+        <h1>サポート</h1>
+
+        <div class="card">
+            <h3>ドキュメント</h3>
+            <ul>
+                <li><a href="manual/server/ja.html">サーバー版マニュアル</a></li>
+                <li><a href="manual/ios/ja.html">iOS版マニュアル</a></li>
+                <li><a href="privacy/ja.html">プライバシーポリシー</a></li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>よくある質問 (FAQ)</h3>
+            <h4>Q: サーバーが見つかりません</h4>
+            <p>A: サーバーとiPhoneが同じWi-Fiネットワークに接続されているか確認してください。また、サーバーが正常に起動しているか、ファイアウォールでポートがブロックされていないか確認してください。</p>
+
+            <h4>Q: 「証明書が無効です」と表示されます</h4>
+            <p>A: サーバーを再起動して新しいフィンガープリントを確認し、iOSアプリでサーバーを削除して再登録してください。</p>
+
+            <h4>Q: CLIが実行されません</h4>
+            <p>A: サーバーマシンでCLI（claude/codex/gemini）が正しくインストールされ、認証設定が完了しているか確認してください。</p>
+        </div>
+
+        <div class="card">
+            <h3>問題を報告する</h3>
+            <p>バグや問題を発見した場合は、GitHubのIssueで報告してください：</p>
+            <p><a href="https://github.com/yourusername/RemotePromptServer/issues">GitHub Issues</a></p>
+        </div>
+
+        <div class="card">
+            <h3>お問い合わせ</h3>
+            <p>その他のお問い合わせは、GitHubのDiscussionsをご利用ください：</p>
+            <p><a href="https://github.com/yourusername/RemotePromptServer/discussions">GitHub Discussions</a></p>
+        </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- English Section -->
+    <section id="english">
+        <h1>Support</h1>
+
+        <div class="card">
+            <h3>Documentation</h3>
+            <ul>
+                <li><a href="manual/server/en.html">Server Manual</a></li>
+                <li><a href="manual/ios/en.html">iOS Manual</a></li>
+                <li><a href="privacy/en.html">Privacy Policy</a></li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h3>Frequently Asked Questions (FAQ)</h3>
+            <h4>Q: Server not found</h4>
+            <p>A: Verify that the server and iPhone are connected to the same Wi-Fi network. Also check that the server is running properly and the port is not blocked by a firewall.</p>
+
+            <h4>Q: "Invalid certificate" error</h4>
+            <p>A: Restart the server to get a new fingerprint, then remove and re-add the server in the iOS app.</p>
+
+            <h4>Q: CLI not executing</h4>
+            <p>A: Verify that the CLI (claude/codex/gemini) is correctly installed on the server machine and authentication is configured.</p>
+        </div>
+
+        <div class="card">
+            <h3>Report an Issue</h3>
+            <p>If you find a bug or issue, please report it on GitHub Issues:</p>
+            <p><a href="https://github.com/yourusername/RemotePromptServer/issues">GitHub Issues</a></p>
+        </div>
+
+        <div class="card">
+            <h3>Contact</h3>
+            <p>For other inquiries, please use GitHub Discussions:</p>
+            <p><a href="https://github.com/yourusername/RemotePromptServer/discussions">GitHub Discussions</a></p>
+        </div>
+    </section>
+
+</body>
+</html>

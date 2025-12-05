@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS版マニュアル - RemotePrompt</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h2 { color: #333; margin-top: 40px; border-left: 4px solid #007AFF; padding-left: 10px; }
+        h3 { color: #555; margin-top: 25px; }
+        .lang-switch { text-align: right; margin-bottom: 20px; }
+        .lang-switch a { color: #007AFF; text-decoration: none; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; }
+        .note { background: #e7f3ff; border-left: 4px solid #007AFF; padding: 10px 15px; margin: 15px 0; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; }
+        .tip { background: #d4edda; border-left: 4px solid #28a745; padding: 10px 15px; margin: 15px 0; }
+        .toc { background: #f8f8f8; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .toc ul { margin: 0; padding-left: 20px; }
+        .toc li { margin: 5px 0; }
+        .toc a { color: #007AFF; text-decoration: none; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f8f8; }
+        .step { display: flex; margin: 15px 0; }
+        .step-num { background: #007AFF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+        .step-content { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <a href="en.html">English</a>
+    </div>
+
+    <h1>RemotePrompt iOS版 マニュアル</h1>
+
+    <div class="toc">
+        <strong>目次</strong>
+        <ul>
+            <li><a href="#setup">1. 初期設定</a></li>
+            <li><a href="#room">2. Roomの作成と管理</a></li>
+            <li><a href="#thread">3. Threadの使い方</a></li>
+            <li><a href="#prompt">4. プロンプトの送信</a></li>
+            <li><a href="#settings">5. 設定</a></li>
+            <li><a href="#notifications">6. 通知</a></li>
+            <li><a href="#troubleshooting">7. トラブルシューティング</a></li>
+        </ul>
+    </div>
+
+    <h2 id="setup">1. 初期設定</h2>
+
+    <h3>サーバーの追加</h3>
+
+    <p>RemotePromptを使用するには、まずサーバーへの接続を設定する必要があります。</p>
+
+    <h4>方法1: 自動検出（推奨）</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">アプリを起動し、「サーバーを追加」をタップ</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">「自動検出」を選択</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">同じネットワーク上のサーバーが自動的に表示されます</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">接続したいサーバーを選択</div>
+    </div>
+    <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">表示されるフィンガープリントがサーバー起動時に表示されたものと一致することを確認</div>
+    </div>
+    <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-content">「信頼」をタップして接続を完了</div>
+    </div>
+
+    <h4>方法2: QRコードスキャン</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">「サーバーを追加」→「QRコードをスキャン」を選択</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">サーバー起動時に表示されるQRコードをカメラでスキャン</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">フィンガープリントを確認して「信頼」をタップ</div>
+    </div>
+
+    <h4>方法3: 手動設定</h4>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">「サーバーを追加」→「手動設定」を選択</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">以下の情報を入力：
+            <ul>
+                <li><strong>サーバーURL</strong>: https://[IPアドレス]:[ポート]</li>
+                <li><strong>APIキー</strong>: サーバーの.envで設定したキー</li>
+                <li><strong>フィンガープリント</strong>: サーバー起動時に表示された値</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="warning">
+        <strong>セキュリティ確認</strong><br>
+        フィンガープリントは必ずサーバー起動時に表示されたものと一致することを確認してください。一致しない場合、偽のサーバーに接続している可能性があります。
+    </div>
+
+    <h2 id="room">2. Roomの作成と管理</h2>
+
+    <p><strong>Room</strong>は、プロジェクトやワークスペースを表す単位です。各Roomは特定のディレクトリに関連付けられます。</p>
+
+    <h3>Roomの作成</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">ホーム画面で「＋」ボタンをタップ</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">Room名を入力（例: 「MyProject」）</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">ワークスペースパスを入力（例: <code>/Users/username/Projects/MyProject</code>）</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">アイコンを選択（オプション）</div>
+    </div>
+    <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">「作成」をタップ</div>
+    </div>
+
+    <div class="note">
+        <strong>ワークスペースパス</strong><br>
+        AIが操作できるディレクトリのパスを指定します。このパスの配下でファイルの読み書きが行われます。
+    </div>
+
+    <h3>Roomの編集・削除</h3>
+    <ul>
+        <li><strong>編集</strong>: Roomを左にスワイプして「編集」をタップ</li>
+        <li><strong>削除</strong>: Roomを左にスワイプして「削除」をタップ</li>
+        <li><strong>並び替え</strong>: 「編集」モードでドラッグして順序を変更</li>
+    </ul>
+
+    <h2 id="thread">3. Threadの使い方</h2>
+
+    <p><strong>Thread</strong>は、Room内での会話セッションです。異なるタスクや話題ごとにThreadを分けることができます。</p>
+
+    <h3>Threadの作成</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Roomを選択してRoom詳細画面を開く</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">「新しいThread」ボタンをタップ</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">Thread名を入力（例: 「バグ修正」「新機能実装」）</div>
+    </div>
+
+    <h3>Thread間の切り替え</h3>
+    <p>Threadリストから別のThreadをタップすることで、会話を切り替えられます。各Threadは独立したセッションを持ちます。</p>
+
+    <div class="tip">
+        <strong>ヒント</strong><br>
+        関連性のあるタスクは同じThreadで続けると、AIがコンテキストを保持して効率的に作業できます。
+    </div>
+
+    <h2 id="prompt">4. プロンプトの送信</h2>
+
+    <h3>基本的な使い方</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">Threadを選択してチャット画面を開く</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">画面下部のテキストフィールドにプロンプトを入力</div>
+    </div>
+    <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">送信ボタンをタップ</div>
+    </div>
+    <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">AIの応答を待つ（進捗はリアルタイムで表示）</div>
+    </div>
+
+    <h3>AI Runnerの切り替え</h3>
+    <p>画面上部のセグメントコントロールで使用するAIを切り替えられます：</p>
+    <table>
+        <tr><th>Runner</th><th>説明</th></tr>
+        <tr><td><strong>Claude</strong></td><td>Anthropic Claude Code CLI</td></tr>
+        <tr><td><strong>Codex</strong></td><td>OpenAI Codex CLI</td></tr>
+        <tr><td><strong>Gemini</strong></td><td>Google Gemini CLI</td></tr>
+    </table>
+
+    <div class="note">
+        <strong>セッションの継続</strong><br>
+        同じThread内では、AIがこれまでの会話を記憶しています。「前回のコードを修正して」のような指示が可能です。
+    </div>
+
+    <h2 id="settings">5. 設定</h2>
+
+    <h3>Room設定</h3>
+    <p>各Roomには、AIの動作をカスタマイズする設定があります。</p>
+
+    <table>
+        <tr><th>設定項目</th><th>説明</th></tr>
+        <tr><td><strong>モデル</strong></td><td>使用するAIモデル（Claude、Codex、Gemini別）</td></tr>
+        <tr><td><strong>許可モード</strong></td><td>ファイル操作の許可レベル</td></tr>
+        <tr><td><strong>カスタムフラグ</strong></td><td>CLIに渡す追加オプション</td></tr>
+    </table>
+
+    <h3>アプリ設定</h3>
+    <p>設定画面から以下を変更できます：</p>
+    <ul>
+        <li>通知のオン/オフ</li>
+        <li>サーバー接続の管理</li>
+        <li>外観設定</li>
+    </ul>
+
+    <h2 id="notifications">6. 通知</h2>
+
+    <p>AIの処理が完了すると、プッシュ通知でお知らせします。</p>
+
+    <h3>通知の有効化</h3>
+    <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">初回起動時に通知の許可を求められます</div>
+    </div>
+    <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">「許可」をタップ</div>
+    </div>
+
+    <p>後から設定を変更する場合は、iOSの「設定」→「RemotePrompt」→「通知」から変更できます。</p>
+
+    <h3>バッジ</h3>
+    <p>アプリアイコンのバッジは、未読の完了通知の数を表示します。Threadを開くとバッジがクリアされます。</p>
+
+    <h2 id="troubleshooting">7. トラブルシューティング</h2>
+
+    <h3>サーバーに接続できない</h3>
+    <table>
+        <tr><th>症状</th><th>対処法</th></tr>
+        <tr>
+            <td>「サーバーが見つかりません」</td>
+            <td>
+                <ul>
+                    <li>サーバーとiPhoneが同じWi-Fiに接続されているか確認</li>
+                    <li>サーバーが起動しているか確認</li>
+                    <li>ファイアウォールでポートがブロックされていないか確認</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>「証明書が無効です」</td>
+            <td>
+                <ul>
+                    <li>サーバーを再起動して新しいフィンガープリントを確認</li>
+                    <li>アプリからサーバーを削除して再登録</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>「認証に失敗しました」</td>
+            <td>
+                <ul>
+                    <li>APIキーが正しいか確認</li>
+                    <li>サーバーの.envファイルを確認</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <h3>プロンプトが実行されない</h3>
+    <table>
+        <tr><th>症状</th><th>対処法</th></tr>
+        <tr>
+            <td>「ジョブが失敗しました」</td>
+            <td>
+                <ul>
+                    <li>サーバー側でCLIが正しくインストールされているか確認</li>
+                    <li>サーバーのログを確認（logs/server.log）</li>
+                </ul>
+            </td>
+        </tr>
+        <tr>
+            <td>応答が返ってこない</td>
+            <td>
+                <ul>
+                    <li>ネットワーク接続を確認</li>
+                    <li>処理中のジョブは時間がかかる場合があります（タイムアウト: 30分）</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+
+    <h3>通知が届かない</h3>
+    <ul>
+        <li>iOSの「設定」→「RemotePrompt」→「通知」が有効になっているか確認</li>
+        <li>「おやすみモード」がオフになっているか確認</li>
+        <li>アプリを一度終了して再起動</li>
+    </ul>
+
+</body>
+</html>

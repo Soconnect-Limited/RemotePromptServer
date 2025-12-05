@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Manual - RemotePrompt</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #1a1a1a; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h2 { color: #333; margin-top: 40px; border-left: 4px solid #007AFF; padding-left: 10px; }
+        h3 { color: #555; margin-top: 25px; }
+        .lang-switch { text-align: right; margin-bottom: 20px; }
+        .lang-switch a { color: #007AFF; text-decoration: none; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-family: 'SF Mono', Monaco, monospace; }
+        pre { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        pre code { background: none; color: inherit; padding: 0; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f8f8; }
+        .note { background: #e7f3ff; border-left: 4px solid #007AFF; padding: 10px 15px; margin: 15px 0; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 15px; margin: 15px 0; }
+        .toc { background: #f8f8f8; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .toc ul { margin: 0; padding-left: 20px; }
+        .toc li { margin: 5px 0; }
+        .toc a { color: #007AFF; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="lang-switch">
+        <a href="ja.html">日本語</a>
+    </div>
+
+    <h1>RemotePrompt Server Manual</h1>
+
+    <div class="toc">
+        <strong>Table of Contents</strong>
+        <ul>
+            <li><a href="#requirements">1. Requirements</a></li>
+            <li><a href="#install-cli">2. Installing AI CLI</a></li>
+            <li><a href="#install-server">3. Installing the Server</a></li>
+            <li><a href="#configuration">4. Configuration</a></li>
+            <li><a href="#startup">5. Starting and Stopping</a></li>
+            <li><a href="#connect-ios">6. Connecting from iOS</a></li>
+            <li><a href="#troubleshooting">7. Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <h2 id="requirements">1. Requirements</h2>
+
+    <h3>Operating System</h3>
+    <table>
+        <tr><th>OS</th><th>Support Status</th><th>Notes</th></tr>
+        <tr><td>macOS 12+</td><td>✅ Recommended</td><td>Tested</td></tr>
+        <tr><td>Linux</td><td>⚠️ Experimental</td><td>Feedback welcome</td></tr>
+        <tr><td>Windows</td><td>⚠️ Experimental</td><td>WSL2 recommended</td></tr>
+    </table>
+
+    <h3>Software Requirements</h3>
+    <ul>
+        <li><strong>Python 3.11 or later</strong></li>
+        <li><strong>Node.js 18 or later</strong> (required for AI CLI installation)</li>
+        <li><strong>pip</strong> (Python package manager)</li>
+    </ul>
+
+    <h2 id="install-cli">2. Installing AI CLI</h2>
+
+    <p>Install at least one AI CLI that you want to use.</p>
+
+    <h3>Claude Code</h3>
+    <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
+    <p>After installation, run initial setup:</p>
+    <pre><code>claude</code></pre>
+
+    <h3>OpenAI Codex</h3>
+    <pre><code>npm install -g @openai/codex</code></pre>
+    <p>Set up API key:</p>
+    <pre><code>export OPENAI_API_KEY="your-api-key"</code></pre>
+
+    <h3>Google Gemini CLI</h3>
+    <pre><code># See Google's official documentation for installation instructions</code></pre>
+
+    <h2 id="install-server">3. Installing the Server</h2>
+
+    <h3>Step 1: Clone the Repository</h3>
+    <pre><code>git clone https://github.com/yourusername/RemotePromptServer.git
+cd RemotePromptServer</code></pre>
+
+    <h3>Step 2: Create Virtual Environment</h3>
+    <pre><code>python3 -m venv .venv
+source .venv/bin/activate</code></pre>
+
+    <h3>Step 3: Install Dependencies</h3>
+    <pre><code>pip install -r requirements.txt</code></pre>
+
+    <h3>Step 4: Create Configuration File</h3>
+    <pre><code>cp .env.example .env</code></pre>
+
+    <h2 id="configuration">4. Configuration</h2>
+
+    <p>Edit the <code>.env</code> file to configure the server.</p>
+
+    <h3>Required Settings</h3>
+    <table>
+        <tr><th>Setting</th><th>Description</th><th>Example</th></tr>
+        <tr>
+            <td><code>API_KEY</code></td>
+            <td>Authentication key for iOS app</td>
+            <td>Generate with:<br><code>python3 -c "import secrets; print(secrets.token_urlsafe(32))"</code></td>
+        </tr>
+        <tr>
+            <td><code>SERVER_HOSTNAME</code></td>
+            <td>Server IP address or hostname</td>
+            <td><code>192.168.1.100</code></td>
+        </tr>
+        <tr>
+            <td><code>SERVER_SAN_IPS</code></td>
+            <td>IP addresses for SSL certificate (comma-separated)</td>
+            <td><code>192.168.1.100,127.0.0.1</code></td>
+        </tr>
+    </table>
+
+    <h3>Optional Settings</h3>
+    <table>
+        <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+        <tr><td><code>SERVER_PORT</code></td><td>8443</td><td>Server port number</td></tr>
+        <tr><td><code>SSL_MODE</code></td><td>self_signed</td><td>SSL certificate mode</td></tr>
+        <tr><td><code>BONJOUR_ENABLED</code></td><td>true</td><td>Enable Bonjour auto-discovery</td></tr>
+        <tr><td><code>LOG_LEVEL</code></td><td>INFO</td><td>Log level</td></tr>
+    </table>
+
+    <div class="note">
+        <strong>How to find your IP address</strong><br>
+        macOS: <code>ipconfig getifaddr en0</code><br>
+        Linux: <code>hostname -I</code>
+    </div>
+
+    <h2 id="startup">5. Starting and Stopping</h2>
+
+    <h3>Starting the Server</h3>
+    <pre><code># Activate virtual environment
+source .venv/bin/activate
+
+# Start server
+python main.py</code></pre>
+
+    <p>On successful startup, you'll see information like this:</p>
+    <pre><code>╔══════════════════════════════════════════════════════════════╗
+║                    RemotePrompt Server                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  URL: https://192.168.1.100:8443                              ║
+║  Fingerprint: SHA256:XXXX:XXXX:XXXX:...                      ║
+╚══════════════════════════════════════════════════════════════╝</code></pre>
+
+    <div class="warning">
+        <strong>Important</strong>: Note the displayed fingerprint. You'll need it when connecting from the iOS app for the first time.
+    </div>
+
+    <h3>Stopping the Server</h3>
+    <p>Press <code>Ctrl+C</code> to stop the server.</p>
+
+    <h3>Running in Background</h3>
+    <pre><code># Using nohup
+nohup python main.py > server.log 2>&1 &
+
+# Or using tmux/screen
+tmux new -s remoteprompt
+python main.py</code></pre>
+
+    <h2 id="connect-ios">6. Connecting from iOS</h2>
+
+    <h3>Method 1: Bonjour Auto-Discovery (Recommended)</h3>
+    <ol>
+        <li>Ensure server and iOS device are on the same Wi-Fi network</li>
+        <li>Open the iOS app</li>
+        <li>Tap "Add Server" → "Auto Discover"</li>
+        <li>Select the discovered server</li>
+        <li>Verify the fingerprint and tap "Trust"</li>
+    </ol>
+
+    <h3>Method 2: QR Code</h3>
+    <ol>
+        <li>Scan the QR code displayed on server startup</li>
+        <li>Verify the fingerprint and tap "Trust"</li>
+    </ol>
+
+    <h3>Method 3: Manual Configuration</h3>
+    <ol>
+        <li>In iOS app, tap "Add Server" → "Manual Setup"</li>
+        <li>Enter the following:
+            <ul>
+                <li>URL: <code>https://[SERVER_HOSTNAME]:[SERVER_PORT]</code></li>
+                <li>API Key: <code>API_KEY</code> from <code>.env</code></li>
+                <li>Fingerprint: Value displayed on startup</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2 id="troubleshooting">7. Troubleshooting</h2>
+
+    <h3>Server Won't Start</h3>
+    <table>
+        <tr><th>Symptom</th><th>Cause</th><th>Solution</th></tr>
+        <tr>
+            <td>Port in use</td>
+            <td>Another process using the port</td>
+            <td>Check with <code>lsof -i :8443</code> and terminate process</td>
+        </tr>
+        <tr>
+            <td>Module not found</td>
+            <td>Virtual environment not activated</td>
+            <td>Run <code>source .venv/bin/activate</code></td>
+        </tr>
+        <tr>
+            <td>Certificate error</td>
+            <td>Certificate generation failed</td>
+            <td>Delete <code>certs/</code> directory and restart</td>
+        </tr>
+    </table>
+
+    <h3>Can't Connect from iOS</h3>
+    <table>
+        <tr><th>Symptom</th><th>Cause</th><th>Solution</th></tr>
+        <tr>
+            <td>Server not found</td>
+            <td>Different network</td>
+            <td>Verify both are on same Wi-Fi</td>
+        </tr>
+        <tr>
+            <td>Connection refused</td>
+            <td>Firewall</td>
+            <td>Allow port 8443</td>
+        </tr>
+        <tr>
+            <td>Certificate error</td>
+            <td>Fingerprint mismatch</td>
+            <td>Remove and re-add server in iOS app</td>
+        </tr>
+        <tr>
+            <td>Authentication error</td>
+            <td>Invalid API key</td>
+            <td>Verify API key in <code>.env</code> and iOS app settings</td>
+        </tr>
+    </table>
+
+    <h3>CLI Not Running</h3>
+    <table>
+        <tr><th>Symptom</th><th>Cause</th><th>Solution</th></tr>
+        <tr>
+            <td>claude: command not found</td>
+            <td>CLI not installed</td>
+            <td><code>npm install -g @anthropic-ai/claude-code</code></td>
+        </tr>
+        <tr>
+            <td>Authentication error</td>
+            <td>CLI not authenticated</td>
+            <td>Run <code>claude</code> in terminal for initial setup</td>
+        </tr>
+    </table>
+
+    <h3>Viewing Logs</h3>
+    <pre><code># View logs in real-time
+tail -f logs/server.log
+
+# Filter errors only
+grep ERROR logs/server.log</code></pre>
+
+</body>
+</html>
