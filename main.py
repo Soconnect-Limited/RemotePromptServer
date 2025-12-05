@@ -35,6 +35,7 @@ from cert_generator import (
     revoke_certificate,
     print_certificate_banner,
 )
+from qr_generator import generate_qr_png_base64, generate_config_payload, print_qr_banner
 from bonjour_publisher import (
     start_bonjour_service_async,
     stop_bonjour_service_async,
@@ -112,9 +113,18 @@ async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
         )
 
         # Print banner for self-signed certificates
+        server_url = f"https://{settings.server_hostname}:{settings.server_port}"
         if mode_used == "self_signed":
-            server_url = f"https://{settings.server_hostname}:{settings.server_port}"
             print_certificate_banner(cert_path, server_url)
+
+        # Show QR code if enabled (via SHOW_QR_ON_STARTUP=true)
+        if settings.show_qr_on_startup:
+            print_qr_banner(
+                server_url=server_url,
+                api_key=settings.api_key,
+                fingerprint=_current_cert_fingerprint,
+                server_name=settings.bonjour_service_name,
+            )
 
     except RuntimeError as e:
         LOGGER.error("[SSL] Failed to initialize certificates: %s", e)
@@ -1068,6 +1078,57 @@ def get_server_certificate(request: Request) -> dict:
         "pending_restart": _pending_cert_restart,
         "pending_fingerprint": _pending_cert_fingerprint if _pending_cert_restart else None,
     }
+
+
+@app.get("/server/qrcode")
+def get_server_qrcode(
+    request: Request,
+    _: None = Depends(verify_api_key),
+    format: str = Query("png", description="Output format: 'png' (base64) or 'json' (payload only)"),
+) -> dict:
+    """Get QR code for server configuration (requires API key).
+
+    This endpoint generates a QR code containing server connection information
+    that can be scanned by the iOS app for quick setup.
+
+    Args:
+        format: Output format - 'png' returns base64 PNG image, 'json' returns raw payload
+
+    Returns:
+        QR code data in requested format
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    LOGGER.info("[AUDIT] QR code requested from %s", client_ip)
+
+    # Build server URL
+    server_url = f"https://{settings.server_hostname}:{settings.server_port}"
+
+    if format == "json":
+        # Return just the payload data
+        payload = generate_config_payload(
+            server_url=server_url,
+            api_key=settings.api_key,
+            fingerprint=_current_cert_fingerprint,
+            server_name=settings.bonjour_service_name,
+        )
+        return {
+            "format": "json",
+            "payload": payload,
+        }
+    else:
+        # Return base64 PNG image
+        qr_base64 = generate_qr_png_base64(
+            server_url=server_url,
+            api_key=settings.api_key,
+            fingerprint=_current_cert_fingerprint,
+            server_name=settings.bonjour_service_name,
+        )
+        return {
+            "format": "png",
+            "image": f"data:image/png;base64,{qr_base64}",
+            "server_url": server_url,
+            "fingerprint": _current_cert_fingerprint,
+        }
 
 
 class RegenerateCertificateRequest(BaseModel):

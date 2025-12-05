@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     bonjour_enabled: bool = True  # Enable Bonjour service discovery
     bonjour_service_name: str = "RemotePrompt Server"  # Service name shown to clients
 
+    # Startup QR Code Display
+    show_qr_on_startup: bool = False  # Show QR code in terminal on server startup
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

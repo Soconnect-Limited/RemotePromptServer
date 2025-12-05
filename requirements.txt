@@ -8,3 +8,4 @@ httpx==0.26.0
 pyjwt==2.10.1
 cryptography==46.0.3
 zeroconf>=0.80.0
+qrcode[pil]==7.4.2
