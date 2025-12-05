@@ -9,12 +9,16 @@ import base64
 import json
 import logging
 from io import BytesIO
+from pathlib import Path
 from typing import Optional
 
 import qrcode
 from qrcode.constants import ERROR_CORRECT_M
 
 LOGGER = logging.getLogger(__name__)
+
+# Default QR code output path
+DEFAULT_QR_PATH = Path("qrcode.png")
 
 
 def generate_config_payload(
@@ -200,3 +204,83 @@ def print_qr_banner(
     print()
 
     LOGGER.info("QR code displayed for server: %s", server_url)
+
+
+def save_qr_png(
+    server_url: str,
+    api_key: str,
+    fingerprint: str,
+    server_name: Optional[str] = None,
+    output_path: Optional[Path] = None,
+) -> Path:
+    """Save QR code as PNG file.
+
+    Args:
+        server_url: Full server URL
+        api_key: API key for authentication
+        fingerprint: SSL certificate fingerprint
+        server_name: Optional display name
+        output_path: Output file path (default: ./qrcode.png)
+
+    Returns:
+        Path to the saved QR code image
+    """
+    output_path = output_path or DEFAULT_QR_PATH
+    payload = generate_config_payload(server_url, api_key, fingerprint, server_name)
+
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    img.save(output_path)
+
+    LOGGER.info("QR code saved to: %s", output_path)
+    return output_path
+
+
+def ensure_qr_code_exists(
+    server_url: str,
+    api_key: str,
+    fingerprint: str,
+    server_name: Optional[str] = None,
+    output_path: Optional[Path] = None,
+    force_regenerate: bool = False,
+) -> Path:
+    """Ensure QR code file exists, generate if needed.
+
+    Regenerates the QR code if:
+    - File doesn't exist
+    - force_regenerate is True
+    - Content would be different (settings changed)
+
+    Args:
+        server_url: Full server URL
+        api_key: API key for authentication
+        fingerprint: SSL certificate fingerprint
+        server_name: Optional display name
+        output_path: Output file path (default: ./qrcode.png)
+        force_regenerate: Force regeneration even if file exists
+
+    Returns:
+        Path to the QR code image
+    """
+    output_path = output_path or DEFAULT_QR_PATH
+
+    if not force_regenerate and output_path.exists():
+        # Check if we need to regenerate by comparing payload
+        # For simplicity, always regenerate on startup to ensure consistency
+        LOGGER.debug("QR code already exists at: %s", output_path)
+
+    return save_qr_png(
+        server_url=server_url,
+        api_key=api_key,
+        fingerprint=fingerprint,
+        server_name=server_name,
+        output_path=output_path,
+    )

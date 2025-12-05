@@ -49,3 +49,6 @@ backups/
 # Secrets
 secrets/
 *.p8
+
+# Generated QR code (contains API key)
+qrcode.png

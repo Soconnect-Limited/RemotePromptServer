@@ -35,7 +35,12 @@ from cert_generator import (
     revoke_certificate,
     print_certificate_banner,
 )
-from qr_generator import generate_qr_png_base64, generate_config_payload, print_qr_banner
+from qr_generator import (
+    generate_qr_png_base64,
+    generate_config_payload,
+    print_qr_banner,
+    ensure_qr_code_exists,
+)
 from bonjour_publisher import (
     start_bonjour_service_async,
     stop_bonjour_service_async,
@@ -117,7 +122,16 @@ async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
         if mode_used == "self_signed":
             print_certificate_banner(cert_path, server_url)
 
-        # Show QR code if enabled (via SHOW_QR_ON_STARTUP=true)
+        # Generate QR code image file (always, for iOS app scanning)
+        qr_path = ensure_qr_code_exists(
+            server_url=server_url,
+            api_key=settings.api_key,
+            fingerprint=_current_cert_fingerprint,
+            server_name=settings.bonjour_service_name,
+        )
+        LOGGER.info("[QR] QR code saved to: %s", qr_path)
+
+        # Show QR code in terminal if enabled (via SHOW_QR_ON_STARTUP=true)
         if settings.show_qr_on_startup:
             print_qr_banner(
                 server_url=server_url,
