@@ -41,7 +41,7 @@
 "threads.edit.title" = "スレッドを編集";
 "threads.field.name" = "スレッド名";
 "threads.untitled" = "無題";
-"threads.lastConversation" = "最終会話: %@ %@";
+"threads.lastConversation" = "最終会話";
 "threads.noHistory" = "会話履歴がありません";
 "threads.fetch.error" = "スレッドの取得に失敗しました: %@";
 "threads.create.error" = "スレッドの作成に失敗しました: %@";

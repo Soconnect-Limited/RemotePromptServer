@@ -41,7 +41,7 @@
 "threads.edit.title" = "Edit Thread";
 "threads.field.name" = "Thread Name";
 "threads.untitled" = "Untitled";
-"threads.lastConversation" = "Last conversation: %@ %@";
+"threads.lastConversation" = "Last conversation";
 "threads.noHistory" = "No conversation history";
 "threads.fetch.error" = "Failed to fetch threads: %@";
 "threads.create.error" = "Failed to create thread: %@";
