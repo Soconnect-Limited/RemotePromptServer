@@ -211,6 +211,22 @@
 "error.network" = "Network error: %@";
 "error.certificate" = "Certificate error: %@";
 "error.auth" = "Authentication error: Please check your API key";
-"error.server" = "Server error: %d";
 "error.unknown" = "Unknown error: %@";
 "error.apikey.missing" = "API key is not set. Please set the API key in server settings.";
+
+// MARK: - HTTP Status Code Errors
+"error.server.400" = "[400 Bad Request]\nThe request format is invalid.\n\n[Cause]\n• Problem with sent data\n• App and server version mismatch\n\n[Solution]\n• Update the app to latest version\n• Check for special characters in input";
+"error.server.401" = "[401 Unauthorized]\nAuthentication failed.\n\n[Cause]\n• API key is incorrect\n• API key expired or invalid\n\n[Solution]\n• Re-check API key in server settings\n• Verify it matches API_KEY in server's .env file";
+"error.server.403" = "[403 Forbidden]\nAccess denied.\n\n[Cause]\n• Device ID mismatch\n• Accessing another user's resource\n\n[Solution]\n• Verify your Device ID is correct\n• Confirm you own this room/thread";
+"error.server.404" = "[404 Not Found]\nResource not found.\n\n[Cause]\n• Room/thread was deleted\n• Server URL path is incorrect\n• Server running on different port\n\n[Solution]\n• Refresh the room list\n• Verify server URL (including port)";
+"error.server.405" = "[405 Method Not Allowed]\nOperation not permitted.\n\n[Cause]\n• API version mismatch between server and app\n\n[Solution]\n• Update the app to latest version\n• Update the server to latest version";
+"error.server.408" = "[408 Request Timeout]\nThe request timed out.\n\n[Cause]\n• Unstable network connection\n• Server under heavy load\n\n[Solution]\n• Check Wi-Fi/mobile connection\n• Wait and retry";
+"error.server.409" = "[409 Conflict]\nA conflict occurred.\n\n[Cause]\n• Room/thread with same name exists\n\n[Solution]\n• Create with a different name";
+"error.server.413" = "[413 Payload Too Large]\nData size is too large.\n\n[Cause]\n• Message too long\n• Attachment too large\n\n[Solution]\n• Shorten your message\n• Keep file size under 500KB";
+"error.server.422" = "[422 Unprocessable Entity]\nData cannot be processed.\n\n[Cause]\n• Required fields empty\n• Invalid data format\n\n[Solution]\n• Fill all required fields\n• Remove special characters and retry";
+"error.server.429" = "[429 Too Many Requests]\nRequest limit reached.\n\n[Cause]\n• Too many requests in short time\n• AI API rate limiting\n\n[Solution]\n• Wait about 1 minute and retry\n• Reduce request frequency";
+"error.server.500" = "[500 Internal Server Error]\nAn internal server error occurred.\n\n[Cause]\n• Server program bug\n• Database error\n\n[Solution]\n• Check server logs:\n  remote-job-server/server.log\n  or remote-job-server/logs/ folder\n• Restart server:\n  cd remote-job-server && python main.py";
+"error.server.502" = "[502 Bad Gateway]\nCannot connect to server.\n\n[Cause]\n• Server not running\n• Server process crashed\n• Port blocked\n\n[Solution]\n• Start server:\n  cd remote-job-server\n  source .venv/bin/activate\n  python main.py\n• Allow port 8443 in firewall";
+"error.server.503" = "[503 Service Unavailable]\nService temporarily unavailable.\n\n[Cause]\n• Server under maintenance\n• Server overloaded\n\n[Solution]\n• Wait a few minutes and retry\n• Contact server administrator";
+"error.server.504" = "[504 Gateway Timeout]\nNo response from server.\n\n[Cause]\n• AI processing taking too long\n• Network routing issue\n\n[Solution]\n• Shorten prompt and retry\n• Check VPN connection\n• Check logs:\n  tail -100 remote-job-server/server.log";
+"error.server.other" = "[%d Error]\nAn unexpected error occurred.\n\n[Solution]\n• Check server logs:\n  tail -100 remote-job-server/server.log\n• Take a screenshot and report\n  this error code to developer";

@@ -293,7 +293,39 @@ enum L10n {
         }
         static var auth: String { "error.auth".localized }
         static func server(_ code: Int) -> String {
-            "error.server".localized(code)
+            // HTTPステータスコードごとに詳細メッセージを返す
+            switch code {
+            case 400:
+                return "error.server.400".localized
+            case 401:
+                return "error.server.401".localized
+            case 403:
+                return "error.server.403".localized
+            case 404:
+                return "error.server.404".localized
+            case 405:
+                return "error.server.405".localized
+            case 408:
+                return "error.server.408".localized
+            case 409:
+                return "error.server.409".localized
+            case 413:
+                return "error.server.413".localized
+            case 422:
+                return "error.server.422".localized
+            case 429:
+                return "error.server.429".localized
+            case 500:
+                return "error.server.500".localized
+            case 502:
+                return "error.server.502".localized
+            case 503:
+                return "error.server.503".localized
+            case 504:
+                return "error.server.504".localized
+            default:
+                return "error.server.other".localized(code)
+            }
         }
         static func unknown(_ message: String) -> String {
             "error.unknown".localized(message)

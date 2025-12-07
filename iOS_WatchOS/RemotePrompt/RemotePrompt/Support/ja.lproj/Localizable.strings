@@ -211,6 +211,22 @@
 "error.network" = "ネットワークエラー: %@";
 "error.certificate" = "証明書エラー: %@";
 "error.auth" = "認証エラー: APIキーを確認してください";
-"error.server" = "サーバーエラー: %d";
 "error.unknown" = "不明なエラー: %@";
 "error.apikey.missing" = "APIキーが設定されていません。サーバー設定でAPIキーを設定してください。";
+
+// MARK: - HTTP Status Code Errors
+"error.server.400" = "[400 Bad Request]\nリクエストの形式が不正です。\n\n【原因】\n・送信データに問題がある可能性があります\n・アプリとサーバーのバージョン不一致\n\n【対処法】\n・アプリを最新版に更新してください\n・入力内容に特殊文字が含まれていないか確認";
+"error.server.401" = "[401 Unauthorized]\n認証に失敗しました。\n\n【原因】\n・APIキーが間違っている\n・APIキーが期限切れまたは無効\n\n【対処法】\n・サーバー設定でAPIキーを再確認\n・サーバーの.envファイルのAPI_KEYと一致しているか確認";
+"error.server.403" = "[403 Forbidden]\nアクセスが拒否されました。\n\n【原因】\n・デバイスIDが異なる\n・他のユーザーのリソースにアクセスしようとした\n\n【対処法】\n・デバイスIDが正しいか確認\n・自分が作成したルーム/スレッドか確認";
+"error.server.404" = "[404 Not Found]\nリソースが見つかりません。\n\n【原因】\n・指定したルーム/スレッドが削除された\n・サーバーURLのパスが間違っている\n・サーバーが別のポートで動作している\n\n【対処法】\n・ルーム一覧を更新してください\n・サーバーURLを再確認（ポート番号含む）";
+"error.server.405" = "[405 Method Not Allowed]\n許可されていない操作です。\n\n【原因】\n・サーバーとアプリのAPIバージョン不一致\n\n【対処法】\n・アプリを最新版に更新\n・サーバーも最新版に更新";
+"error.server.408" = "[408 Request Timeout]\nリクエストがタイムアウトしました。\n\n【原因】\n・ネットワーク接続が不安定\n・サーバーが高負荷状態\n\n【対処法】\n・Wi-Fi/モバイル接続を確認\n・しばらく待ってから再試行";
+"error.server.409" = "[409 Conflict]\n競合が発生しました。\n\n【原因】\n・同じ名前のルーム/スレッドが既に存在\n\n【対処法】\n・別の名前で作成してください";
+"error.server.413" = "[413 Payload Too Large]\nデータサイズが大きすぎます。\n\n【原因】\n・送信メッセージが長すぎる\n・添付ファイルが大きすぎる\n\n【対処法】\n・メッセージを短くしてください\n・ファイルサイズを500KB以下に";
+"error.server.422" = "[422 Unprocessable Entity]\n処理できないデータです。\n\n【原因】\n・必須項目が未入力\n・データ形式が不正\n\n【対処法】\n・すべての必須項目を入力\n・特殊文字を削除して再試行";
+"error.server.429" = "[429 Too Many Requests]\nリクエスト回数の上限に達しました。\n\n【原因】\n・短時間に大量のリクエストを送信\n・AI APIのレート制限\n\n【対処法】\n・1分程度待ってから再試行\n・リクエスト頻度を下げてください";
+"error.server.500" = "[500 Internal Server Error]\nサーバー内部でエラーが発生しました。\n\n【原因】\n・サーバープログラムのバグ\n・データベースエラー\n\n【対処法】\n・サーバーログを確認:\n  remote-job-server/server.log\n  または remote-job-server/logs/フォルダ\n・サーバーを再起動:\n  cd remote-job-server && python main.py";
+"error.server.502" = "[502 Bad Gateway]\nサーバーに接続できません。\n\n【原因】\n・サーバーが起動していない\n・サーバープロセスがクラッシュした\n・ポートがブロックされている\n\n【対処法】\n・サーバーを起動:\n  cd remote-job-server\n  source .venv/bin/activate\n  python main.py\n・ファイアウォールでポート8443を許可";
+"error.server.503" = "[503 Service Unavailable]\nサービスが一時的に利用できません。\n\n【原因】\n・サーバーがメンテナンス中\n・サーバーが過負荷状態\n\n【対処法】\n・数分待ってから再試行\n・サーバー管理者に確認";
+"error.server.504" = "[504 Gateway Timeout]\nサーバーからの応答がありません。\n\n【原因】\n・AI処理に時間がかかりすぎている\n・ネットワーク経路の問題\n\n【対処法】\n・プロンプトを短くして再試行\n・VPN接続を確認\n・サーバーログを確認:\n  tail -100 remote-job-server/server.log";
+"error.server.other" = "[%d エラー]\n予期しないエラーが発生しました。\n\n【対処法】\n・サーバーログを確認:\n  tail -100 remote-job-server/server.log\n・このエラーコードをスクリーンショットで\n  開発者に報告してください";
