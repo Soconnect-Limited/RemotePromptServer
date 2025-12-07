@@ -211,6 +211,6 @@
 "error.network" = "Network error: %@";
 "error.certificate" = "Certificate error: %@";
 "error.auth" = "Authentication error: Please check your API key";
-"error.server" = "Server error: %@";
+"error.server" = "Server error: %d";
 "error.unknown" = "Unknown error: %@";
 "error.apikey.missing" = "API key is not set. Please set the API key in server settings.";

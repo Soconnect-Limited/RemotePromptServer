@@ -211,6 +211,6 @@
 "error.network" = "ネットワークエラー: %@";
 "error.certificate" = "証明書エラー: %@";
 "error.auth" = "認証エラー: APIキーを確認してください";
-"error.server" = "サーバーエラー: %@";
+"error.server" = "サーバーエラー: %d";
 "error.unknown" = "不明なエラー: %@";
 "error.apikey.missing" = "APIキーが設定されていません。サーバー設定でAPIキーを設定してください。";
