@@ -2299,8 +2299,8 @@ enum APIError: Error {
 ```swift
 private func getSession() -> URLSession {
     let config = URLSessionConfiguration.default
-    config.timeoutIntervalForRequest = 15           // リクエストタイムアウト: 15秒
-    config.timeoutIntervalForResource = 30          // リソースタイムアウト: 30秒
+    config.timeoutIntervalForRequest = 8            // リクエストタイムアウト: 8秒（初回ハング防止）
+    config.timeoutIntervalForResource = 12          // リソースタイムアウト: 12秒
     config.httpMaximumConnectionsPerHost = 4        // ホストあたりの最大接続数
     config.waitsForConnectivity = false             // 接続待機しない
     config.urlCache = URLCache(
@@ -2318,12 +2318,25 @@ private func getSession() -> URLSession {
 **接続ウォームアップ機能**:
 ```swift
 /// TLSハンドシェイクを事前に実行してコネクションを確立
-func warmupConnection() async {
-    guard let url = URL(string: "\(Constants.baseURL)/health") else { return }
-    var request = URLRequest(url: url)
-    request.httpMethod = "HEAD"
+/// server/certificate が無い場合は rooms?device_id&limit=1 を叩く
+func warmupConnection(deviceId: String? = nil) async {
+    guard let base = URL(string: Constants.baseURL) else { return }
+    let target: URL = {
+        let cert = base.appendingPathComponent("server/certificate")
+        if let deviceId {
+            var c = URLComponents(url: base.appendingPathComponent("rooms"), resolvingAgainstBaseURL: false)
+            c?.queryItems = [
+                URLQueryItem(name: "device_id", value: deviceId),
+                URLQueryItem(name: "limit", value: "1")
+            ]
+            if let u = c?.url { return u }
+        }
+        return cert
+    }()
+    var request = URLRequest(url: target)
+    request.httpMethod = "GET"
     request.timeoutInterval = 5
-    _ = try await getSession().data(for: request)
+    _ = try? await getSession().data(for: request)
 }
 ```
 

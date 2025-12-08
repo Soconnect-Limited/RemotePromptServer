@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class RoomsViewModel: ObservableObject {
+    private static let cacheKey = "rooms_cache_v1"
+
     @Published var rooms: [Room]
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -21,7 +23,14 @@ final class RoomsViewModel: ObservableObject {
         self.apiClient = apiClient
         self.deviceId = deviceIdProvider()
         self.shouldValidateAPIKey = !skipAPIKeyCheck
-        self.rooms = initialRooms
+
+        // キャッシュされたルームを即時表示して初期体感を改善
+        if let data = UserDefaults.standard.data(forKey: Self.cacheKey),
+           let cached = try? JSONDecoder().decode([Room].self, from: data) {
+            self.rooms = cached
+        } else {
+            self.rooms = initialRooms
+        }
     }
 
     func loadRooms() async {
@@ -49,6 +58,10 @@ final class RoomsViewModel: ObservableObject {
             let sorted = sortRooms(fetched)
             objectWillChange.send()
             rooms = sorted
+            // キャッシュ保存
+            if let data = try? JSONEncoder().encode(sorted) {
+                UserDefaults.standard.set(data, forKey: Self.cacheKey)
+            }
             print("[RoomsViewModel] rooms assigned @ \(Date()), count=\(rooms.count)")
 
             // 次のRunLoopで確認

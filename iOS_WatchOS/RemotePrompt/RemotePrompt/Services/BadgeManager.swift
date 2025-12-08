@@ -87,7 +87,7 @@ nonisolated final class BadgeManager: Sendable {
 
         // 独自の軽量セッション（証明書ピンニングなし、自己署名証明書を許可）
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForRequest = 5
         config.waitsForConnectivity = false
 
         // 自己署名証明書を許可するデリゲート
@@ -106,7 +106,7 @@ nonisolated final class BadgeManager: Sendable {
                 var request = URLRequest(url: url)
                 request.httpMethod = "GET"
                 request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-                request.timeoutInterval = 10
+                request.timeoutInterval = 5
 
                 let (data, response) = try await session.data(for: request)
 

@@ -5,7 +5,7 @@ struct RoomsListView: View {
     @StateObject private var viewModel: RoomsViewModel
     @State private var showingCreateRoom = false
     @State private var showingServerSettings = false
-    @State private var hasLoadedOnce = false
+    @State private var hasLoadedOnce: Bool
     @State private var showingCertificateError = false
     @State private var certificateErrorMessage = ""
     @State private var pendingCertificateFingerprint: String?
@@ -27,6 +27,7 @@ struct RoomsListView: View {
         if let viewModel {
             _viewModel = StateObject(wrappedValue: viewModel)
             self.detailAPIClient = viewModel.apiClient
+            _hasLoadedOnce = State(initialValue: !viewModel.rooms.isEmpty)
         } else if AppEnvironment.isUITesting {
             let previewClient = PreviewAPIClient()
             let vm = RoomsViewModel(
@@ -36,10 +37,12 @@ struct RoomsListView: View {
             )
             _viewModel = StateObject(wrappedValue: vm)
             self.detailAPIClient = previewClient
+            _hasLoadedOnce = State(initialValue: !vm.rooms.isEmpty)
         } else {
             let vm = RoomsViewModel()
             _viewModel = StateObject(wrappedValue: vm)
             self.detailAPIClient = vm.apiClient
+            _hasLoadedOnce = State(initialValue: !vm.rooms.isEmpty)
         }
     }
 

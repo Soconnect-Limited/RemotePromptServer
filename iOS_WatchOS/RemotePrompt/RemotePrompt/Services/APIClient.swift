@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Security
 
 enum APIError: Error, LocalizedError {
     case invalidURL
@@ -86,6 +87,7 @@ final class APIClient: APIClientProtocol {
 
     // MARK: - Certificate Pinning Session
     private var pinnedSession: URLSession?
+    private var warmupTask: Task<Void, Never>?
     private let pinningDelegate = CertificatePinningDelegate.shared
     private var cancellables = Set<AnyCancellable>()
 
@@ -166,8 +168,10 @@ final class APIClient: APIClientProtocol {
 
         print("[APIClient] Creating session with self-signed certificate support")
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+
+        // 接続タイムアウトを安定寄りに設定（サーバ応答が10秒超のケースを許容）
+        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForResource = 30
 
         // HTTP/2を無効化（自己署名証明書との互換性向上）
         config.httpAdditionalHeaders = ["Accept-Encoding": "gzip, deflate"]
@@ -175,6 +179,10 @@ final class APIClient: APIClientProtocol {
         // ローカルネットワーク向けの最適化
         config.waitsForConnectivity = false
         config.shouldUseExtendedBackgroundIdleMode = false
+
+        // 接続の高速化：不要な遅延を防ぐ
+        config.httpShouldUsePipelining = true
+        config.httpMaximumConnectionsPerHost = 4
 
         // TLS設定を最適化（自己署名証明書用）
         // OCSP/CRL検証を無効化（自己署名証明書にはOCSPサーバーがない）
@@ -281,92 +289,71 @@ final class APIClient: APIClientProtocol {
         throw lastError
     }
 
-    /// フォールバック付きでリクエストを実行（dataTask版 - fetchRooms用）
-    private func executeWithFallbackDataTask(
-        path: String,
-        queryItems: [URLQueryItem]? = nil
-    ) async throws -> Data {
-        // デバッグ: 設定内容を詳細出力
-        if let config = ServerConfigurationStore.shared.currentConfiguration {
-            print("[APIClient] config.url=\(config.url)")
-            print("[APIClient] config.alternativeURLs=\(config.alternativeURLs)")
-            print("[APIClient] config.autoFallback=\(config.autoFallback)")
-        } else {
-            print("[APIClient] currentConfiguration is nil")
-        }
-        let allURLs = Constants.allURLs
-        print("[APIClient] executeWithFallbackDataTask: allURLs=\(allURLs), autoFallback=\(Constants.autoFallbackEnabled)")
-        guard !allURLs.isEmpty else {
-            throw APIError.serverNotConfigured
+    /// 接続のウォームアップ（TLS接続を事前確立）
+    /// メインのpinnedSessionを使用してTLS接続を共有する
+    func warmupConnection(deviceId: String? = nil) async {
+        // 進行中のウォームアップがあれば合流して二重実行を防ぐ
+        if let task = warmupTask {
+            await task.value
+            return
         }
 
-        guard let apiKey = Constants.apiKey else {
-            throw APIError.missingAPIKey
-        }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.warmupTask = nil }
 
-        var lastError: Error = APIError.invalidURL
+            guard let baseURL = URL(string: Constants.baseURL),
+                  Constants.isAPIKeyConfigured else {
+                print("[APIClient] warmupConnection: skipped (not configured)")
+                return
+            }
 
-        for (index, baseURL) in allURLs.enumerated() {
-            do {
-                var components = URLComponents(string: "\(baseURL)\(path)")
-                components?.queryItems = queryItems
-
-                guard let url = components?.url else {
-                    continue
+            let startTime = CFAbsoluteTimeGetCurrent()
+            // 可能なら軽量な /server/certificate を使用。無ければ /rooms?device_id&limit=1 にフォールバック。
+            let targetURL: URL = {
+                let certURL = baseURL.appendingPathComponent("server/certificate")
+                if let deviceId = deviceId {
+                    var components = URLComponents(url: baseURL.appendingPathComponent("rooms"), resolvingAgainstBaseURL: false)
+                    var items = [URLQueryItem(name: "device_id", value: deviceId)]
+                    items.append(URLQueryItem(name: "limit", value: "1")) // 未対応でも無害
+                    components?.queryItems = items
+                    if let roomsURL = components?.url {
+                        return roomsURL
+                    }
                 }
+                return certURL
+            }()
 
-                var request = URLRequest(url: url)
-                request.httpMethod = "GET"
+            print("[APIClient] warmupConnection: starting TLS warmup to \(targetURL.absoluteString) @ \(Date())")
+
+            // メインのpinnedSessionを使用（TLS接続を共有するため）
+            let session = self.getSession()
+
+            // 軽量なGETリクエストでTLS接続を確立
+            var request = URLRequest(url: targetURL)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 5  // 短いタイムアウト
+            // APIキーがあれば設定（正常なレスポンスを得るため）
+            if let apiKey = Constants.apiKey {
                 request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            }
 
-                if index > 0 {
-                    print("[APIClient] Fallback to: \(baseURL)")
+            do {
+                let (_, response) = try await session.data(for: request)
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                if let http = response as? HTTPURLResponse {
+                    print("[APIClient] warmupConnection: completed in \(String(format: "%.2f", elapsed))s (status: \(http.statusCode)) @ \(Date())")
+                } else {
+                    print("[APIClient] warmupConnection: completed in \(String(format: "%.2f", elapsed))s @ \(Date())")
                 }
-
-                let session = getSession()
-                let result: (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
-                    session.dataTask(with: request) { data, response, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else if let data = data, let response = response {
-                            continuation.resume(returning: (data, response))
-                        } else {
-                            continuation.resume(throwing: APIError.invalidURL)
-                        }
-                    }.resume()
-                }
-
-                let (data, response) = result
-
-                guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
-                    let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                    throw APIError.httpError(code)
-                }
-
-                if index > 0 {
-                    print("[APIClient] ✅ Fallback succeeded: \(baseURL)")
-                }
-
-                return data
             } catch {
-                lastError = error
-                print("[APIClient] Request failed for \(baseURL): \(error.localizedDescription)")
-
-                if case APIError.httpError(401) = error { throw error }
-                if case APIError.httpError(403) = error { throw error }
-
-                continue
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                print("[APIClient] warmupConnection: failed in \(String(format: "%.2f", elapsed))s - \(error.localizedDescription)")
             }
         }
 
-        throw lastError
-    }
-
-    /// 接続のウォームアップ（現在は無効化）
-    /// 注意: 共有URLSessionを使用するとメインのリクエストをブロックする問題があるため無効化
-    func warmupConnection() {
-        // ウォームアップは現在無効化されています
-        // サーバーは十分高速なので不要
+        warmupTask = task
+        await task.value
     }
 
     /// 証明書バイパスモードの設定（接続テスト用）
@@ -439,11 +426,35 @@ final class APIClient: APIClientProtocol {
         let startTime = Date()
         print("[APIClient] fetchRooms START")
 
-        let queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
-        let data = try await executeWithFallbackDataTask(path: "/rooms", queryItems: queryItems)
+        guard var components = URLComponents(string: "\(Constants.baseURL)/rooms") else {
+            throw APIError.invalidURL
+        }
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceId)]
+
+        guard let url = components.url else {
+            throw APIError.invalidURL
+        }
+
+        guard let apiKey = Constants.apiKey else {
+            throw APIError.missingAPIKey
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 20
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+
+        print("[APIClient] fetchRooms requesting: \(url)")
+
+        let (data, response) = try await getSession().data(for: request)
 
         let elapsed = Date().timeIntervalSince(startTime)
         print("[APIClient] fetchRooms DONE in \(String(format: "%.2f", elapsed))s")
+
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw APIError.httpError(code)
+        }
 
         return try decoder.decode([Room].self, from: data)
     }

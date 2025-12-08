@@ -31,10 +31,12 @@ struct ContentView: View {
             }
 
             // 接続のウォームアップ（TLSハンドシェイクを事前実行）
-            // 非同期で実行されるため、ルーム読み込みをブロックしない
             if Constants.isServerConfigured {
-                print("[ContentView] warmupConnection is disabled @ \(Date())")
-                // APIClient.shared.warmupConnection()
+                print("[ContentView] warmupConnection: starting @ \(Date())")
+                Task.detached {
+                    await APIClient.shared.warmupConnection()
+                    print("[ContentView] warmupConnection: finished @ \(Date())")
+                }
             }
 
             print("[ContentView] .task END @ \(Date())")
