@@ -51,8 +51,10 @@ struct RoomDetailView: View {
             }
         }
         .fullScreenCover(isPresented: $showFileBrowser) {
-            // iPadでは全画面でSplitView表示
-            FileBrowserView(room: room, path: "", isRoot: true)
+            // NavigationStackでラップしてnavigationDestinationを有効化
+            NavigationStack {
+                FileBrowserView(room: room, path: "", isRoot: true)
+            }
         }
         .sheet(isPresented: $showRoomSettings) {
             if selectedThread != nil {
