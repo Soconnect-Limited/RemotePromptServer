@@ -3738,7 +3738,27 @@ SELECT id, device_id, room_id, status FROM jobs LIMIT 5;
 
 ## 13. 運用・保守
 
-### 13.1 サーバー起動
+### 13.1 サーバーリポジトリ
+
+サーバーコードは別リポジトリで管理されています。
+
+- **リポジトリ**: https://github.com/Soconnect-Limited/RemotePromptServer
+- **ローカルパス**: `/Users/macstudio/Projects/RemotePromptServer`
+- **開発用コピー**: `/Users/macstudio/Projects/RemotePrompt/remote-job-server`
+
+変更時は開発用コピーで編集し、RemotePromptServerリポジトリにコピーしてpushしてください。
+
+```bash
+# 変更をサーバーリポジトリにコピー
+cp remote-job-server/utils/*.py ~/Projects/RemotePromptServer/utils/
+cp remote-job-server/requirements.txt ~/Projects/RemotePromptServer/
+
+# コミット＆プッシュ
+cd ~/Projects/RemotePromptServer
+git add -A && git commit -m "変更内容" && git push origin main
+```
+
+### 13.2 サーバー起動
 
 #### 手動起動（開発環境 - HTTP）
 ```bash
