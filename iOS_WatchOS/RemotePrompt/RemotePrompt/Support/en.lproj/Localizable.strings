@@ -117,6 +117,7 @@
 "certificate.changed.warning" = "The server certificate has changed.\nThis could be a man-in-the-middle attack.\n\nPlease verify with the server administrator.";
 "certificate.changed.detail" = "\nOld: %@...\nNew: %@...";
 "certificate.mismatch.message" = "Server certificate has changed.\n\nStored: %@...\nReceived: %@...\n\nIf this is an expected change, trust the new certificate.";
+"certificate.updated" = "Certificate Updated";
 "certificate.updated.restart" = "Server certificate has been updated.\n\nPlease reconnect after server restart.\n\nReason: %@";
 "certificate.updated.reconnect" = "Server certificate has been updated.\n\nReconnect with the new certificate?\n\nReason: %@";
 "certificate.revoked.message" = "Server certificate has been revoked.\n\nPlease reconnect from settings after server restart.\n\nReason: %@";

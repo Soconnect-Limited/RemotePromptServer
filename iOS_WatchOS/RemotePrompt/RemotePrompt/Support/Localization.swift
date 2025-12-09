@@ -178,6 +178,7 @@ enum L10n {
         static func mismatchMessage(stored: String, received: String) -> String {
             "certificate.mismatch.message".localized(stored, received)
         }
+        static var updated: String { "certificate.updated".localized }
         static func updatedRestart(_ reason: String) -> String {
             "certificate.updated.restart".localized(reason)
         }

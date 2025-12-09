@@ -13,6 +13,8 @@ struct RoomsListView: View {
     @State private var roomToEdit: Room?
     @State private var roomToDelete: Room?
     @State private var showingDeleteConfirmation = false
+    // 証明書更新成功メッセージ
+    @State private var showingCertificateUpdatedAlert = false
     // SSE証明書イベント用のダイアログ状態
     @State private var showingSSECertificateChangedAlert = false
     @State private var sseCertificateChangedEvent: CertificateChangedEvent?
@@ -123,6 +125,9 @@ struct RoomsListView: View {
                     Button("OK", role: .cancel) { viewModel.errorMessage = nil }
                 } message: {
                     Text(viewModel.errorMessage ?? "")
+                }
+                .alert(L10n.Certificate.updated, isPresented: $showingCertificateUpdatedAlert) {
+                    Button("OK", role: .cancel) { }
                 }
                 .modifier(CertificateAlertsModifier(
                     showingCertificateError: $showingCertificateError,
@@ -353,6 +358,9 @@ struct RoomsListView: View {
         CertificatePinningDelegate.shared.clearError()
         APIClient.shared.invalidateSession()
         pendingCertificateFingerprint = nil
+        // エラーメッセージをクリアして成功メッセージを表示
+        viewModel.errorMessage = nil
+        showingCertificateUpdatedAlert = true
 
         Task {
             await viewModel.loadRooms()

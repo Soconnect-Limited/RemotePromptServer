@@ -117,6 +117,7 @@
 "certificate.changed.warning" = "サーバー証明書が変更されました。\n中間者攻撃の可能性があります。\n\nサーバー管理者に確認してください。";
 "certificate.changed.detail" = "\n旧: %@...\n新: %@...";
 "certificate.mismatch.message" = "サーバー証明書が変更されました。\n\n保存済み: %@...\n受信: %@...\n\nこれが予期された変更であれば、新しい証明書を信頼してください。";
+"certificate.updated" = "証明書を更新しました";
 "certificate.updated.restart" = "サーバー証明書が更新されました。\n\nサーバー再起動後に再接続してください。\n\n理由: %@";
 "certificate.updated.reconnect" = "サーバー証明書が更新されました。\n\n新しい証明書で再接続しますか？\n\n理由: %@";
 "certificate.revoked.message" = "サーバー証明書が失効しました。\n\nサーバー再起動後、設定から再接続してください。\n\n理由: %@";
