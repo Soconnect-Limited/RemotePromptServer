@@ -1,8 +1,8 @@
 # 非対話モード方式 MacStudio ⇔ iPhone/Apple Watch ジョブ実行システム 詳細技術仕様書
 
 作成日: 2025-11-16
-最終更新: 2025-12-03
-バージョン: 4.5（AIプロバイダー設定機能）
+最終更新: 2025-12-09
+バージョン: 4.6（動的ツール許可機能）
 想定作成者: Nao
 
 **変更履歴**:
@@ -15,6 +15,7 @@
 - v4.3 (2025-11-23): SSE初期スナップショット送信を必須化、heartbeat(30s)導入、iOS delegateQueueを`.main`固定、SSE接続タイムアウト60秒、iOSバッファ上限1MB、ログ取得手順更新
 - v4.4 (2025-12-02): URLSession最適化（タイムアウト短縮・コネクション再利用）、接続ウォームアップ機能追加（TLSハンドシェイク事前実行）、RoomsListViewツールバー統合（Auto Layout警告修正）
 - v4.5 (2025-12-03): AIプロバイダー設定機能 - Claude Code/Codex/Geminiの3種類対応、プロバイダー有効化・順序変更・Bashパス設定をサポート
+- v4.6 (2025-12-09): 動的ツール許可機能 - Claude Codeの`--allowedTools`/`--disallowedTools`オプションをRoom設定から指定可能に。ジョブごとに許可/拒否するツールを動的に制御
 
 ---
 
@@ -3746,6 +3747,15 @@ source .venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+#### 手動起動（ローカル開発 - 自己署名証明書）
+```bash
+cd ~/Projects/RemotePrompt/remote-job-server
+source .venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8443 \
+  --ssl-keyfile=certs/self_signed/server.key \
+  --ssl-certfile=certs/self_signed/server.crt
+```
+
 #### 手動起動（本番環境 - HTTPS/SSL）
 ```bash
 cd ~/Projects/RemotePrompt/remote-job-server
@@ -4355,6 +4365,140 @@ final class MemoryPressureMonitor {
 - ✅ メモリ警告時の自動クリーンアップ
 - ✅ 長時間使用時のメモリ蓄積防止
 - ✅ OS killによるアプリ強制終了の防止
+
+---
+
+## 17. v4.6 変更点詳細（2025-12-09）
+
+### 17.1 動的ツール許可機能
+
+#### 概要
+
+Claude Codeの`--allowedTools`/`--disallowedTools`オプションをRoom設定から指定可能に。ジョブ実行時に許可/拒否するツールを動的に制御できるようになった。
+
+これにより、`.claude/settings.local.json`で全許可している環境でも、Room/プロジェクト単位で細かく権限を制御できる。
+
+#### 背景
+
+非対話モード（`--print`）では権限確認プロンプトに応答できないため、従来は事前に全てのツールを許可する必要があった。`--allowedTools`オプションを使用することで、ジョブ単位で許可するツールを制限できる。
+
+#### 修正ファイル
+
+**サーバー側**
+- `remote-job-server/utils/cli_builder.py`
+
+**iOS側**
+- `iOS_WatchOS/RemotePrompt/RemotePrompt/Models/RoomSettings.swift`
+- `iOS_WatchOS/RemotePrompt/RemotePrompt/Views/RoomSettingsView.swift`
+
+#### 実装内容
+
+**cli_builder.py - allowedTools/disallowedTools対応**
+
+```python
+def build_claude_command(settings: Optional[Dict] = None) -> List[str]:
+    cmd: List[str] = ["claude", "--print", "--output-format", "text"]
+
+    if settings and "claude" in settings:
+        cfg = settings["claude"]
+        # ... 既存の設定 ...
+
+        # v4.6: allowedTools/disallowedTools support
+        if "allowed_tools" in cfg and cfg["allowed_tools"]:
+            tools = ",".join(cfg["allowed_tools"])
+            cmd.extend(["--allowedTools", tools])
+        if "disallowed_tools" in cfg and cfg["disallowed_tools"]:
+            tools = ",".join(cfg["disallowed_tools"])
+            cmd.extend(["--disallowedTools", tools])
+
+    return cmd
+```
+
+**ClaudeSettings - 新フィールド追加**
+
+```swift
+struct ClaudeSettings: Codable, Equatable {
+    var model: String
+    var permissionMode: String
+    var tools: [String]
+    var customFlags: [String]
+    // v4.6: 動的ツール許可/拒否
+    var allowedTools: [String]
+    var disallowedTools: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case permissionMode = "permission_mode"
+        case tools
+        case customFlags = "custom_flags"
+        case allowedTools = "allowed_tools"
+        case disallowedTools = "disallowed_tools"
+    }
+
+    // 後方互換性のためのカスタムデコーダ
+    init(from decoder: Decoder) throws {
+        // ... 既存フィールドのデコード ...
+        // v4.6: 新フィールドは省略可能
+        allowedTools = try container.decodeIfPresent([String].self, forKey: .allowedTools) ?? []
+        disallowedTools = try container.decodeIfPresent([String].self, forKey: .disallowedTools) ?? []
+    }
+}
+```
+
+**RoomSettingsView - ツール選択UI**
+
+```swift
+// v4.6: 動的ツール許可設定
+Section {
+    AllowedToolsEditor(
+        allowedTools: $viewModel.settings.claude.allowedTools,
+        disallowedTools: $viewModel.settings.claude.disallowedTools
+    )
+} header: {
+    Text("動的ツール許可")
+} footer: {
+    Text("ジョブ実行時に --allowedTools / --disallowedTools として渡されます。")
+}
+```
+
+#### 利用可能なツール
+
+**基本ツール**
+- `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`
+- `Task`, `WebFetch`, `WebSearch`, `NotebookEdit`
+- `TodoWrite`, `SlashCommand`, `Skill`, `BashOutput`, `KillShell`
+
+**Bashパターン（ワイルドカード対応）**
+- `Bash(git:*)` - gitコマンド全般
+- `Bash(npm:*)`, `Bash(yarn:*)` - パッケージマネージャー
+- `Bash(python:*)`, `Bash(pip:*)` - Python関連
+- `Bash(rm:*)`, `Bash(sudo:*)` - 危険なコマンド（拒否推奨）
+
+#### 使用例
+
+```json
+{
+  "claude": {
+    "model": "sonnet",
+    "allowed_tools": ["Read", "Write", "Bash(git:*)"],
+    "disallowed_tools": ["Bash(rm:*)", "Bash(sudo:*)"]
+  }
+}
+```
+
+実行されるコマンド:
+```bash
+claude --print --output-format text \
+  --model sonnet \
+  --allowedTools "Read,Write,Bash(git:*)" \
+  --disallowedTools "Bash(rm:*),Bash(sudo:*)"
+```
+
+#### 期待される効果
+- ✅ Room/プロジェクト単位でツール権限を細かく制御
+- ✅ 危険なBashコマンドを明示的に拒否可能
+- ✅ `.claude/settings.local.json`の全許可設定を維持しつつセキュリティ向上
+- ✅ UIから直感的にツールを選択可能
 
 ---
 

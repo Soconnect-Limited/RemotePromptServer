@@ -35,12 +35,38 @@ struct ClaudeSettings: Codable, Equatable {
     var permissionMode: String
     var tools: [String]
     var customFlags: [String]
+    // v4.6: 動的ツール許可/拒否
+    var allowedTools: [String]
+    var disallowedTools: [String]
 
     enum CodingKeys: String, CodingKey {
         case model
         case permissionMode = "permission_mode"
         case tools
         case customFlags = "custom_flags"
+        case allowedTools = "allowed_tools"
+        case disallowedTools = "disallowed_tools"
+    }
+
+    // 後方互換性のためのカスタムデコーダ
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decode(String.self, forKey: .model)
+        permissionMode = try container.decode(String.self, forKey: .permissionMode)
+        tools = try container.decode([String].self, forKey: .tools)
+        customFlags = try container.decode([String].self, forKey: .customFlags)
+        // v4.6: 新フィールドは省略可能
+        allowedTools = try container.decodeIfPresent([String].self, forKey: .allowedTools) ?? []
+        disallowedTools = try container.decodeIfPresent([String].self, forKey: .disallowedTools) ?? []
+    }
+
+    init(model: String, permissionMode: String, tools: [String], customFlags: [String], allowedTools: [String] = [], disallowedTools: [String] = []) {
+        self.model = model
+        self.permissionMode = permissionMode
+        self.tools = tools
+        self.customFlags = customFlags
+        self.allowedTools = allowedTools
+        self.disallowedTools = disallowedTools
     }
 
     static var `default`: ClaudeSettings {
@@ -48,7 +74,9 @@ struct ClaudeSettings: Codable, Equatable {
             model: "sonnet",
             permissionMode: "default",
             tools: ["Bash", "Edit", "Read", "Write", "Grep", "Glob"],
-            customFlags: []
+            customFlags: [],
+            allowedTools: [],
+            disallowedTools: []
         )
     }
 }

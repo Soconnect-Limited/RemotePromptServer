@@ -26,11 +26,14 @@ final class RoomSettingsViewModel: ObservableObject {
         do {
             if let fetched = try await apiClient.getRoomSettings(roomId: room.id, deviceId: deviceId) {
                 settings = fetched
+                print("[RoomSettingsVM] Loaded settings - allowedTools: \(fetched.claude.allowedTools), disallowedTools: \(fetched.claude.disallowedTools)")
             } else {
                 settings = .default
+                print("[RoomSettingsVM] No settings found, using default")
             }
         } catch {
             errorMessage = error.localizedDescription
+            print("[RoomSettingsVM] Load error: \(error)")
         }
     }
 
@@ -46,6 +49,7 @@ final class RoomSettingsViewModel: ObservableObject {
             switch runner {
             case "claude":
                 mergedSettings = RoomSettings(claude: settings.claude, codex: currentSettings.codex, gemini: currentSettings.gemini)
+                print("[RoomSettingsVM] Saving claude settings - allowedTools: \(settings.claude.allowedTools), disallowedTools: \(settings.claude.disallowedTools)")
             case "codex":
                 mergedSettings = RoomSettings(claude: currentSettings.claude, codex: settings.codex, gemini: currentSettings.gemini)
             case "gemini":
@@ -54,10 +58,12 @@ final class RoomSettingsViewModel: ObservableObject {
                 mergedSettings = settings
             }
 
-            _ = try await apiClient.updateRoomSettings(roomId: room.id, deviceId: deviceId, settings: mergedSettings)
+            let result = try await apiClient.updateRoomSettings(roomId: room.id, deviceId: deviceId, settings: mergedSettings)
+            print("[RoomSettingsVM] Save result - allowedTools: \(result?.claude.allowedTools ?? []), disallowedTools: \(result?.claude.disallowedTools ?? [])")
             return true
         } catch {
             errorMessage = error.localizedDescription
+            print("[RoomSettingsVM] Save error: \(error)")
             return false
         }
     }
