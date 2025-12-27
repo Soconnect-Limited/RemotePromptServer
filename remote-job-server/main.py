@@ -42,7 +42,7 @@ from bonjour_publisher import (
 )
 from database import SessionLocal, init_db
 from job_manager import JobManager
-from models import Device, DeviceSession, Job, Room, Thread, utcnow
+from models import Device, DeviceSession, Job, Room, Thread, InvitationCode, SubdomainRegistration, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
 from utils.path_validator import validate_workspace_path
@@ -1209,3 +1209,310 @@ async def global_events_stream(request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ========== Subdomain Registration APIs ==========
+
+import secrets
+from datetime import timedelta
+
+from cloudflare_dns import CloudflareDNS, CloudflareError, generate_random_subdomain
+
+
+def _is_tailscale_ip(ip: str) -> bool:
+    """Check if IP is a Tailscale IP (100.x.x.x range)."""
+    return ip.startswith("100.")
+
+
+def _require_tailscale_ip(request: Request) -> str:
+    """Require request to come from Tailscale IP range."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _is_tailscale_ip(client_ip):
+        LOGGER.warning("[SUBDOMAIN] Rejected non-Tailscale IP: %s", client_ip)
+        raise HTTPException(
+            status_code=403,
+            detail="This API is only accessible from Tailscale network (100.x.x.x)"
+        )
+    return client_ip
+
+
+class CreateInvitationRequest(BaseModel):
+    expires_days: int = 7  # 有効期限（日）
+
+
+class RegisterSubdomainRequest(BaseModel):
+    invitation_code: str
+    tailscale_ip: str  # クライアントが自分のTailscale IPを送信
+
+
+@app.post("/invitations")
+async def create_invitation(
+    req: CreateInvitationRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Create a new invitation code.
+
+    Security:
+    - Requires API key
+    - Only callable from Tailscale network
+    - Only users with registered subdomain can create invitations
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Check if the device has a registered subdomain (only registered users can invite)
+    existing = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not existing:
+        raise HTTPException(
+            status_code=403,
+            detail="Only users with registered subdomain can create invitations"
+        )
+
+    # Limit: max 3 invitation codes per device
+    MAX_INVITATIONS_PER_DEVICE = 3
+    invitation_count = db.query(InvitationCode).filter_by(created_by_device_id=device_id).count()
+    if invitation_count >= MAX_INVITATIONS_PER_DEVICE:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Maximum {MAX_INVITATIONS_PER_DEVICE} invitation codes per device"
+        )
+
+    # Generate invitation code
+    code = secrets.token_urlsafe(12)  # 16文字のランダム文字列
+    expires_at = utcnow() + timedelta(days=req.expires_days)
+
+    invitation = InvitationCode(
+        code=code,
+        created_by_device_id=device_id,
+        expires_at=expires_at,
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    LOGGER.info(
+        "[SUBDOMAIN] Invitation created: code=%s, by=%s, expires=%s",
+        code[:8] + "...", device_id[:8] + "...", expires_at.isoformat()
+    )
+
+    return invitation.to_dict()
+
+
+@app.get("/invitations")
+async def list_invitations(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[dict]:
+    """List invitation codes created by this device."""
+    invitations = db.query(InvitationCode).filter_by(created_by_device_id=device_id).all()
+    return [inv.to_dict() for inv in invitations]
+
+
+@app.post("/subdomain/register")
+async def register_subdomain(
+    req: RegisterSubdomainRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Register a subdomain for this device.
+
+    Security:
+    - Requires API key
+    - Only callable from Tailscale network
+    - Requires valid invitation code
+    - One subdomain per device
+    - Only accepts Tailscale IPs (100.x.x.x)
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Validate Tailscale IP format
+    if not _is_tailscale_ip(req.tailscale_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="tailscale_ip must be a Tailscale IP (100.x.x.x)"
+        )
+
+    # Check if device already has a subdomain
+    existing = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Device already has subdomain: {existing.subdomain}.remoteprompt.net"
+        )
+
+    # Validate invitation code
+    invitation = db.query(InvitationCode).filter_by(code=req.invitation_code).first()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invalid invitation code")
+    if not invitation.is_valid():
+        raise HTTPException(status_code=400, detail="Invitation code expired or already used")
+
+    # Generate unique subdomain
+    max_attempts = 10
+    subdomain = None
+    for _ in range(max_attempts):
+        candidate = generate_random_subdomain(8)
+        if not db.query(SubdomainRegistration).filter_by(subdomain=candidate).first():
+            subdomain = candidate
+            break
+
+    if not subdomain:
+        raise HTTPException(status_code=500, detail="Failed to generate unique subdomain")
+
+    # Create DNS record via Cloudflare
+    try:
+        cloudflare = CloudflareDNS()
+        record = await cloudflare.create_subdomain(subdomain, req.tailscale_ip)
+        cloudflare_record_id = record.id
+    except CloudflareError as e:
+        LOGGER.error("[SUBDOMAIN] Cloudflare error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to create DNS record: {e}")
+
+    # Mark invitation as used
+    invitation.used_by_device_id = device_id
+    invitation.used_at = utcnow()
+
+    # Create subdomain registration
+    registration = SubdomainRegistration(
+        device_id=device_id,
+        subdomain=subdomain,
+        tailscale_ip=req.tailscale_ip,
+        cloudflare_record_id=cloudflare_record_id,
+        invitation_code_id=invitation.id,
+    )
+    db.add(registration)
+    db.commit()
+    db.refresh(registration)
+
+    LOGGER.info(
+        "[SUBDOMAIN] Registered: %s.remoteprompt.net -> %s (device=%s)",
+        subdomain, req.tailscale_ip, device_id[:8] + "..."
+    )
+
+    return {
+        **registration.to_dict(),
+        "message": f"Subdomain registered successfully. Use https://{subdomain}.remoteprompt.net:8443",
+    }
+
+
+@app.get("/subdomain")
+async def get_my_subdomain(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Get the subdomain registered to this device."""
+    registration = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="No subdomain registered for this device")
+    return registration.to_dict()
+
+
+class UpdateSubdomainIPRequest(BaseModel):
+    tailscale_ip: str
+
+
+@app.put("/subdomain")
+async def update_subdomain_ip(
+    req: UpdateSubdomainIPRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Update the Tailscale IP for this device's subdomain.
+
+    Use this when your Tailscale IP changes.
+    """
+    _require_tailscale_ip(request)
+
+    # Validate Tailscale IP format
+    if not _is_tailscale_ip(req.tailscale_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="tailscale_ip must be a Tailscale IP (100.x.x.x)"
+        )
+
+    registration = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="No subdomain registered for this device")
+
+    # Update DNS record via Cloudflare
+    try:
+        cloudflare = CloudflareDNS()
+        await cloudflare.update_subdomain(registration.subdomain, req.tailscale_ip)
+    except CloudflareError as e:
+        LOGGER.error("[SUBDOMAIN] Cloudflare update error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to update DNS record: {e}")
+
+    old_ip = registration.tailscale_ip
+    registration.tailscale_ip = req.tailscale_ip
+    registration.updated_at = utcnow()
+    db.commit()
+    db.refresh(registration)
+
+    LOGGER.info(
+        "[SUBDOMAIN] IP updated: %s.remoteprompt.net %s -> %s",
+        registration.subdomain, old_ip, req.tailscale_ip
+    )
+
+    return registration.to_dict()
+
+
+# ========== Admin APIs (Bootstrap) ==========
+
+
+@app.post("/admin/bootstrap-invitation")
+async def create_bootstrap_invitation(
+    req: CreateInvitationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Create the first invitation code (admin bootstrap).
+
+    This endpoint is for creating the initial invitation code when no users exist yet.
+    Once any subdomain is registered, this endpoint becomes disabled.
+
+    Security:
+    - Requires API key
+    - Only works when no subdomains are registered yet
+    - Only callable from Tailscale network
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Check if any subdomain exists
+    existing_count = db.query(SubdomainRegistration).count()
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Bootstrap disabled: subdomains already exist. Use /invitations instead."
+        )
+
+    # Generate invitation code
+    code = secrets.token_urlsafe(12)
+    expires_at = utcnow() + timedelta(days=req.expires_days)
+
+    invitation = InvitationCode(
+        code=code,
+        created_by_device_id="ADMIN_BOOTSTRAP",  # 特別なマーカー
+        expires_at=expires_at,
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    LOGGER.warning(
+        "[ADMIN] Bootstrap invitation created: code=%s, expires=%s, from=%s",
+        code, expires_at.isoformat(), client_ip
+    )
+
+    return {
+        **invitation.to_dict(),
+        "note": "This is a bootstrap invitation. Share this code securely with the first user.",
+    }
