@@ -9,15 +9,21 @@ from typing import Dict, List
 
 from file_security import (
     ALLOWED_IMAGE_EXTENSIONS,
+    ALLOWED_SOURCE_EXTENSIONS,
     MAX_FILE_SIZE,
+    MAX_SOURCE_SIZE,
+    PHASE2_SOURCE_FILENAMES,
     FileSizeExceeded,
     InvalidExtension,
     InvalidPath,
+    get_source_language,
+    is_source_file,
     validate_file_path,
     validate_file_size,
     validate_image_extension,
     validate_markdown_extension,
     validate_pdf_extension,
+    validate_source_extension,
 )
 
 # PDFファイルのサイズ上限（10MB）
@@ -65,29 +71,36 @@ def list_files(workspace_path: str, relative_path: str) -> List[FileItemDict]:
             )
         elif entry.is_file():
             suffix = entry.suffix.lower()
+            filename = entry.name.lower()
+            language = None
+            
             if suffix == ".md":
                 file_type = "markdown_file"
             elif suffix == ".pdf":
                 file_type = "pdf_file"
             elif suffix in ALLOWED_IMAGE_EXTENSIONS:
                 file_type = "image_file"
+            elif is_source_file(entry):
+                file_type = "source_file"
+                language = get_source_language(entry)
             else:
                 continue  # 未対応の拡張子はスキップ
 
             stat = entry.stat()
             path = entry.relative_to(base).as_posix()
-            results.append(
-                {
-                    "id": path,
-                    "name": entry.name,
-                    "type": file_type,
-                    "path": path,
-                    "size": stat.st_size,
-                    "modified_at": datetime.fromtimestamp(
-                        stat.st_mtime, timezone.utc
-                    ).isoformat(),
-                }
-            )
+            item: FileItemDict = {
+                "id": path,
+                "name": entry.name,
+                "type": file_type,
+                "path": path,
+                "size": stat.st_size,
+                "modified_at": datetime.fromtimestamp(
+                    stat.st_mtime, timezone.utc
+                ).isoformat(),
+            }
+            if language:
+                item["language"] = language
+            results.append(item)
     return results
 
 
@@ -152,6 +165,46 @@ def read_image_file(workspace_path: str, file_path: str) -> bytes:
     validate_image_extension(target)
     validate_file_size(target, max_size=MAX_IMAGE_SIZE)
     return target.read_bytes()
+
+
+@dataclass
+class SourceFileResult:
+    """Result of reading a source file."""
+    content: str
+    encoding: str  # "utf-8", "utf-8-sig", or "latin-1"
+
+
+def read_source_file(workspace_path: str, file_path: str) -> SourceFileResult:
+    """Read a source code file as text.
+    
+    Attempts UTF-8 decoding first, then UTF-8 with BOM, then falls back to latin-1.
+    Returns the content and detected encoding.
+    """
+    target = validate_file_path(workspace_path, file_path)
+    if not target.exists() or not target.is_file():
+        raise FileNotFoundError("File not found")
+    validate_source_extension(target)
+    validate_file_size(target, max_size=MAX_SOURCE_SIZE)
+    
+    raw_bytes = target.read_bytes()
+    
+    # 1. UTF-8で試行
+    try:
+        content = raw_bytes.decode("utf-8")
+        return SourceFileResult(content=content, encoding="utf-8")
+    except UnicodeDecodeError:
+        pass
+    
+    # 2. UTF-8 with BOMで試行
+    try:
+        content = raw_bytes.decode("utf-8-sig")
+        return SourceFileResult(content=content, encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+    
+    # 3. latin-1フォールバック（常に成功するが文字化けの可能性）
+    content = raw_bytes.decode("latin-1")
+    return SourceFileResult(content=content, encoding="latin-1")
 
 
 def _generate_unique_filename(target: Path) -> Path:

@@ -1,48 +1,26 @@
-# RemotePrompt Server
+# Remote Job Server
 
-[日本語](#日本語) | [English](#english)
+RemotePrompt iOS/watchOSアプリ用のバックエンドサーバー。
+AI CLIツール（Claude Code, Codex CLI, Gemini CLI）をiOSからリモート操作できます。
+
+## 目次
+
+- [セットアップ](#セットアップ)
+- [SSL証明書の発行](#ssl証明書の発行)
+- [更新方法](#更新方法)
+- [サーバーの再起動](#サーバーの再起動)
+- [設定](#設定)
+- [トラブルシューティング](#トラブルシューティング)
 
 ---
 
-## 日本語
-
-RemotePrompt Serverは、iOSアプリからClaude Code、Codex、Gemini CLIをリモート操作するためのサーバーです。
-
-### 特徴
-
-- **複数のAI CLI対応**: Claude Code、OpenAI Codex、Google Gemini CLI
-- **リアルタイム通信**: Server-Sent Events (SSE)によるストリーミング
-- **自動検出**: Bonjour/mDNSによるローカルネットワーク自動検出
-- **セキュア通信**: SSL/TLS暗号化（自己署名証明書の自動生成対応）
-- **セッション管理**: 会話の継続が可能
-
-### 必要環境
-
-- **OS**: macOS（推奨）、Linux（実験的）、Windows（WSL2推奨）
-- **Python**: 3.11以上
-- **Node.js**: 18以上（CLI用）
-
-### AI CLIのインストール
-
-使用するCLIを少なくとも1つインストールしてください：
-
-```bash
-# Claude Code
-npm install -g @anthropic-ai/claude-code
-
-# OpenAI Codex
-npm install -g @openai/codex
-
-# Google Gemini CLI
-npm install -g @anthropic-ai/claude-code  # TODO: 正式なパッケージ名に更新
-```
-
-### サーバーのインストール
+## セットアップ
 
 ```bash
 # リポジトリをクローン
+cd ~
 git clone https://github.com/Soconnect-Limited/RemotePromptServer.git
-cd RemotePromptServer
+cd ~/RemotePromptServer
 
 # 仮想環境を作成
 python3 -m venv .venv
@@ -51,143 +29,216 @@ source .venv/bin/activate
 # 依存関係をインストール
 pip install -r requirements.txt
 
-# 設定ファイルを作成
+# 環境変数を設定
 cp .env.example .env
-
-# 設定を編集
-nano .env  # または任意のエディタ
-```
-
-### 設定
-
-`.env`ファイルで以下を設定してください：
-
-| 項目 | 説明 | 例 |
-|------|------|-----|
-| `API_KEY` | iOS認証用キー | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
-| `SERVER_HOSTNAME` | サーバーのIPまたはホスト名 | `192.168.1.100` |
-| `SERVER_SAN_IPS` | 証明書に含めるIP（カンマ区切り） | `192.168.1.100,127.0.0.1` |
-| `SERVER_PORT` | サーバーポート | `8443` |
-
-### 起動
-
-```bash
-# 仮想環境を有効化
-source .venv/bin/activate
+# .envファイルを編集して API_KEY を設定
 
 # サーバーを起動
 python main.py
 ```
 
-起動すると、証明書のフィンガープリントが表示されます。iOSアプリでの初回接続時にこのフィンガープリントを確認してください。
+---
 
-### iOSアプリとの接続
+## SSL証明書の発行
 
-1. **Bonjour自動検出**: 同じネットワーク上でアプリを開くと自動的にサーバーが検出されます
-2. **QRコード**: サーバー起動時に表示されるQRコードをスキャン
-3. **手動設定**: サーバーのURL、APIキー、フィンガープリントを手動入力
+### 自己署名証明書（デフォルト）
 
-### ドキュメント
+初回起動時に自動生成されます。ローカルネットワーク内での利用に適しています。
 
-- [サーバー版マニュアル](docs/manual/server/ja.html)
-- [iOS版マニュアル](docs/manual/ios/ja.html)
-- [プライバシーポリシー](docs/privacy/ja.html)
+iOSアプリ側で証明書の確認ダイアログが表示されるので、信頼して接続してください。
 
-### ライセンス
+### Let's Encrypt証明書（推奨）
 
-MIT License - 詳細は [LICENSE](LICENSE) を参照
+正規のSSL証明書を使用する場合、以下の手順で発行できます。
+
+#### 前提条件
+
+1. 管理者にTailscale IPを伝え、サブドメインを発行してもらう
+2. ポート80が一時的に使用可能であること
+
+#### 手順
+
+1. **Tailscale IPを確認**
+   ```bash
+   tailscale ip -4
+   ```
+   このIPアドレスを管理者に伝えてください。
+
+2. **管理者からサブドメインを受け取る**
+
+   例: `abc12345.remoteprompt.net`
+
+3. **DNS解決を確認**
+   ```bash
+   dig abc12345.remoteprompt.net
+   ```
+   あなたのIPアドレスが表示されればOK。
+
+4. **証明書発行スクリプトを実行**
+   ```bash
+   cd ~/RemotePromptServer
+   source .venv/bin/activate
+   python3 scripts/setup_letsencrypt.py abc12345
+   ```
+
+   スクリプトが自動的に:
+   - certbotをインストール
+   - Let's Encrypt証明書を発行（HTTPチャレンジ）
+   - `.env`ファイルを更新
+   - 自動更新を設定（毎日3:00 AM）
+
+5. **サーバーを起動**
+   ```bash
+   python main.py
+   ```
+
+6. **動作確認**
+   ```bash
+   curl https://abc12345.remoteprompt.net:8443/health
+   ```
+
+#### 証明書の手動更新
+
+```bash
+./scripts/renew-letsencrypt.sh
+```
 
 ---
 
-## English
-
-RemotePrompt Server enables remote control of Claude Code, Codex, and Gemini CLI from iOS app.
-
-### Features
-
-- **Multiple AI CLI Support**: Claude Code, OpenAI Codex, Google Gemini CLI
-- **Real-time Communication**: Streaming via Server-Sent Events (SSE)
-- **Auto Discovery**: Local network discovery via Bonjour/mDNS
-- **Secure Communication**: SSL/TLS encryption with auto-generated self-signed certificates
-- **Session Management**: Conversation continuity support
-
-### Requirements
-
-- **OS**: macOS (recommended), Linux (experimental), Windows (WSL2 recommended)
-- **Python**: 3.11 or later
-- **Node.js**: 18 or later (for CLI tools)
-
-### Install AI CLI
-
-Install at least one of the following CLI tools:
+## 更新方法
 
 ```bash
-# Claude Code
-npm install -g @anthropic-ai/claude-code
+cd ~/RemotePromptServer
 
-# OpenAI Codex
-npm install -g @openai/codex
+# 最新版を取得
+git pull origin main
 
-# Google Gemini CLI
-npm install -g @anthropic-ai/claude-code  # TODO: Update to official package name
-```
-
-### Install Server
-
-```bash
-# Clone repository
-git clone https://github.com/Soconnect-Limited/RemotePromptServer.git
-cd RemotePromptServer
-
-# Create virtual environment
-python3 -m venv .venv
+# 依存関係を更新
 source .venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Create configuration file
-cp .env.example .env
-
-# Edit configuration
-nano .env  # or your preferred editor
+# サーバーを再起動（下記参照）
 ```
 
-### Configuration
+---
 
-Configure the following in `.env`:
+## サーバーの再起動
 
-| Setting | Description | Example |
-|---------|-------------|---------|
-| `API_KEY` | Authentication key for iOS app | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
-| `SERVER_HOSTNAME` | Server IP or hostname | `192.168.1.100` |
-| `SERVER_SAN_IPS` | IPs for certificate (comma-separated) | `192.168.1.100,127.0.0.1` |
-| `SERVER_PORT` | Server port | `8443` |
-
-### Start Server
+### 方法1: プロセスを探して停止
 
 ```bash
-# Activate virtual environment
-source .venv/bin/activate
+# 実行中のサーバープロセスを確認
+ps aux | grep "python main.py"
 
-# Start server
+# プロセスを停止（PIDは上記で確認した数字）
+kill <PID>
+
+# サーバーを起動
+cd ~/RemotePromptServer
+source .venv/bin/activate
 python main.py
 ```
 
-On startup, the certificate fingerprint will be displayed. Verify this fingerprint when connecting from the iOS app for the first time.
+### 方法2: ポートを使用しているプロセスを停止
 
-### Connect from iOS App
+```bash
+# 8443ポートを使用しているプロセスを確認
+lsof -i :8443
 
-1. **Bonjour Auto-Discovery**: Open the app on the same network to automatically discover the server
-2. **QR Code**: Scan the QR code displayed on server startup
-3. **Manual Configuration**: Manually enter server URL, API key, and fingerprint
+# プロセスを停止
+kill <PID>
 
-### Documentation
+# サーバーを起動
+cd ~/RemotePromptServer
+source .venv/bin/activate
+python main.py
+```
 
-- [Server Manual](docs/manual/server/en.html)
-- [iOS Manual](docs/manual/ios/en.html)
-- [Privacy Policy](docs/privacy/en.html)
+### 方法3: 一括コマンド
 
-### License
+```bash
+# 停止→更新→起動を一括実行
+pkill -f "python main.py" ; cd ~/RemotePromptServer && git pull origin main && source .venv/bin/activate && pip install -r requirements.txt && python main.py
+```
 
-MIT License - See [LICENSE](LICENSE) for details
+---
+
+## 設定
+
+`.env.example`を参考に`.env`ファイルを作成してください。
+
+主な設定項目：
+
+| 項目 | 説明 | デフォルト |
+|------|------|-----------|
+| `API_KEY` | クライアント認証用のAPIキー | **必須** |
+| `SERVER_PORT` | サーバーポート | 8443 |
+| `SSL_MODE` | 証明書モード（`auto`, `self_signed`, `commercial`） | auto |
+| `BONJOUR_ENABLED` | ローカルネットワーク自動検出 | true |
+
+※ このサーバーはCLI（Claude Code, Codex CLI等）をリモート操作するためのものです。各AIサービスのAPIキーはサーバー側ではなく、CLIがインストールされたマシン上で設定します。
+
+---
+
+## ファイル構成
+
+```
+RemotePromptServer/
+├── main.py                      # サーバー本体
+├── .env                         # 環境設定
+├── .env.example                 # 環境設定テンプレート
+├── certs/                       # SSL証明書
+├── scripts/
+│   ├── setup_letsencrypt.py    # Let's Encrypt証明書発行
+│   └── renew-letsencrypt.sh    # 証明書更新スクリプト
+└── utils/                       # ユーティリティ
+```
+
+---
+
+## トラブルシューティング
+
+### サーバーにアクセスできない
+
+**確認事項**:
+1. サーバーが起動しているか: `ps aux | grep "python main.py"`
+2. ポートが開いているか: `lsof -i :8443`
+3. ファイアウォール設定
+
+### 「証明書が信頼されていない」エラー
+
+自己署名証明書を使用している場合は正常です。iOSアプリで証明書を信頼してください。
+
+正規証明書を使用している場合は、パスが正しいか確認：
+```bash
+ls -la ./certs/remoteprompt.net/config/live/
+```
+
+### 証明書発行に失敗する
+
+**考えられる原因**:
+1. ポート80が別のプロセスで使用中
+2. ファイアウォールでポート80がブロックされている
+3. DNSがまだ伝播していない（数分待ってから再試行）
+
+```bash
+# ポート80の使用状況を確認
+lsof -i :80
+
+# DNSを確認
+dig abc12345.remoteprompt.net
+```
+
+---
+
+## セキュリティに関する注意
+
+1. **APIキーは必ず変更する** - デフォルト値を使用しない
+2. **APIキーを他者に共有しない** - 各ユーザーが独自のキーを設定
+3. **.envファイルをgit管理しない** - `.gitignore`に含まれていることを確認
+
+---
+
+## ライセンス
+
+MIT License

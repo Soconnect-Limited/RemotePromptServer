@@ -362,7 +362,7 @@ def print_certificate_banner(
 
     Args:
         cert_path: Path to the certificate file
-        server_url: Server URL (e.g., https://192.168.1.100:8443)
+        server_url: Server URL (e.g., https://192.168.11.110:8443)
         version: Server version string
     """
     try:

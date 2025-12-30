@@ -1,27 +1,12 @@
 """Workspace path validation for security."""
-import os
 from pathlib import Path
 from typing import List
 
-
-def get_default_allowed_paths() -> List[str]:
-    """Get default allowed paths based on current user's home directory.
-
-    By default, allows the entire home directory for flexibility.
-    Users can restrict this via ALLOWED_BASE_PATHS environment variable.
-    """
-    home = str(Path.home())
-    return [home]
-
-
-# Allowed base paths for workspace directories
-# Override by setting ALLOWED_BASE_PATHS environment variable (comma-separated)
-_env_paths = os.environ.get("ALLOWED_BASE_PATHS", "")
-ALLOWED_BASE_PATHS: List[str] = (
-    [p.strip() for p in _env_paths.split(",") if p.strip()]
-    if _env_paths
-    else get_default_allowed_paths()
-)
+ALLOWED_BASE_PATHS: List[str] = [
+    "/Users/macstudio/Projects",
+    "/Users/macstudio/Documents",
+    "/Users/macstudio/Library/Mobile Documents",  # iCloud Drive
+]
 
 FORBIDDEN_PATHS: List[str] = [
     "/System",

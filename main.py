@@ -5,7 +5,6 @@ import asyncio
 import uuid
 import json
 import logging
-from pathlib import Path
 from typing import List, Optional
 
 from fastapi import (
@@ -36,12 +35,6 @@ from cert_generator import (
     revoke_certificate,
     print_certificate_banner,
 )
-from qr_generator import (
-    generate_qr_png_base64,
-    generate_config_payload,
-    print_qr_banner,
-    ensure_qr_code_exists,
-)
 from bonjour_publisher import (
     start_bonjour_service_async,
     stop_bonjour_service_async,
@@ -49,7 +42,7 @@ from bonjour_publisher import (
 )
 from database import SessionLocal, init_db
 from job_manager import JobManager
-from models import Device, DeviceSession, Job, Room, Thread, utcnow
+from models import Device, DeviceSession, Job, Room, Thread, InvitationCode, SubdomainRegistration, utcnow
 from session_manager import SessionManager
 from sse_manager import sse_manager
 from utils.path_validator import validate_workspace_path
@@ -67,12 +60,20 @@ from file_operations import (
     read_file,
     read_image_file,
     read_pdf_file,
+    read_source_file,
     write_file,
     write_image_file,
     ImageWriteResult,
+    SourceFileResult,
     WriteResult,
 )
-from file_security import ALLOWED_IMAGE_EXTENSIONS, FileSizeExceeded, InvalidExtension, InvalidPath
+from file_security import (
+    ALLOWED_IMAGE_EXTENSIONS,
+    FileSizeExceeded,
+    InvalidExtension,
+    InvalidPath,
+    is_source_file,
+)
 
 # Setup logging BEFORE any manager initialization
 setup_logging()
@@ -119,27 +120,9 @@ async def lifespan(app: FastAPI):  # noqa: D417 - FastAPI lifespan signature
         )
 
         # Print banner for self-signed certificates
-        server_url = f"https://{settings.server_hostname}:{settings.server_port}"
         if mode_used == "self_signed":
+            server_url = f"https://{settings.server_hostname}:{settings.server_port}"
             print_certificate_banner(cert_path, server_url)
-
-        # Generate QR code image file (always, for iOS app scanning)
-        qr_path = ensure_qr_code_exists(
-            server_url=server_url,
-            api_key=settings.api_key,
-            fingerprint=_current_cert_fingerprint,
-            server_name=settings.bonjour_service_name,
-        )
-        LOGGER.info("[QR] QR code saved to: %s", qr_path)
-
-        # Show QR code in terminal if enabled (via SHOW_QR_ON_STARTUP=true)
-        if settings.show_qr_on_startup:
-            print_qr_banner(
-                server_url=server_url,
-                api_key=settings.api_key,
-                fingerprint=_current_cert_fingerprint,
-                server_name=settings.bonjour_service_name,
-            )
 
     except RuntimeError as e:
         LOGGER.error("[SSL] Failed to initialize certificates: %s", e)
@@ -325,8 +308,6 @@ def create_room(
     try:
         validated_path = validate_workspace_path(req.workspace_path)
     except ValueError as exc:
-        LOGGER.warning("[ROOM] Failed to create room: %s (device_id=%s, workspace_path=%s)", 
-                      str(exc), req.device_id, req.workspace_path)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # 新しいRoomは最後に追加（既存の最大sort_order + 1）
@@ -649,12 +630,17 @@ async def get_room_file(
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> Response:
+    from pathlib import Path
     room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
 
     # ファイル拡張子に応じて読み込み方法を切り替え
     suffix = "." + filepath.lower().rsplit(".", 1)[-1] if "." in filepath else ""
     is_pdf = suffix == ".pdf"
     is_image = suffix in ALLOWED_IMAGE_EXTENSIONS
+
+    # ソースファイル判定
+    full_path = Path(room.workspace_path) / filepath
+    is_source = is_source_file(full_path)
 
     # 画像のMIMEタイプ
     image_mime_types = {
@@ -673,6 +659,19 @@ async def get_room_file(
             content = read_image_file(workspace_path=room.workspace_path, file_path=filepath)
             mime_type = image_mime_types.get(suffix, "application/octet-stream")
             return Response(content=content, media_type=mime_type)
+        elif is_source:
+            result: SourceFileResult = read_source_file(
+                workspace_path=room.workspace_path, file_path=filepath
+            )
+            headers = {"X-File-Encoding": result.encoding}
+            # latin-1フォールバック時は警告ヘッダーを追加
+            if result.encoding == "latin-1":
+                headers["X-Encoding-Warning"] = "File decoded with latin-1 fallback, may contain incorrect characters"
+            return Response(
+                content=result.content,
+                media_type="text/plain; charset=utf-8",
+                headers=headers,
+            )
         else:
             content = read_file(workspace_path=room.workspace_path, file_path=filepath)
             return Response(content=content, media_type="text/plain; charset=utf-8")
@@ -695,7 +694,16 @@ async def put_room_file(
     db: Session = Depends(get_db),
     _: None = Depends(verify_api_key),
 ) -> dict:
+    from pathlib import Path
     room = await verify_room_ownership(room_id=room_id, device_id=device_id, db=db)
+
+    # ソースファイルは読み取り専用（編集不可）
+    full_path = Path(room.workspace_path) / filepath
+    if is_source_file(full_path):
+        raise HTTPException(
+            status_code=405,
+            detail="Source code files are read-only",
+        )
 
     try:
         body_bytes = await request.body()
@@ -1024,6 +1032,24 @@ def health() -> dict:
     return result
 
 
+@app.get("/models")
+def get_models() -> dict:
+    """Get available AI models for each provider.
+
+    Returns the models.json content which clients can use
+    to populate model selection UI dynamically.
+    """
+    from pathlib import Path
+    models_path = Path(__file__).parent / "data" / "models.json"
+    try:
+        with open(models_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="Models configuration not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid models configuration")
+
+
 # ========== Certificate Management APIs ==========
 
 # Rate limiting state for certificate API
@@ -1095,57 +1121,6 @@ def get_server_certificate(request: Request) -> dict:
         "pending_restart": _pending_cert_restart,
         "pending_fingerprint": _pending_cert_fingerprint if _pending_cert_restart else None,
     }
-
-
-@app.get("/server/qrcode")
-def get_server_qrcode(
-    request: Request,
-    _: None = Depends(verify_api_key),
-    format: str = Query("png", description="Output format: 'png' (base64) or 'json' (payload only)"),
-) -> dict:
-    """Get QR code for server configuration (requires API key).
-
-    This endpoint generates a QR code containing server connection information
-    that can be scanned by the iOS app for quick setup.
-
-    Args:
-        format: Output format - 'png' returns base64 PNG image, 'json' returns raw payload
-
-    Returns:
-        QR code data in requested format
-    """
-    client_ip = request.client.host if request.client else "unknown"
-    LOGGER.info("[AUDIT] QR code requested from %s", client_ip)
-
-    # Build server URL
-    server_url = f"https://{settings.server_hostname}:{settings.server_port}"
-
-    if format == "json":
-        # Return just the payload data
-        payload = generate_config_payload(
-            server_url=server_url,
-            api_key=settings.api_key,
-            fingerprint=_current_cert_fingerprint,
-            server_name=settings.bonjour_service_name,
-        )
-        return {
-            "format": "json",
-            "payload": payload,
-        }
-    else:
-        # Return base64 PNG image
-        qr_base64 = generate_qr_png_base64(
-            server_url=server_url,
-            api_key=settings.api_key,
-            fingerprint=_current_cert_fingerprint,
-            server_name=settings.bonjour_service_name,
-        )
-        return {
-            "format": "png",
-            "image": f"data:image/png;base64,{qr_base64}",
-            "server_url": server_url,
-            "fingerprint": _current_cert_fingerprint,
-        }
 
 
 class RegenerateCertificateRequest(BaseModel):
@@ -1289,30 +1264,308 @@ async def global_events_stream(request: Request) -> StreamingResponse:
     )
 
 
-if __name__ == "__main__":
-    import uvicorn
-    from config import settings
-    
-    cert_path, key_path, mode_used = get_ssl_paths()
-    
-    # 証明書ファイルが存在しない場合は作成
-    if not Path(cert_path).exists() or not Path(key_path).exists():
-        if mode_used == "self_signed" and settings.ssl_auto_generate:
-            LOGGER.info("[SSL] Certificate files not found, generating...")
-            cert_path, key_path, fingerprint = ensure_certificate_exists(
-                hostname=settings.server_hostname,
-                san_ips=settings.get_san_ips_list(),
-            )
-            LOGGER.info("[SSL] Certificate generated: %s", cert_path)
-        else:
-            LOGGER.error("[SSL] Certificate files not found: %s, %s", cert_path, key_path)
-            raise FileNotFoundError(f"SSL certificate files not found: {cert_path}, {key_path}")
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=settings.server_port,
-        ssl_keyfile=key_path,
-        ssl_certfile=cert_path,
-        log_level=settings.log_level.lower(),
+# ========== Subdomain Registration APIs ==========
+
+import secrets
+from datetime import timedelta
+
+from cloudflare_dns import CloudflareDNS, CloudflareError, generate_random_subdomain
+
+
+def _is_tailscale_ip(ip: str) -> bool:
+    """Check if IP is a Tailscale IP (100.x.x.x range)."""
+    return ip.startswith("100.")
+
+
+def _require_tailscale_ip(request: Request) -> str:
+    """Require request to come from Tailscale IP range."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not _is_tailscale_ip(client_ip):
+        LOGGER.warning("[SUBDOMAIN] Rejected non-Tailscale IP: %s", client_ip)
+        raise HTTPException(
+            status_code=403,
+            detail="This API is only accessible from Tailscale network (100.x.x.x)"
+        )
+    return client_ip
+
+
+class CreateInvitationRequest(BaseModel):
+    expires_days: int = 7  # 有効期限（日）
+
+
+class RegisterSubdomainRequest(BaseModel):
+    invitation_code: str
+    tailscale_ip: str  # クライアントが自分のTailscale IPを送信
+
+
+@app.post("/invitations")
+async def create_invitation(
+    req: CreateInvitationRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Create a new invitation code.
+
+    Security:
+    - Requires API key
+    - Only callable from Tailscale network
+    - Only users with registered subdomain can create invitations
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Check if the device has a registered subdomain (only registered users can invite)
+    existing = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not existing:
+        raise HTTPException(
+            status_code=403,
+            detail="Only users with registered subdomain can create invitations"
+        )
+
+    # Limit: max 3 invitation codes per device
+    MAX_INVITATIONS_PER_DEVICE = 3
+    invitation_count = db.query(InvitationCode).filter_by(created_by_device_id=device_id).count()
+    if invitation_count >= MAX_INVITATIONS_PER_DEVICE:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Maximum {MAX_INVITATIONS_PER_DEVICE} invitation codes per device"
+        )
+
+    # Generate invitation code
+    code = secrets.token_urlsafe(12)  # 16文字のランダム文字列
+    expires_at = utcnow() + timedelta(days=req.expires_days)
+
+    invitation = InvitationCode(
+        code=code,
+        created_by_device_id=device_id,
+        expires_at=expires_at,
     )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    LOGGER.info(
+        "[SUBDOMAIN] Invitation created: code=%s, by=%s, expires=%s",
+        code[:8] + "...", device_id[:8] + "...", expires_at.isoformat()
+    )
+
+    return invitation.to_dict()
+
+
+@app.get("/invitations")
+async def list_invitations(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> List[dict]:
+    """List invitation codes created by this device."""
+    invitations = db.query(InvitationCode).filter_by(created_by_device_id=device_id).all()
+    return [inv.to_dict() for inv in invitations]
+
+
+@app.post("/subdomain/register")
+async def register_subdomain(
+    req: RegisterSubdomainRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Register a subdomain for this device.
+
+    Security:
+    - Requires API key
+    - Only callable from Tailscale network
+    - Requires valid invitation code
+    - One subdomain per device
+    - Only accepts Tailscale IPs (100.x.x.x)
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Validate Tailscale IP format
+    if not _is_tailscale_ip(req.tailscale_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="tailscale_ip must be a Tailscale IP (100.x.x.x)"
+        )
+
+    # Check if device already has a subdomain
+    existing = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Device already has subdomain: {existing.subdomain}.remoteprompt.net"
+        )
+
+    # Validate invitation code
+    invitation = db.query(InvitationCode).filter_by(code=req.invitation_code).first()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invalid invitation code")
+    if not invitation.is_valid():
+        raise HTTPException(status_code=400, detail="Invitation code expired or already used")
+
+    # Generate unique subdomain
+    max_attempts = 10
+    subdomain = None
+    for _ in range(max_attempts):
+        candidate = generate_random_subdomain(8)
+        if not db.query(SubdomainRegistration).filter_by(subdomain=candidate).first():
+            subdomain = candidate
+            break
+
+    if not subdomain:
+        raise HTTPException(status_code=500, detail="Failed to generate unique subdomain")
+
+    # Create DNS record via Cloudflare
+    try:
+        cloudflare = CloudflareDNS()
+        record = await cloudflare.create_subdomain(subdomain, req.tailscale_ip)
+        cloudflare_record_id = record.id
+    except CloudflareError as e:
+        LOGGER.error("[SUBDOMAIN] Cloudflare error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to create DNS record: {e}")
+
+    # Mark invitation as used
+    invitation.used_by_device_id = device_id
+    invitation.used_at = utcnow()
+
+    # Create subdomain registration
+    registration = SubdomainRegistration(
+        device_id=device_id,
+        subdomain=subdomain,
+        tailscale_ip=req.tailscale_ip,
+        cloudflare_record_id=cloudflare_record_id,
+        invitation_code_id=invitation.id,
+    )
+    db.add(registration)
+    db.commit()
+    db.refresh(registration)
+
+    LOGGER.info(
+        "[SUBDOMAIN] Registered: %s.remoteprompt.net -> %s (device=%s)",
+        subdomain, req.tailscale_ip, device_id[:8] + "..."
+    )
+
+    return {
+        **registration.to_dict(),
+        "message": f"Subdomain registered successfully. Use https://{subdomain}.remoteprompt.net:8443",
+    }
+
+
+@app.get("/subdomain")
+async def get_my_subdomain(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Get the subdomain registered to this device."""
+    registration = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="No subdomain registered for this device")
+    return registration.to_dict()
+
+
+class UpdateSubdomainIPRequest(BaseModel):
+    tailscale_ip: str
+
+
+@app.put("/subdomain")
+async def update_subdomain_ip(
+    req: UpdateSubdomainIPRequest,
+    request: Request,
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Update the Tailscale IP for this device's subdomain.
+
+    Use this when your Tailscale IP changes.
+    """
+    _require_tailscale_ip(request)
+
+    # Validate Tailscale IP format
+    if not _is_tailscale_ip(req.tailscale_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="tailscale_ip must be a Tailscale IP (100.x.x.x)"
+        )
+
+    registration = db.query(SubdomainRegistration).filter_by(device_id=device_id).first()
+    if not registration:
+        raise HTTPException(status_code=404, detail="No subdomain registered for this device")
+
+    # Update DNS record via Cloudflare
+    try:
+        cloudflare = CloudflareDNS()
+        await cloudflare.update_subdomain(registration.subdomain, req.tailscale_ip)
+    except CloudflareError as e:
+        LOGGER.error("[SUBDOMAIN] Cloudflare update error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to update DNS record: {e}")
+
+    old_ip = registration.tailscale_ip
+    registration.tailscale_ip = req.tailscale_ip
+    registration.updated_at = utcnow()
+    db.commit()
+    db.refresh(registration)
+
+    LOGGER.info(
+        "[SUBDOMAIN] IP updated: %s.remoteprompt.net %s -> %s",
+        registration.subdomain, old_ip, req.tailscale_ip
+    )
+
+    return registration.to_dict()
+
+
+# ========== Admin APIs (Bootstrap) ==========
+
+
+@app.post("/admin/bootstrap-invitation")
+async def create_bootstrap_invitation(
+    req: CreateInvitationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_api_key),
+) -> dict:
+    """Create the first invitation code (admin bootstrap).
+
+    This endpoint is for creating the initial invitation code when no users exist yet.
+    Once any subdomain is registered, this endpoint becomes disabled.
+
+    Security:
+    - Requires API key
+    - Only works when no subdomains are registered yet
+    - Only callable from Tailscale network
+    """
+    client_ip = _require_tailscale_ip(request)
+
+    # Check if any subdomain exists
+    existing_count = db.query(SubdomainRegistration).count()
+    if existing_count > 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Bootstrap disabled: subdomains already exist. Use /invitations instead."
+        )
+
+    # Generate invitation code
+    code = secrets.token_urlsafe(12)
+    expires_at = utcnow() + timedelta(days=req.expires_days)
+
+    invitation = InvitationCode(
+        code=code,
+        created_by_device_id="ADMIN_BOOTSTRAP",  # 特別なマーカー
+        expires_at=expires_at,
+    )
+    db.add(invitation)
+    db.commit()
+    db.refresh(invitation)
+
+    LOGGER.warning(
+        "[ADMIN] Bootstrap invitation created: code=%s, expires=%s, from=%s",
+        code, expires_at.isoformat(), client_ip
+    )
+
+    return {
+        **invitation.to_dict(),
+        "note": "This is a bootstrap invitation. Share this code securely with the first user.",
+    }

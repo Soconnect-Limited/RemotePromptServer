@@ -7,7 +7,15 @@ from typing import Any, Dict, List, Optional
 # Allowed values per implementation plan v1.6
 ALLOWED_VALUES: Dict[str, Dict[str, List[str]]] = {
     "claude": {
-        "model": ["sonnet", "opus", "haiku"],
+        "model": [
+            "default",
+            "sonnet",
+            "opus",
+            "haiku",
+            "claude-opus-4-5-20251101",
+            "claude-sonnet-4-5-20250929",
+            "claude-sonnet-4-20250514",
+        ],
         "permission_mode": ["default", "ask", "deny"],
         "tools": [
             "Bash",
@@ -26,13 +34,13 @@ ALLOWED_VALUES: Dict[str, Dict[str, List[str]]] = {
         ],
     },
     "codex": {
-        "model": ["gpt-5.1", "gpt-5.1-codex", "gpt-5.1-codex-mini", "gpt-5.1-codex-max"],
+        "model": ["default", "gpt-5.2-codex", "gpt-5.1-codex-max", "gpt-5.1-codex-mini"],
         "sandbox": ["read-only", "workspace-write", "danger-full-access"],
         "approval_policy": ["untrusted", "on-failure", "on-request", "never"],
         "reasoning_effort": ["low", "medium", "high", "extra-high"],
     },
     "gemini": {
-        "model": ["gemini-3.0-pro", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
+        "model": ["default", "gemini-3.0-pro", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
         "approval_mode": ["default", "auto_edit", "yolo"],
     },
 }
